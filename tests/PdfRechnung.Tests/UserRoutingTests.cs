@@ -175,3 +175,54 @@ public sealed class HandoverLoginTests
         Assert.Contains("\"t\":\"tok\"", json);
     }
 }
+
+public sealed class OutlookHandoverTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "pdfr-ol-" + Guid.NewGuid().ToString("N")[..8]);
+    public void Dispose() { try { Directory.Delete(_dir, true); } catch { } }
+
+    [Fact]
+    public async Task Mail_fuer_Outlook_enthaelt_Anhang_und_Status_bleibt_Outlook()
+    {
+        Directory.CreateDirectory(_dir);
+        var users = new UserStore(_dir);
+        users.Replace(new List<PortalUser> { new() { Id = "martin", Name = "Martin", Email = "m@firma.at", OperatorNumbers = { "007" } } });
+        var (dev, _) = users.AddDevice("martin", "PC");
+        Assert.False(users.UsesOutlook("martin"));
+        users.SetDeviceOutlook(dev.Id, true);
+        Assert.True(users.UsesOutlook("martin"));
+
+        var settings = new SettingsStore(_dir);
+        var s = DefaultSettings.Create();
+        s.Mail.Enabled = true; s.Mail.FromAddress = "rechnung@firma.at";
+        var store = new DocumentStore(settings, NullLogger<DocumentStore>.Instance);
+        var proc = new DocumentProcessor(store, new StaticOptions<MailOptions>(s.Mail), new StaticOptions<InvoiceOptions>(s.Invoice),
+            NullLogger<DocumentProcessor>.Instance, settings: settings, users: users);
+        var v = proc.Process(TestData.Pdf(new[] { "@@pb7@@", "@@tokunde@example.at@@", "@@edRechnung 1@@" }), "Eingang", "a.pdf");
+
+        var send = new SendService(store, settings, new StaticOptions<MailOptions>(s.Mail), new StaticOptions<StorageOptions>(s.Storage),
+            new StaticOptions<MailTemplateOptions>(s.MailTemplates), NullLogger<SendService>.Instance);
+        var (mail, err) = await send.BuildMail(store.Get(v.Id)!, CancellationToken.None);
+        Assert.Null(err);
+        Assert.Equal(new[] { "kunde@example.at" }, mail!.To);
+        Assert.Single(mail.Attachments);
+        Assert.EndsWith(".pdf", mail.Attachments[0].Name);
+        Assert.NotNull(mail.HtmlBody);
+
+        var mime = MailSender.BuildMime(s.Mail, mail, includeCopyTo: false);
+        Assert.Equal("Rechnung 1", mime.Subject);
+
+        send.MarkOutlook(v.Id, "Martin (Outlook, PC)");
+        var after = store.Get(v.Id)!;
+        Assert.Equal(VorgangStatus.Outlook, after.Status);
+        after.UpdateStatus();
+        Assert.Equal(VorgangStatus.Outlook, after.Status);
+
+        // Autoversand lässt Belege von Outlook-Benutzern aus
+        s.Mail.AutoSend = true; s.Mail.AutoSendDelayMinutes = 0;
+        var v2 = proc.Process(TestData.Pdf(new[] { "@@pb7@@", "@@tokunde@example.at@@" }), "Eingang", "b.pdf");
+        var worker = new AutoSendWorker(new StaticOptions<MailOptions>(s.Mail), store, send, NullLogger<AutoSendWorker>.Instance, users);
+        await worker.RunOnce(CancellationToken.None);
+        Assert.Equal(0, store.Get(v2.Id)!.SendAttempts);
+    }
+}

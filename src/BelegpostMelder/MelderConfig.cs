@@ -14,9 +14,14 @@ public sealed class MelderConfig
     public string? Thumbprint { get; set; }
     public string? PortalTitle { get; set; }
     public string? UserName { get; set; }
+    /// <summary>Älterer Schalter („automatisch öffnen“) – wird in <see cref="OnNewDocument"/> übernommen.</summary>
     public bool AutoOpen { get; set; } = true;
+    /// <summary>Was passiert bei einem neuen Beleg: "portal" (Ansicht im Browser), "outlook" (Mail-Entwurf in Outlook), "hinweis" (nur Meldung).</summary>
+    public string? OnNewDocument { get; set; }
+    public string Action => OnNewDocument is "portal" or "outlook" or "hinweis" ? OnNewDocument : AutoOpen ? "portal" : "hinweis";
     public long? LastSeq { get; set; }
     public string? LastDocumentPath { get; set; }
+    public string? LastDocumentId { get; set; }
 
     public static string Folder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Belegpost");
     public static string FilePath => Path.Combine(Folder, "melder.json");

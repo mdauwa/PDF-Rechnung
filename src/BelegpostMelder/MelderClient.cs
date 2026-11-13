@@ -5,7 +5,7 @@ using System.Text.Json;
 
 namespace BelegpostMelder;
 
-public sealed record BelegEvent(long Seq, string Id, string Title, string Status, string? Text, string Path, string Kind);
+public sealed record BelegEvent(long Seq, string Id, string Title, string Status, string? Text, string Path, string Kind, bool Mail);
 
 public enum MelderState { NotPaired, Connecting, Connected, Offline, Rejected }
 
@@ -109,6 +109,7 @@ public sealed class MelderClient : IDisposable
                 }
                 res.EnsureSuccessStatusCode();
                 Set(MelderState.Connected, "Wartet auf neue Belege – druckst du im ERP, erscheint der Beleg hier.");
+                _ = SendSettings();
                 delay = TimeSpan.FromSeconds(3);
                 await ReadStream(await res.Content.ReadAsStreamAsync(ct), ct);
                 Set(MelderState.Offline, "Verbindung beendet – verbinde neu …");
@@ -121,6 +122,23 @@ public sealed class MelderClient : IDisposable
             try { await Task.Delay(delay, ct); } catch (OperationCanceledException) { return; }
             delay = TimeSpan.FromSeconds(Math.Min(60, delay.TotalSeconds * 2));
         }
+    }
+
+    /// <summary>Dem Server mitteilen, ob dieser PC Belege in Outlook öffnet (dann kein Autoversand für den Benutzer).</summary>
+    public async Task SendSettings()
+    {
+        try
+        {
+            if (_cfg.Token is not { } token || _cfg.Server is null) return;
+            using var http = CreateHttp(_cfg.Thumbprint, TimeSpan.FromSeconds(15));
+            using var req = new HttpRequestMessage(HttpMethod.Post, _cfg.Server.TrimEnd('/') + "/melder/api/einstellungen")
+            {
+                Content = new StringContent(JsonSerializer.Serialize(new { outlook = _cfg.Action == "outlook" }), System.Text.Encoding.UTF8, "application/json")
+            };
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var _ = await http.SendAsync(req);
+        }
+        catch { /* beim nächsten Verbinden erneut */ }
     }
 
     private async Task ReadStream(Stream stream, CancellationToken ct)
@@ -155,9 +173,11 @@ public sealed class MelderClient : IDisposable
             var r = doc.RootElement;
             string S(string n) => r.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
             var e = new BelegEvent(r.GetProperty("seq").GetInt64(), S("id"), S("title"), S("status"),
-                r.TryGetProperty("text", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() : null, S("path"), S("kind"));
+                r.TryGetProperty("text", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() : null, S("path"), S("kind"),
+                !r.TryGetProperty("mail", out var ml) || ml.ValueKind != JsonValueKind.False);
             _cfg.LastSeq = e.Seq;
             _cfg.LastDocumentPath = e.Path;
+            _cfg.LastDocumentId = e.Id;
             try { _cfg.Save(); } catch { }
             Received?.Invoke(e);
         }

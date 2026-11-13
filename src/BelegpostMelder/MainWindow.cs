@@ -14,7 +14,8 @@ internal sealed class MainWindow : Form
     private readonly Pill _pill = new();
     private readonly Label _statusText = Lbl(Theme.Body, Theme.Muted), _userLine = Lbl(Theme.Strong, Theme.Text), _serverLine = Lbl(Theme.Small, Theme.Muted);
     private readonly ModernButton _btnPortal = new() { Text = "Portal öffnen" }, _btnLast = new() { Text = "Letzten Beleg" };
-    private readonly ToggleSwitch _tAuto = new() { Text = "Neue Belege automatisch öffnen", Hint = "Öffnet den Beleg im Browser, sobald du druckst" };
+    private readonly Label _actionTitle = Lbl(Theme.Body, Theme.Text), _actionHint = Lbl(Theme.Small, Theme.Muted);
+    private readonly Segmented _action = new();
     private readonly ToggleSwitch _tStart = new() { Text = "Mit Windows starten", Hint = "Melder läuft unauffällig im Infobereich" };
     private readonly Label _connectTitle = Lbl(Theme.Strong, Theme.Text), _connectHint = Lbl(Theme.Small, Theme.Muted);
     private readonly TextBox _code = new() { Multiline = true, BorderStyle = BorderStyle.None, Font = Theme.Mono, ScrollBars = ScrollBars.None };
@@ -42,7 +43,8 @@ internal sealed class MainWindow : Form
         DoubleBuffered = true;
 
         _statusCard.Controls.AddRange(new Control[] { _pill, _statusText, _userLine, _serverLine, _btnPortal, _btnLast });
-        _optionsCard.Controls.AddRange(new Control[] { _tAuto, _tStart });
+        _action.SetItems(("portal", "Portal"), ("outlook", "Outlook"), ("hinweis", "Nur Hinweis"));
+        _optionsCard.Controls.AddRange(new Control[] { _actionTitle, _action, _actionHint, _tStart });
         _codeFrame.Controls.Add(_code);
         _codeFrame.Paint += (_, e) =>
         {
@@ -61,7 +63,7 @@ internal sealed class MainWindow : Form
 
         _btnPortal.Click += (_, _) => _tray.OpenPath("/");
         _btnLast.Click += (_, _) => { if (_cfg.LastDocumentPath is { } p) _tray.OpenPath(p); };
-        _tAuto.CheckedChanged += (_, _) => { if (_cfg.AutoOpen != _tAuto.Checked) { _cfg.AutoOpen = _tAuto.Checked; _cfg.Save(); } };
+        _action.ValueChanged += (_, _) => { if (_cfg.Action != _action.Value) _tray.SetAction(_action.Value); UpdateActionHint(); };
         _tStart.CheckedChanged += (_, _) => { try { if (Program.Autostart != _tStart.Checked) Program.Autostart = _tStart.Checked; } catch { } };
         _btnPaste.Click += (_, _) => { try { if (Clipboard.ContainsText()) _code.Text = Clipboard.GetText().Trim(); } catch { } };
         _btnPair.Click += async (_, _) =>
@@ -121,6 +123,13 @@ internal sealed class MainWindow : Form
             new Point((int)(81 * _s), (int)(50 * _s)), Color.FromArgb(0xC9, 0xD2, 0xDE));
     }
 
+    private void UpdateActionHint() => _actionHint.Text = _action.Value switch
+    {
+        "outlook" => "Öffnet die E-Mail mit Text und Anhängen als Entwurf in Outlook – du prüfst und sendest selbst. Kein automatischer Versand.",
+        "hinweis" => "Zeigt nur eine Meldung mit „Öffnen“ und „In Outlook“.",
+        _ => "Öffnet die Ansicht des Belegs im Browser."
+    };
+
     public void RefreshView()
     {
         if (IsDisposed) return;
@@ -155,11 +164,15 @@ internal sealed class MainWindow : Form
         y = _statusCard.Bottom + (int)(12 * s);
 
         // ---- Einstellungen ----
-        _tAuto.Checked = _cfg.AutoOpen;
+        _action.Value = _cfg.Action;
+        UpdateActionHint();
         try { _tStart.Checked = Program.Autostart; } catch { }
-        _tAuto.SetBounds(inner, (int)(8 * s), iw, (int)(48 * s));
-        _tStart.SetBounds(inner, (int)(58 * s), iw, (int)(48 * s));
-        _optionsCard.SetBounds(pad, y, w, (int)(114 * s));
+        _actionTitle.Text = "Wenn ein neuer Beleg von dir kommt";
+        _actionTitle.SetBounds(inner, inner, iw, (int)(22 * s));
+        _action.SetBounds(inner, inner + (int)(26 * s), iw, (int)(38 * s));
+        _actionHint.SetBounds(inner, inner + (int)(70 * s), iw, (int)(34 * s));
+        _tStart.SetBounds(inner, inner + (int)(106 * s), iw, (int)(48 * s));
+        _optionsCard.SetBounds(pad, y, w, inner + (int)(160 * s));
         y = _optionsCard.Bottom + (int)(12 * s);
 
         // ---- Verbinden ----

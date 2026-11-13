@@ -52,6 +52,8 @@ public sealed class MelderDevice
     public string TokenHash { get; set; } = "";
     public DateTimeOffset Created { get; set; }
     public DateTimeOffset? LastSeen { get; set; }
+    /// <summary>Der Melder öffnet neue Belege als E-Mail-Entwurf in Outlook – dann kein Autoversand für diesen Benutzer.</summary>
+    public bool OpenInOutlook { get; set; }
 }
 
 public sealed class UserData
@@ -242,7 +244,7 @@ public sealed class UserStore
     public List<MelderDevice> Devices(string? userId)
     {
         lock (_lock) return _data.Devices.Where(d => userId is null || d.UserId == userId)
-            .Select(d => new MelderDevice { Id = d.Id, UserId = d.UserId, Name = d.Name, Created = d.Created, LastSeen = d.LastSeen }).ToList();
+            .Select(d => new MelderDevice { Id = d.Id, UserId = d.UserId, Name = d.Name, Created = d.Created, LastSeen = d.LastSeen, OpenInOutlook = d.OpenInOutlook }).ToList();
     }
 
     public bool RemoveDevice(string id, string? userId)
@@ -250,6 +252,19 @@ public sealed class UserStore
         var removed = false;
         Update(x => removed = x.Devices.RemoveAll(d => d.Id == id && (userId is null || d.UserId == userId)) > 0);
         return removed;
+    }
+
+    public void SetDeviceOutlook(string id, bool outlook) => Update(d =>
+    {
+        var x = d.Devices.FirstOrDefault(v => v.Id == id);
+        if (x is not null) x.OpenInOutlook = outlook;
+    });
+
+    /// <summary>Hat dieser Benutzer einen Melder, der Belege in Outlook öffnet?</summary>
+    public bool UsesOutlook(string? userId)
+    {
+        if (userId is null) return false;
+        lock (_lock) return _data.Devices.Any(d => d.UserId == userId && d.OpenInOutlook);
     }
 
     public void TouchDevice(string id)

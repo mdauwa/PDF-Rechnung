@@ -35,6 +35,15 @@ public sealed class PortalAccess
         return info;
     }
 
+    /// <summary>Rechte eines Portal-Benutzers (z. B. für den Melder, der mit Schlüssel statt Cookie kommt).</summary>
+    public static AccessInfo ForUser(PortalUser pu, string? login = null)
+    {
+        var seeAll = pu.IsAdmin || pu.Visibility == "alle";
+        var visible = new HashSet<string> { pu.Id };
+        if (pu.Visibility == "auswahl") visible.UnionWith(pu.AlsoSees);
+        return new AccessInfo(true, pu.IsAdmin, false, pu.IsAdmin || pu.CanSend, pu.Id, pu.Name, login ?? pu.Email, seeAll, visible);
+    }
+
     private AccessInfo Resolve(ClaimsPrincipal user, bool local)
     {
         if (user.Identity?.IsAuthenticated != true) return AccessInfo.Anonymous;
@@ -45,10 +54,7 @@ public sealed class PortalAccess
         var pu = _users.FindById(user.FindFirst(ClaimUser)?.Value);
         if (pu is null || !pu.Active) return AccessInfo.Anonymous;
         var login = user.FindFirst(ClaimLogin)?.Value ?? pu.Email;
-        var seeAll = pu.IsAdmin || pu.Visibility == "alle";
-        var visible = new HashSet<string> { pu.Id };
-        if (pu.Visibility == "auswahl") visible.UnionWith(pu.AlsoSees);
-        return new AccessInfo(true, pu.IsAdmin, false, pu.IsAdmin || pu.CanSend, pu.Id, pu.Name, login, seeAll, visible);
+        return ForUser(pu, login);
     }
 
     public static ClaimsPrincipal Principal(string kind, string name, string? userId = null, string? login = null)

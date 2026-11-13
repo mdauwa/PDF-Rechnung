@@ -3,7 +3,7 @@ using System.Threading.Channels;
 namespace PdfRechnung.Services;
 
 /// <summary>Ereignis für einen Benutzer, z. B. „neuer Beleg von dir gedruckt“.</summary>
-public sealed record PortalEvent(long Seq, DateTimeOffset At, string UserId, string Kind, string DocumentId, string Title, string Status, string? Text);
+public sealed record PortalEvent(long Seq, DateTimeOffset At, string UserId, string Kind, string DocumentId, string Title, string Status, string? Text, bool Mail = true);
 
 /// <summary>
 /// Verteilt Ereignisse live an offene Portal-Tabs und an gekoppelte Melder (Server-Sent Events).
@@ -17,12 +17,12 @@ public sealed class EventHub
     private readonly List<(string UserId, Channel<PortalEvent> Channel)> _subs = new();
     private long _seq = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(); // über Neustarts hinweg aufsteigend
 
-    public PortalEvent Publish(string userId, string kind, string documentId, string title, string status, string? text = null)
+    public PortalEvent Publish(string userId, string kind, string documentId, string title, string status, string? text = null, bool mail = true)
     {
         PortalEvent e;
         lock (_lock)
         {
-            e = new PortalEvent(++_seq, DateTimeOffset.Now, userId, kind, documentId, title, status, text);
+            e = new PortalEvent(++_seq, DateTimeOffset.Now, userId, kind, documentId, title, status, text, mail);
             _recent.Add(e);
             _recent.RemoveAll(x => DateTimeOffset.Now - x.At > Keep);
             if (_recent.Count > 500) _recent.RemoveRange(0, _recent.Count - 500);
@@ -81,7 +81,7 @@ public sealed class EventHub
                     {
                         var json = System.Text.Json.JsonSerializer.Serialize(new
                         {
-                            seq = e.Seq, at = e.At, kind = e.Kind, id = e.DocumentId, title = e.Title, status = e.Status, text = e.Text,
+                            seq = e.Seq, at = e.At, kind = e.Kind, id = e.DocumentId, title = e.Title, status = e.Status, text = e.Text, mail = e.Mail,
                             path = "/#/vorgang?id=" + Uri.EscapeDataString(e.DocumentId)
                         });
                         await ctx.Response.WriteAsync($"id: {e.Seq}\nevent: beleg\ndata: {json}\n\n", ct);

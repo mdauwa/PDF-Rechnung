@@ -46,25 +46,8 @@ public sealed class SendService
             if (v.Status == VorgangStatus.Error && !force) return (false, "Der Vorgang hat Fehler. Bitte zuerst beheben oder „Trotzdem senden“ wählen.");
             if (v.Mail.To.Count == 0) return (false, "Kein Empfänger eingetragen.");
 
-            var rendered = Render(v);
-            var mail = new OutgoingMail
-            {
-                Subject = v.Mail.Subject, Body = rendered.Text, HtmlBody = rendered.Html,
-                FromAddress = v.Mail.FromAddress, FromName = v.Mail.FromName, ReplyTo = v.Mail.ReplyTo
-            };
-            mail.Images.AddRange(rendered.Images);
-            mail.To.AddRange(v.Mail.To); mail.Cc.AddRange(v.Mail.Cc); mail.Bcc.AddRange(v.Mail.Bcc);
-            if (!v.Mail.NoDocument)
-            {
-                var pdf = _store.FilePath(id, DocumentStore.SendFile);
-                if (pdf is null) return (false, "Das Versand-PDF fehlt – bitte „Neu prüfen“.");
-                mail.Attachments.Add((MailTemplate.SafeFileName(v.Mail.FileName) + ".pdf", await File.ReadAllBytesAsync(pdf, ct), "application/pdf"));
-            }
-            foreach (var a in v.Mail.Attachments)
-            {
-                if (!File.Exists(a)) return (false, $"Anlage nicht gefunden: {a}");
-                mail.Attachments.Add((Path.GetFileName(a), await File.ReadAllBytesAsync(a, ct), "application/octet-stream"));
-            }
+            var (mail, buildError) = await BuildMail(v, ct);
+            if (mail is null) return (false, buildError!);
 
             _store.Update(id, x => { x.Status = VorgangStatus.Sending; x.SendAttempts++; return true; });
             try
@@ -96,6 +79,47 @@ public sealed class SendService
         }
         finally { _gate.Release(); }
     }
+
+    /// <summary>Fertige Mail eines Vorgangs (HTML, Logo, Beleg und Anlagen) – für den Versand und für Outlook über den Melder.</summary>
+    public async Task<(OutgoingMail? Mail, string? Error)> BuildMail(Vorgang v, CancellationToken ct)
+    {
+        var rendered = Render(v);
+        var mail = new OutgoingMail
+        {
+            Subject = v.Mail.Subject, Body = rendered.Text, HtmlBody = rendered.Html,
+            FromAddress = v.Mail.FromAddress, FromName = v.Mail.FromName, ReplyTo = v.Mail.ReplyTo
+        };
+        mail.Images.AddRange(rendered.Images);
+        mail.To.AddRange(v.Mail.To); mail.Cc.AddRange(v.Mail.Cc); mail.Bcc.AddRange(v.Mail.Bcc);
+        if (!v.Mail.NoDocument)
+        {
+            var pdf = _store.FilePath(v.Id, DocumentStore.SendFile);
+            if (pdf is null) return (null, "Das Versand-PDF fehlt – bitte „Neu prüfen“.");
+            mail.Attachments.Add((MailTemplate.SafeFileName(v.Mail.FileName) + ".pdf", await File.ReadAllBytesAsync(pdf, ct), "application/pdf"));
+        }
+        foreach (var a in v.Mail.Attachments)
+        {
+            if (!File.Exists(a)) return (null, $"Anlage nicht gefunden: {a}");
+            mail.Attachments.Add((Path.GetFileName(a), await File.ReadAllBytesAsync(a, ct), MimeType(a)));
+        }
+        return (mail, null);
+    }
+
+    private static string MimeType(string path) => Path.GetExtension(path).ToLowerInvariant() switch
+    {
+        ".pdf" => "application/pdf", ".png" => "image/png", ".jpg" or ".jpeg" => "image/jpeg", ".txt" => "text/plain",
+        ".xml" => "application/xml", ".zip" => "application/zip", ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", _ => "application/octet-stream"
+    };
+
+    /// <summary>Vom Melder in Outlook geöffnet: nicht mehr automatisch versenden.</summary>
+    public void MarkOutlook(string id, string by) => _store.Update(id, x =>
+    {
+        if (x.Status is VorgangStatus.Sent or VorgangStatus.Sending) return false;
+        x.Status = VorgangStatus.Outlook; x.SentBy = by;
+        x.History.Add(new HistoryEntry(DateTimeOffset.Now, by, "outlook", "Als E-Mail-Entwurf in Outlook geöffnet – Versand durch den Benutzer"));
+        return true;
+    });
 
     /// <summary>Kopie in den Exportordner (Archiv/DMS), falls eingestellt.</summary>
     private void Export(string id, Vorgang v)
@@ -190,10 +214,11 @@ public sealed class AutoSendWorker : BackgroundService
     private readonly DocumentStore _store;
     private readonly SendService _send;
     private readonly ILogger<AutoSendWorker> _log;
+    private readonly Settings.UserStore? _users;
 
-    public AutoSendWorker(IOptionsMonitor<MailOptions> opt, DocumentStore store, SendService send, ILogger<AutoSendWorker> log)
+    public AutoSendWorker(IOptionsMonitor<MailOptions> opt, DocumentStore store, SendService send, ILogger<AutoSendWorker> log, Settings.UserStore? users = null)
     {
-        _opt = opt; _store = store; _send = send; _log = log;
+        _opt = opt; _store = store; _send = send; _log = log; _users = users;
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct)
@@ -213,7 +238,8 @@ public sealed class AutoSendWorker : BackgroundService
         var due = DateTimeOffset.Now.AddMinutes(-Math.Max(0, o.AutoSendDelayMinutes));
         var candidates = _store.All().Where(v =>
             (v.Status == VorgangStatus.Ready || (o.AutoSendWithWarnings && v.Status == VorgangStatus.Warning))
-            && v.SendAttempts == 0 && v.CreatedAt <= due && v.Mail.To.Count > 0).ToList();
+            && v.SendAttempts == 0 && v.CreatedAt <= due && v.Mail.To.Count > 0
+            && !(_users?.UsesOutlook(v.OwnerUserId) ?? false)).ToList(); // Benutzer versendet selbst über Outlook
         foreach (var v in candidates)
         {
             if (ct.IsCancellationRequested) break;

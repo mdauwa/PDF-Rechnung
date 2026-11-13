@@ -56,16 +56,15 @@ public static class MailSender
     internal static IEnumerable<string> CopyTo(MailOptions o) =>
         (o.CopyTo ?? "").Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-    private static async Task SendSmtpAsync(MailOptions o, string? password, OutgoingMail mail, CancellationToken ct)
+    /// <summary>MIME-Nachricht (HTML + Text, eingebettetes Logo, Anlagen) – für SMTP und als .eml-Entwurf.</summary>
+    public static MimeMessage BuildMime(MailOptions o, OutgoingMail mail, bool includeCopyTo)
     {
-        if (string.IsNullOrWhiteSpace(o.Host)) throw new InvalidOperationException("Kein SMTP-Server eingetragen (Einstellungen → E-Mail).");
-
         var msg = new MimeMessage();
-        msg.From.Add(new MailboxAddress(mail.Name(o), mail.From(o)));
+        if (!string.IsNullOrWhiteSpace(mail.From(o))) msg.From.Add(new MailboxAddress(mail.Name(o), mail.From(o)));
         if (mail.Reply(o) is { } reply) msg.ReplyTo.Add(MailboxAddress.Parse(reply));
         foreach (var a in mail.To) msg.To.Add(MailboxAddress.Parse(a));
         foreach (var a in mail.Cc) msg.Cc.Add(MailboxAddress.Parse(a));
-        foreach (var a in mail.Bcc.Concat(CopyTo(o))) msg.Bcc.Add(MailboxAddress.Parse(a));
+        foreach (var a in includeCopyTo ? mail.Bcc.Concat(CopyTo(o)) : mail.Bcc) msg.Bcc.Add(MailboxAddress.Parse(a));
         msg.Subject = mail.Subject;
 
         var builder = new BodyBuilder { TextBody = mail.Body };
@@ -81,6 +80,13 @@ public static class MailSender
         foreach (var (name, data, type) in mail.Attachments)
             builder.Attachments.Add(name, data, ContentType.Parse(type));
         msg.Body = builder.ToMessageBody();
+        return msg;
+    }
+
+    private static async Task SendSmtpAsync(MailOptions o, string? password, OutgoingMail mail, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(o.Host)) throw new InvalidOperationException("Kein SMTP-Server eingetragen (Einstellungen → E-Mail).");
+        var msg = BuildMime(o, mail, includeCopyTo: true);
 
         var security = o.Security switch
         {

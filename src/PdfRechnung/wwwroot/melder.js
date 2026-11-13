@@ -19,6 +19,7 @@ async function renderMelder(view) {
     <p class="help">Wenn du im ERP druckst, erkennt Belegpost dich am Windows-Benutzer des Druckauftrags oder an der Bedienernummer
       (<code>@@pu007@@</code>, Zuordnung unter Einstellungen → Benutzer). Der Beleg erscheint dann unter <b>Meine Belege</b> und kann sofort geöffnet werden:</p>
     <ul class="steps"><li><b>Belegpost Melder</b> (empfohlen): kleines Programm im Infobereich deines PCs – öffnet den Beleg automatisch im Browser, auch wenn du im ERP auf dem Terminalserver (RDP) druckst.</li>
+      <li><b>E-Mail in Outlook</b>: Im Melder „Bei neuem Beleg → Outlook“ wählen – oder im Vorgang auf <b>In Outlook öffnen</b> klicken. Die Mail öffnet sich mit Empfängern, Text (CI-Vorlage) und allen Anhängen als Entwurf in deinem Outlook; du prüfst und sendest selbst. Solche Belege werden nicht automatisch versendet.</li>
       <li><b>Offener Portal-Tab</b>: Ist das Portal in einem Tab offen, springt es selbst zum neuen Beleg oder zeigt einen Hinweis.</li></ul>
   </div></div>
 

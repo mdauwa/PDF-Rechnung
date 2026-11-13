@@ -228,7 +228,7 @@ public sealed class DocumentProcessor
             if (title.Length == 0) title = v.OriginalFileName ?? "Neuer Beleg";
             if (!string.IsNullOrWhiteSpace(v.BuyerName)) title += " – " + v.BuyerName;
             var first = v.Messages.FirstOrDefault(m => m.Level == DocumentChecker.Error)?.Text ?? v.Messages.FirstOrDefault(m => m.Level == DocumentChecker.Warning)?.Text;
-            _events.Publish(v.OwnerUserId, "neu", v.Id, title, v.Status, first);
+            _events.Publish(v.OwnerUserId, "neu", v.Id, title, v.Status, first, v.Mail.Enabled);
         }
         return v;
     }

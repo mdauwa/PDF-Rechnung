@@ -18,14 +18,15 @@ internal sealed class ToastWindow : Form
     private int _ticks, _life;
     private bool _hover, _closing;
 
-    public static void Show(string title, string text, Kinds kind, Action? open, string? openText = "Öffnen", int seconds = 10)
+    public static void Show(string title, string text, Kinds kind, Action? open, string? openText = "Öffnen", int seconds = 10,
+        Action? second = null, string? secondText = null)
     {
         _current?.CloseNow();
-        _current = new ToastWindow(title, text, kind, open, openText, seconds);
+        _current = new ToastWindow(title, text, kind, open, openText, seconds, second, secondText);
         _current.Show();
     }
 
-    private ToastWindow(string title, string text, Kinds kind, Action? open, string? openText, int seconds)
+    private ToastWindow(string title, string text, Kinds kind, Action? open, string? openText, int seconds, Action? second, string? secondText)
     {
         _title = title; _text = text; _kind = kind; _open = open; _life = seconds * 1000 / _timer.Interval;
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
@@ -50,12 +51,12 @@ internal sealed class ToastWindow : Form
         Location = new Point(area.Right - w - (int)(16 * s), area.Bottom - h - (int)(16 * s));
 
         _btnOpen = new ModernButton { Kind = ModernButton.Kinds.Primary, Text = openText ?? "Öffnen", Visible = open is not null };
-        _btnClose = new ModernButton { Kind = ModernButton.Kinds.Ghost, Text = "Schließen", Visible = open is not null };
+        _btnClose = new ModernButton { Kind = second is null ? ModernButton.Kinds.Ghost : ModernButton.Kinds.Secondary, Text = secondText ?? "Schließen", Visible = open is not null };
         var by = h - (int)(50 * s);
         _btnOpen.SetBounds((int)(60 * s), by, (int)(120 * s), (int)(34 * s));
-        _btnClose.SetBounds((int)(188 * s), by, (int)(110 * s), (int)(34 * s));
+        _btnClose.SetBounds((int)(188 * s), by, (int)(130 * s), (int)(34 * s));
         _btnOpen.Click += (_, _) => { CloseNow(); _open?.Invoke(); };
-        _btnClose.Click += (_, _) => CloseNow();
+        _btnClose.Click += (_, _) => { CloseNow(); second?.Invoke(); };
         Controls.Add(_btnOpen); Controls.Add(_btnClose);
 
         _timer.Tick += (_, _) => Tick();

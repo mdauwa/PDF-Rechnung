@@ -36,6 +36,7 @@ Technik und Aufbau sind wie im **Firmenportal**:
 | Rollen/Sicht: nur eigene, eigene + ausgewählte Kollegen, alle; Admins sehen alles | ✅ |
 | Live-Hinweise: offener Portal-Tab springt zum neuen eigenen Beleg | ✅ |
 | **Belegpost Melder** (`Belegpost-Melder.exe`, Infobereich am PC): öffnet neu gedruckte eigene Belege automatisch im Browser, auch bei Druck aus RDP | ✅ |
+| E-Mail als Entwurf im lokalen Outlook öffnen (aus dem Vorgang „In Outlook öffnen“ oder automatisch je Melder-Einstellung), mit Text im CI und allen Anhängen; kein Autoversand für diese Benutzer | ✅ |
 | Einbindung ins Firmenportal mit Übergabe der Anmeldung (signiertes Token), siehe `docs/Firmenportal-Anbindung.md` | ✅ (Firmenportal-Seite folgt) |
 | Druck-Benutzer automatisch aus dem Druckauftrag (mit Drucker-Einrichtung) | ⏳ |
 | `@@af@@`, `@@nd@@`, `@@rpc@@` | ⏳ |

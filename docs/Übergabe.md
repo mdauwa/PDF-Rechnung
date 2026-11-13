@@ -34,7 +34,7 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 - **Erst normale PDFs, dann ZUGFeRD (13.11.2026):** Zuerst läuft der komplette Weg ohne E-Rechnung: Drucker, Steuerzeichen entfernen, Briefpapier, Versand. ZUGFeRD kommt erst dazu, wenn das stabil funktioniert.
 - **ERP-Ausgabe der Steuerzeichen:** Dass die Steuerzeichen jetzt gedruckt werden, lag an einer internen ERP-Einstellung. Für das Projekt ist das nicht relevant.
 
-## Stand (fertig, getestet, 84 Tests grün)
+## Stand (fertig, getestet, 88 Tests grün)
 
 - **Portal:**
   - Vorgangsliste mit Filtern und Menüzählern
@@ -62,6 +62,15 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
   - `/melder/api/*` mit Bearer-Schlüssel für den **Belegpost Melder** (`src/BelegpostMelder`, WinForms-Tray). Kopplung per Link/Code mit Zertifikats-Fingerabdruck, Autostart, Protokoll `belegpost-melder:`.
   - Ende-zu-Ende geprüft: Eingangs-PDF mit `@@pu007@@` → Ereignis am Melder-Endpunkt.
   - Die WinForms-Oberfläche ist unter Windows noch nicht getestet.
+- **Outlook über den Melder (13.11.2026):**
+  - Im Vorgang gibt es „In Outlook öffnen“ (Knopf und Link beim Versand). Das schickt ein Ereignis `outlook` an den eigenen Melder.
+  - Alternativ im Melder einstellen: „Bei neuem Beleg → Outlook“.
+  - Der Melder holt `/melder/api/vorgang/{id}/mail` (Empfänger, Betreff, HTML der CI-Vorlage, Logo inline, Beleg-PDF und Anlagen).
+  - Er legt den Entwurf per COM im klassischen Outlook an und zeigt ihn an (`Display`). Es werden nur Eigenschaften gesetzt, deshalb gibt es keine Sicherheitsabfrage.
+  - Ohne klassisches Outlook: `.eml` mit `X-Unsent` (`/melder/api/vorgang/{id}/eml`).
+  - Danach steht der Vorgang auf Status `outlook` („In Outlook“).
+  - Benutzer, deren Melder „Outlook“ eingestellt hat, sind vom Autoversand ausgenommen (`MelderDevice.OpenInOutlook`).
+  - Absender ist das Standardkonto in Outlook.
 - **Firmenportal:**
   - Übergabe der Anmeldung per HS256-JWT an `/auth/firmenportal` (`HandoverLogin`, einmalige `jti`, höchstens 5 Minuten).
   - Einbettung über `frame-ancestors`; Cookie `SameSite=None`, wenn aktiv.

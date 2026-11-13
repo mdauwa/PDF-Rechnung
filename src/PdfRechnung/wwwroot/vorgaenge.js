@@ -12,13 +12,14 @@ const STATUS = {
   inVersand: ["Wird gesendet", "absent"],
   versendet: ["Versendet", "sent"],
   versandfehler: ["Versandfehler", "missing"],
-  verworfen: ["Verworfen", "free"]
+  verworfen: ["Verworfen", "free"],
+  outlook: ["In Outlook", "sent"]
 };
 const FILTERS = {
   offen: { title: "Zu prüfen", status: "fehler,warnung,bereit,versandfehler,inVersand" },
   meine: { title: "Meine Belege", status: "", mine: true },
   alle: { title: "Alle Vorgänge", status: "" },
-  versendet: { title: "Versendet", status: "versendet" },
+  versendet: { title: "Versendet", status: "versendet,outlook" },
   verworfen: { title: "Verworfen", status: "verworfen" }
 };
 const badge = s => { const [t, c] = STATUS[s] || [s, ""]; return `<span class="badge ${c}">${esc(t)}</span>`; };
@@ -203,7 +204,8 @@ function drawVorgang(view, data) {
 
   const actions = [];
   if (portal.canSend) {
-    if (["bereit", "warnung", "versandfehler"].includes(v.status) && v.mail.enabled) actions.push(`<button class="btn" data-a="senden">${icon("send")} Jetzt senden</button>`);
+    if (["bereit", "warnung", "versandfehler", "outlook"].includes(v.status) && v.mail.enabled) actions.push(`<button class="btn" data-a="senden">${icon("send")} Jetzt senden</button>`);
+    if (portal.userId && v.mail.enabled && !["verworfen", "inVersand"].includes(v.status)) actions.push(`<button class="btn ghost" data-a="outlook" title="Öffnet die E-Mail mit Text und Anhängen als Entwurf in deinem Outlook (über den Belegpost Melder)">In Outlook öffnen</button>`);
     if (v.status === "fehler" && v.mail.enabled) actions.push(`<button class="btn danger-ghost" data-a="senden-force">Trotz Fehler senden …</button>`);
     if (v.status === "versendet") actions.push(`<button class="btn ghost" data-a="erneut">Erneut senden …</button>`);
     if (!["versendet", "inVersand", "verworfen"].includes(v.status)) actions.push(`<button class="btn ghost" data-a="pruefen">Neu prüfen</button>`, `<button class="btn ghost" data-a="verwerfen">Verwerfen</button>`);
@@ -259,7 +261,8 @@ function drawVorgang(view, data) {
             ${v.mail.attachments?.length ? `<p class="meta">Weitere Anlagen: ${v.mail.attachments.map(esc).join(", ")}</p>` : ""}
             ${v.mail.noDocument ? `<p class="meta">Ohne Beleg als Anhang (@@md@@).</p>` : ""}
             <p class="meta">${v.mail.template ? `Mail-Vorlage <b>${esc(v.mail.template)}</b> (${esc(v.mail.templateReason || "")})` : "Ohne Mail-Vorlage (schlichte Mail)"}${v.mail.fromAddress ? ` · Absender ${esc(v.mail.fromName ? v.mail.fromName + " <" + v.mail.fromAddress + ">" : v.mail.fromAddress)}` : ""}
-              · <a href="#" id="mPreviewBtn">So sieht die Mail aus</a></p>
+              · <a href="#" id="mPreviewBtn">So sieht die Mail aus</a>
+              ${portal.userId && v.mail.enabled ? ` · <a href="#" data-a="outlook">In Outlook öffnen</a>` : ""}</p>
             <div id="mPreview"></div>
             ${editable ? `<div class="actions"><button class="btn" data-a="mail-save" disabled>Versanddaten speichern</button><span class="meta-inline">Änderungen werden geprüft und bleiben bei „Neu prüfen“ erhalten.</span></div>` : ""}
           </div>
@@ -331,6 +334,7 @@ function drawVorgang(view, data) {
 
   view.querySelector(".vd-side").addEventListener("click", async e => {
     const b = e.target.closest("[data-a]"); if (!b) return;
+    if (b.tagName === "A") e.preventDefault();
     const a = b.dataset.a;
     b.disabled = true;
     try {
@@ -346,11 +350,17 @@ function drawVorgang(view, data) {
       }
       // ungespeicherte Versanddaten vor dem Senden speichern
       const dirty = view.querySelector('[data-a="mail-save"]') && !view.querySelector('[data-a="mail-save"]').disabled;
-      if (dirty && a.startsWith("senden")) {
+      if (dirty && (a.startsWith("senden") || a === "outlook")) {
         await api("PUT", `api/vorgaenge/${encodeURIComponent(v.id)}/mail`, {
           to: split($("#mTo").value), cc: split($("#mCc").value), bcc: split($("#mBcc").value),
           subject: $("#mSubject").value, body: $("#mBody").value, fileName: $("#mFile").value, enabled: $("#mEnabled")?.checked ?? v.mail.enabled
         });
+      }
+      if (a === "outlook") {
+        r = await api("POST", `api/vorgaenge/${encodeURIComponent(v.id)}/outlook`);
+        toast(r.message || "An den Melder geschickt.");
+        setTimeout(async () => { if (!view.isConnected) return; try { drawVorgang(view, await api("GET", "api/vorgaenge/" + encodeURIComponent(v.id))); } catch { } }, 4000);
+        return;
       }
       let body = { action: a };
       if (a === "senden-force") {

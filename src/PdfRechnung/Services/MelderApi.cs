@@ -8,6 +8,7 @@ using PdfRechnung.Settings;
 namespace PdfRechnung.Services;
 
 public sealed record PairRequest(string? Name);
+public sealed record MelderSettingsRequest(bool Outlook);
 
 /// <summary>
 /// „Belegpost Melder“: kleines Programm im Infobereich des Benutzer-PCs. Es wird im Portal gekoppelt
@@ -94,6 +95,77 @@ public static class MelderApi
             users.TouchDevice(f.Device.Id);
             using var sub = hub.Subscribe(f.User.Id, LastId(ctx));
             await EventHub.Stream(ctx, sub, ctx.RequestAborted);
+        });
+
+        // Einstellungen des Melders (z. B. „neue Belege in Outlook öffnen“ → kein Autoversand für diesen Benutzer)
+        app.MapPost("/melder/api/einstellungen", (MelderSettingsRequest req, HttpContext ctx, UserStore users) =>
+        {
+            if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
+            users.SetDeviceOutlook(f.Device.Id, req.Outlook);
+            return Results.Ok(new { saved = true });
+        });
+
+        // Mail eines Vorgangs für Outlook: Empfänger, Betreff, HTML-Text, Logo (inline) und alle Anlagen
+        app.MapGet("/melder/api/vorgang/{id}/mail", async (string id, HttpContext ctx, UserStore users, DocumentStore store, SendService send,
+            IOptionsMonitor<MailOptions> mailOpt, CancellationToken ct) =>
+        {
+            if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
+            var v = store.Get(id);
+            if (v is null || !PortalAccess.ForUser(f.User).CanSee(v)) return Results.NotFound(new { error = "Vorgang nicht gefunden." });
+            if (!v.Mail.Enabled) return Results.Json(new { error = "Für diesen Beleg ist kein E-Mail-Versand vorgesehen (@@ml0@@)." }, statusCode: 409);
+            var (mail, err) = await send.BuildMail(v, ct);
+            if (mail is null) return Results.Json(new { error = err }, statusCode: 409);
+            var o = mailOpt.CurrentValue;
+            return Results.Ok(new
+            {
+                id = v.Id, to = mail.To, cc = mail.Cc, bcc = mail.Bcc, subject = mail.Subject,
+                html = mail.HtmlBody, text = mail.Body,
+                from = string.IsNullOrWhiteSpace(v.Mail.FromAddress) ? o.FromAddress : v.Mail.FromAddress,
+                replyTo = mail.Reply(o),
+                status = v.Status,
+                attachments = mail.Attachments.Select(a => new { name = a.Name, contentType = a.ContentType, data = Convert.ToBase64String(a.Data), contentId = (string?)null })
+                    .Concat(mail.Images.Select(i => new { name = i.Name, contentType = i.ContentType, data = Convert.ToBase64String(i.Data), contentId = (string?)i.ContentId }))
+            });
+        });
+
+        // Dieselbe Mail als .eml-Entwurf (X-Unsent) – für PCs ohne klassisches Outlook
+        app.MapGet("/melder/api/vorgang/{id}/eml", async (string id, HttpContext ctx, UserStore users, DocumentStore store, SendService send,
+            IOptionsMonitor<MailOptions> mailOpt, CancellationToken ct) =>
+        {
+            if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
+            var v = store.Get(id);
+            if (v is null || !PortalAccess.ForUser(f.User).CanSee(v)) return Results.NotFound(new { error = "Vorgang nicht gefunden." });
+            var (mail, err) = await send.BuildMail(v, ct);
+            if (mail is null) return Results.Json(new { error = err }, statusCode: 409);
+            var msg = MailSender.BuildMime(mailOpt.CurrentValue, mail, includeCopyTo: false);
+            msg.Headers.Add("X-Unsent", "1");
+            if (msg.From.Count == 0) msg.Headers.Remove(MimeKit.HeaderId.From); // Outlook nimmt dann das eigene Konto
+            using var ms = new MemoryStream();
+            await msg.WriteToAsync(ms, ct);
+            return Results.File(ms.ToArray(), "message/rfc822", MailTemplate.SafeFileName(v.Mail.FileName) + ".eml");
+        });
+
+        // Melder meldet: Entwurf ist in Outlook offen → Vorgang „An Outlook übergeben“, kein Autoversand mehr
+        app.MapPost("/melder/api/vorgang/{id}/outlook", (string id, HttpContext ctx, UserStore users, DocumentStore store, SendService send) =>
+        {
+            if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
+            var v = store.Get(id);
+            if (v is null || !PortalAccess.ForUser(f.User).CanSee(v)) return Results.NotFound();
+            send.MarkOutlook(id, $"{f.User.Name} (Outlook, {f.Device.Name})");
+            return Results.Ok(new { ok = true });
+        });
+
+        // Portal: „In Outlook öffnen“ → der eigene Melder öffnet den Entwurf
+        app.MapPost("/api/vorgaenge/{id}/outlook", (string id, PortalAccess access, HttpContext ctx, DocumentStore store, EventHub hub) =>
+        {
+            var a = access.For(ctx);
+            var v = store.Get(id);
+            if (v is null || !a.CanSee(v)) return Results.NotFound();
+            if (a.UserId is null) return Results.BadRequest(new { error = "Nur mit einem Portal-Benutzer möglich (Melder ist an den Benutzer gekoppelt)." });
+            if (hub.Subscribers(a.UserId) == 0) return Results.BadRequest(new { error = "Kein Melder verbunden – bitte den Belegpost Melder auf diesem PC starten." });
+            var title = string.Join(" ", new[] { v.DocumentType, v.VoucherId }.Where(x => !string.IsNullOrWhiteSpace(x)));
+            hub.Publish(a.UserId, "outlook", v.Id, title.Length > 0 ? title : v.OriginalFileName ?? v.Id, v.Status, null, v.Mail.Enabled);
+            return Results.Ok(new { message = "An den Melder geschickt – Outlook öffnet sich gleich." });
         });
 
         // Download des Melders (liegt neben Belegpost.exe)

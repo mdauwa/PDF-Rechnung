@@ -7,9 +7,11 @@ public sealed record HistoryEntry(DateTimeOffset At, string By, string Action, s
 public static class VorgangStatus
 {
     public const string Error = "fehler", Warning = "warnung", Ready = "bereit", NoMail = "ohneVersand",
-        Sending = "inVersand", Sent = "versendet", SendError = "versandfehler", Discarded = "verworfen";
+        Sending = "inVersand", Sent = "versendet", SendError = "versandfehler", Discarded = "verworfen",
+        /// <summary>Über den Melder als Entwurf in Outlook geöffnet – der Benutzer versendet selbst.</summary>
+        Outlook = "outlook";
 
-    public static readonly string[] All = { Error, Warning, Ready, NoMail, Sending, Sent, SendError, Discarded };
+    public static readonly string[] All = { Error, Warning, Ready, NoMail, Sending, Sent, SendError, Discarded, Outlook };
     /// <summary>Abgeschlossen: nur diese werden nach Ablauf der Aufbewahrungsdauer gelöscht.</summary>
     public static bool IsFinal(string s) => s is Sent or Discarded or NoMail;
 }
@@ -98,7 +100,7 @@ public sealed class Vorgang
     /// <summary>Status nach der Prüfung (versendete/verworfene Vorgänge bleiben, wie sie sind).</summary>
     public void UpdateStatus()
     {
-        if (Status is VorgangStatus.Sent or VorgangStatus.Discarded or VorgangStatus.Sending) return;
+        if (Status is VorgangStatus.Sent or VorgangStatus.Discarded or VorgangStatus.Sending or VorgangStatus.Outlook) return;
         Status = ErrorCount > 0 ? VorgangStatus.Error
             : !Mail.Enabled ? VorgangStatus.NoMail
             : WarningCount > 0 ? VorgangStatus.Warning

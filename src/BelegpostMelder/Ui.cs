@@ -288,3 +288,72 @@ internal sealed class MenuRenderer : ToolStripProfessionalRenderer
         public override Color CheckPressedBackground => Color.Transparent;
     }
 }
+
+/// <summary>Auswahl aus wenigen Möglichkeiten als Segmente (wie Tabs), z. B. „Portal | Outlook | Nur Hinweis“.</summary>
+internal sealed class Segmented : Control
+{
+    private (string Key, string Text)[] _items = Array.Empty<(string, string)>();
+    private string _value = "";
+    private int _hover = -1;
+    public event EventHandler? ValueChanged;
+
+    public Segmented()
+    {
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
+        Font = Theme.Body;
+        Cursor = Cursors.Hand;
+        Height = 38;
+    }
+
+    public void SetItems(params (string Key, string Text)[] items) { _items = items; Invalidate(); }
+
+    public string Value
+    {
+        get => _value;
+        set { if (_value == value) return; _value = value; Invalidate(); ValueChanged?.Invoke(this, EventArgs.Empty); }
+    }
+
+    private RectangleF Seg(int i)
+    {
+        var s = Theme.Scale(this);
+        var w = (Width - 8 * s) / Math.Max(1, _items.Length);
+        return new RectangleF(4 * s + i * w, 4 * s, w, Height - 8 * s);
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        var h = Enumerable.Range(0, _items.Length).FirstOrDefault(i => Seg(i).Contains(e.Location), -1);
+        if (h != _hover) { _hover = h; Invalidate(); }
+        base.OnMouseMove(e);
+    }
+    protected override void OnMouseLeave(EventArgs e) { _hover = -1; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnMouseClick(MouseEventArgs e)
+    {
+        for (var i = 0; i < _items.Length; i++) if (Seg(i).Contains(e.Location)) Value = _items[i].Key;
+        base.OnMouseClick(e);
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.Clear(Parent?.BackColor ?? Theme.Surface);
+        Theme.Smooth(g);
+        var s = Theme.Scale(this);
+        using (var path = Theme.Round(new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), 9 * s))
+        using (var b = new SolidBrush(Theme.Surface2)) { g.FillPath(b, path); using var p = new Pen(Theme.Border); g.DrawPath(p, path); }
+        for (var i = 0; i < _items.Length; i++)
+        {
+            var r = Seg(i);
+            var active = _items[i].Key == _value;
+            if (active || i == _hover)
+            {
+                using var path = Theme.Round(r, 7 * s);
+                using var b = new SolidBrush(active ? Theme.Accent : Theme.AccentSoft);
+                g.FillPath(b, path);
+            }
+            using var f = active ? Theme.Strong : Theme.Body;
+            TextRenderer.DrawText(g, _items[i].Text, f, Rectangle.Round(r), active ? Color.White : Theme.Text,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine);
+        }
+    }
+}

@@ -6,7 +6,7 @@ public sealed class TrayContext : ApplicationContext
     private readonly MelderConfig _cfg = MelderConfig.Load();
     private readonly MelderClient _client;
     private readonly NotifyIcon _icon;
-    private readonly ToolStripMenuItem _status, _auto, _autostart, _openLast, _openPortal;
+    private readonly ToolStripMenuItem _status, _autostart, _openLast, _openPortal, _lastOutlook, _actPortal, _actOutlook, _actHint;
     private readonly WindowsFormsSynchronizationContext _ui;
     private MainWindow? _window;
 
@@ -23,7 +23,14 @@ public sealed class TrayContext : ApplicationContext
         _status = new ToolStripMenuItem("…") { Enabled = false };
         _openPortal = new ToolStripMenuItem("Portal öffnen", null, (_, _) => OpenPath("/"));
         _openLast = new ToolStripMenuItem("Letzten Beleg öffnen", null, (_, _) => { if (_cfg.LastDocumentPath is { } p) OpenPath(p); });
-        _auto = new ToolStripMenuItem("Neue Belege automatisch öffnen", null, (_, _) => { _cfg.AutoOpen = !_cfg.AutoOpen; _cfg.Save(); Refresh(); });
+        _lastOutlook = new ToolStripMenuItem("Letzten Beleg in Outlook", null, (_, _) => { if (_cfg.LastDocumentId is { } id) _ = OpenOutlook(id, null); });
+        _actPortal = new ToolStripMenuItem("Ansicht im Portal öffnen", null, (_, _) => SetAction("portal"));
+        _actOutlook = new ToolStripMenuItem("E-Mail in Outlook öffnen", null, (_, _) => SetAction("outlook"));
+        _actHint = new ToolStripMenuItem("Nur Hinweis anzeigen", null, (_, _) => SetAction("hinweis"));
+        var actions = new ToolStripMenuItem("Bei neuem Beleg");
+        actions.DropDownItems.AddRange(new ToolStripItem[] { _actPortal, _actOutlook, _actHint });
+        actions.DropDown.BackColor = Theme.Surface;
+        if (actions.DropDown is ToolStripDropDownMenu dd) dd.Renderer = new MenuRenderer();
         _autostart = new ToolStripMenuItem("Mit Windows starten", null, (_, _) => { try { Program.Autostart = !Program.Autostart; } catch { } Refresh(); });
         var menu = new ContextMenuStrip
         {
@@ -32,7 +39,7 @@ public sealed class TrayContext : ApplicationContext
         };
         menu.Items.AddRange(new ToolStripItem[]
         {
-            head, _status, new ToolStripSeparator(), _openPortal, _openLast, new ToolStripSeparator(), _auto, _autostart,
+            head, _status, new ToolStripSeparator(), _openPortal, _openLast, _lastOutlook, new ToolStripSeparator(), actions, _autostart,
             new ToolStripSeparator(), new ToolStripMenuItem("Beenden", null, (_, _) => ExitThread())
         });
         foreach (ToolStripItem i in menu.Items) if (i is ToolStripMenuItem) i.Padding = new Padding(4, 5, 4, 5);
@@ -84,7 +91,10 @@ public sealed class TrayContext : ApplicationContext
 
     private void Refresh()
     {
-        _auto.Checked = _cfg.AutoOpen;
+        _actPortal.Checked = _cfg.Action == "portal";
+        _actOutlook.Checked = _cfg.Action == "outlook";
+        _actHint.Checked = _cfg.Action == "hinweis";
+        _lastOutlook.Enabled = _cfg.Paired && _cfg.LastDocumentId is not null;
         try { _autostart.Checked = Program.Autostart; } catch { }
         _openPortal.Enabled = _cfg.Paired;
         _openLast.Enabled = _cfg.Paired && _cfg.LastDocumentPath is not null;
@@ -98,9 +108,36 @@ public sealed class TrayContext : ApplicationContext
         Program.OpenUrl(_cfg.Server.TrimEnd('/') + (path.StartsWith('/') ? path : "/" + path));
     }
 
+    /// <summary>Was bei einem neuen Beleg passiert; Outlook-Modus wird dem Server gemeldet (kein Autoversand).</summary>
+    public void SetAction(string action)
+    {
+        _cfg.OnNewDocument = action;
+        _cfg.AutoOpen = action == "portal";
+        _cfg.Save();
+        _ = _client.SendSettings();
+        Refresh();
+    }
+
+    /// <summary>Mail des Belegs als Entwurf in Outlook öffnen.</summary>
+    public async Task OpenOutlook(string documentId, string? title)
+    {
+        try
+        {
+            var r = await OutlookBridge.OpenDraft(_cfg, documentId);
+            if (!r.Ok) ToastWindow.Show(title ?? "Outlook", r.Message, ToastWindow.Kinds.Bad, () => OpenPath("/#/vorgang?id=" + Uri.EscapeDataString(documentId)), "Im Portal", 12);
+            else if (!r.ViaOutlook) ToastWindow.Show(title ?? "E-Mail-Entwurf", r.Message, ToastWindow.Kinds.Info, null, seconds: 6);
+        }
+        catch (Exception ex)
+        {
+            ToastWindow.Show(title ?? "Outlook", "Der Entwurf konnte nicht geöffnet werden: " + ex.Message, ToastWindow.Kinds.Bad, null, seconds: 12);
+        }
+    }
+
     private void OnBeleg(BelegEvent e)
     {
         Refresh();
+        // Aus dem Portal angestoßen: „In Outlook öffnen“
+        if (e.Kind == "outlook") { _ = OpenOutlook(e.Id, e.Title); return; }
         var kind = e.Status switch
         {
             "fehler" or "versandfehler" => ToastWindow.Kinds.Bad,
@@ -117,12 +154,21 @@ public sealed class TrayContext : ApplicationContext
             _ => "Neuer Beleg."
         };
         var title = e.Title.Length > 0 ? e.Title : "Neuer Beleg";
-        if (_cfg.AutoOpen)
+        Action? outlook = e.Mail ? () => _ = OpenOutlook(e.Id, title) : null;
+        switch (_cfg.Action)
         {
-            OpenPath(e.Path);
-            ToastWindow.Show(title, text + "\nIm Browser geöffnet.", kind, null, seconds: 6);
+            case "outlook" when e.Mail:
+                _ = OpenOutlook(e.Id, title);
+                ToastWindow.Show(title, text + "\nAls E-Mail in Outlook geöffnet.", kind, () => OpenPath(e.Path), "Im Portal", 6);
+                break;
+            case "portal":
+                OpenPath(e.Path);
+                ToastWindow.Show(title, text + "\nIm Browser geöffnet.", kind, outlook, "In Outlook", 6);
+                break;
+            default:
+                ToastWindow.Show(title, text, kind, () => OpenPath(e.Path), "Öffnen", 12, outlook, outlook is null ? null : "In Outlook");
+                break;
         }
-        else ToastWindow.Show(title, text, kind, () => OpenPath(e.Path));
     }
 
     /// <summary>Link aus dem Portal („Im Melder übernehmen“) oder anderer Aufruf.</summary>

@@ -95,8 +95,16 @@ function route() {
   view.className = "view";
 
   let key = hash.split("?")[0] || "vorgaenge";
-  if (!portal.authenticated) key = "anmeldung";
-  else if (key === "anmeldung") key = "vorgaenge";
+  if (!portal.authenticated) {
+    // Direktlink (z. B. #/vorgang?id=…) über die Anmeldung hinweg merken
+    if (key !== "anmeldung" && hash) try { sessionStorage.setItem("belegpost.ziel", "#/" + hash); } catch { }
+    key = "anmeldung";
+  } else {
+    let ziel = null;
+    try { ziel = sessionStorage.getItem("belegpost.ziel"); sessionStorage.removeItem("belegpost.ziel"); } catch { }
+    if (ziel && (key === "anmeldung" || !hash)) { location.replace(ziel); return; }
+    if (key === "anmeldung") key = "vorgaenge";
+  }
   if (key === "einstellungen" && !portal.isAdmin) key = "vorgaenge";
   const v = VIEWS[key] || VIEWS.vorgaenge;
   $("#viewTitle").textContent = v.title;
@@ -122,6 +130,11 @@ async function renderLogin(view) {
   const q = new URLSearchParams(location.hash.split("?")[1] || "");
   let st = { isLocal: false, needsSetup: false, entraEnabled: false };
   try { st = await (await fetch("api/auth/status", { cache: "no-store" })).json(); } catch { /* Server nicht erreichbar */ }
+  let ziel = null;
+  try { ziel = sessionStorage.getItem("belegpost.ziel"); } catch { }
+  const loginUrl = "auth/login?returnUrl=" + encodeURIComponent("/" + (ziel || ""));
+  // Direktlink von außen (z. B. nach dem Druck): gleich zur Microsoft-Anmeldung – meist ohne Eingabe (SSO)
+  if (ziel && st.entraEnabled && !st.isLocal && !q.get("fehler") && !q.get("abgemeldet")) { location.href = loginUrl; return; }
   const err = q.get("fehler");
   const errText = err === "nicht-freigeschaltet"
     ? `Das Konto <b>${esc(q.get("konto") || "")}</b> ist im Portal nicht freigeschaltet. Bitte an einen Administrator wenden.`
@@ -140,7 +153,7 @@ async function renderLogin(view) {
   } else {
     body = `<h2>Anmeldung</h2>
       ${q.get("abgemeldet") ? `<p class="meta">Du wurdest abgemeldet.</p>` : ""}
-      ${st.entraEnabled ? `<a class="btn ms-btn" href="auth/login?returnUrl=%2F"><span class="ms-logo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Mit Microsoft anmelden</a>`
+      ${st.entraEnabled ? `<a class="btn ms-btn" href="${esc(loginUrl)}"><span class="ms-logo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Mit Microsoft anmelden</a>`
         : `<p class="meta">Die Anmeldung mit Microsoft ist noch nicht eingerichtet${st.isLocal ? " (Einstellungen → Anmeldung)" : " – bitte an einen Administrator wenden"}.</p>`}
       ${st.isLocal ? `<div class="login-sep"><span>oder direkt am Server</span></div>
       <form id="loginForm" class="login-form">
@@ -165,7 +178,8 @@ async function renderLogin(view) {
       } else {
         await api("POST", "api/auth/local", { password: pw });
       }
-      location.hash = "#/";
+      location.hash = ziel || "#/";
+      try { sessionStorage.removeItem("belegpost.ziel"); } catch { }
       await loadPortal();
       route();
     } catch (ex) { m.textContent = ex.message; m.hidden = false; }

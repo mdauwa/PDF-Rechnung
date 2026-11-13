@@ -12,6 +12,7 @@ async function renderMelder(view) {
   catch (e) { view.innerHTML = `<div class="notice">${esc(e.message)}</div>`; return; }
   const fmt = s => s ? new Date(s).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–";
   const notifyState = !window.Notification ? "nicht verfügbar" : Notification.permission === "granted" ? "erlaubt" : Notification.permission === "denied" ? "im Browser blockiert" : "noch nicht erlaubt";
+  const isMac = /Mac/i.test(navigator.platform || navigator.userAgent);
   const localhost = /^(https?:\/\/)?(localhost|127\.0\.0\.1|\[::1\])(:|$)/i.test(d.server.replace(/^https?:\/\//, ""));
 
   view.innerHTML = `
@@ -27,8 +28,13 @@ async function renderMelder(view) {
     ${!d.canPair ? `<div class="notice">Der Melder wird mit deinem eigenen Portal-Konto verbunden. Als Server-Administrator geht das nicht – bitte mit dem Microsoft-Konto anmelden.</div>` : `
     ${localhost ? `<div class="notice">Du bist über <b>localhost</b> angemeldet. Für einen anderen PC das Portal dort mit der Server-Adresse öffnen (z. B. https://server:${location.port || 443}/) und den Melder von dort verbinden.</div>` : ""}
     <ol class="steps">
-      <li>${d.download ? `<a class="btn ghost" href="${esc(d.download)}" download>Belegpost Melder herunterladen</a> und starten (keine Administratorrechte nötig, startet künftig mit Windows).`
-        : `Den Belegpost Melder (<code>Belegpost-Melder.exe</code>) vom Administrator holen und starten – er liegt am Server noch nicht neben <code>Belegpost.exe</code>.`}</li>
+      <li>${isMac
+        ? (d.downloadMac ? `<a class="btn ghost" href="${esc(d.downloadMac)}" download>Belegpost Melder für Mac herunterladen</a>, entpacken, in „Programme“ ziehen und starten (beim ersten Mal Rechtsklick → Öffnen). Er erscheint oben in der Menüleiste.`
+          : `Den Belegpost Melder für Mac (<code>Belegpost-Melder-macOS.zip</code>) vom Administrator holen – er liegt am Server noch nicht neben <code>Belegpost.exe</code>.`)
+        : (d.download ? `<a class="btn ghost" href="${esc(d.download)}" download>Belegpost Melder herunterladen</a> und starten (keine Administratorrechte nötig, startet künftig mit Windows).`
+          : `Den Belegpost Melder (<code>Belegpost-Melder.exe</code>) vom Administrator holen und starten – er liegt am Server noch nicht neben <code>Belegpost.exe</code>.`)}
+        ${!isMac && d.downloadMac ? `<br><span class="meta-inline">Für Mac: <a href="${esc(d.downloadMac)}" download>Belegpost Melder für macOS</a></span>` : ""}
+        ${isMac && d.download ? `<br><span class="meta-inline">Für Windows: <a href="${esc(d.download)}" download>Belegpost-Melder.exe</a></span>` : ""}</li>
       <li><label class="field inline"><span class="lbl">Name dieses PCs</span><input id="mlName" value="${esc(store.get("melder.name", ""))}" placeholder="z. B. Büro Martin"></label>
         <button class="btn" id="mlPair">Melder verbinden</button></li>
     </ol>

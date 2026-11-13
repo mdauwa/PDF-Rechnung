@@ -73,6 +73,12 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
   - Die Belege solcher Benutzer werden nicht automatisch versendet.
   - Ablauf: Im ERP drucken → Melder meldet und öffnet das Portal mit dem Vorgang → „Freigeben & in Outlook senden“ → Outlook öffnet die fertige Mail.
   - Absender ist das Standardkonto in Outlook.
+- **Melder für macOS (13.11.2026):**
+  - `src/BelegpostMelderMac`: SwiftUI-Menüleisten-App (macOS 13+), gleiche Melder-API wie Windows.
+  - Outlook für Mac per AppleScript, Rückfall `.eml` bzw. Apple Mail.
+  - Bauen auf einem Mac mit `build.sh` (Universal-Binary, ad-hoc oder Developer-ID-Signatur, optional Notarisierung).
+  - Die ZIP liegt neben `Belegpost.exe`; das Portal bietet sie Mac-Benutzern an.
+  - **Noch nie kompiliert** (in der Linux-Umgebung gibt es kein Swift). Der erste Build auf dem Mac kann Korrekturen brauchen.
 - **Firmenportal:**
   - Übergabe der Anmeldung per HS256-JWT an `/auth/firmenportal` (`HandoverLogin`, einmalige `jti`, höchstens 5 Minuten).
   - Einbettung über `frame-ancestors`; Cookie `SameSite=None`, wenn aktiv.

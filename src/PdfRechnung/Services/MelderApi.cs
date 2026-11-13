@@ -18,6 +18,7 @@ public sealed record MelderSettingsRequest(bool Outlook);
 public static class MelderApi
 {
     public const string ExeName = "Belegpost-Melder.exe";
+    public const string MacZipName = "Belegpost-Melder-macOS.zip";
     public const string Scheme = "belegpost-melder";
 
     public static void Map(WebApplication app)
@@ -33,6 +34,7 @@ public static class MelderApi
                 devices = a.UserId is null ? new List<MelderDevice>() : users.Devices(a.UserId),
                 canPair = a.UserId is not null,
                 download = File.Exists(ExePath) ? "melder/" + ExeName : null,
+                downloadMac = File.Exists(MacZipPath) ? "melder/" + MacZipName : null,
                 server = $"{ctx.Request.Scheme}://{ctx.Request.Host}"
             });
         });
@@ -173,12 +175,16 @@ public static class MelderApi
             return Results.Ok(new { message = "An den Melder geschickt – Outlook öffnet sich gleich." });
         });
 
+        app.MapGet("/melder/" + MacZipName, () =>
+            File.Exists(MacZipPath) ? Results.File(MacZipPath, "application/zip", MacZipName) : Results.NotFound());
+
         // Download des Melders (liegt neben Belegpost.exe)
         app.MapGet("/melder/" + ExeName, () =>
             File.Exists(ExePath) ? Results.File(ExePath, "application/octet-stream", ExeName) : Results.NotFound());
     }
 
     public static string ExePath => Path.Combine(AppContext.BaseDirectory, ExeName);
+    public static string MacZipPath => Path.Combine(AppContext.BaseDirectory, MacZipName);
 
     private static string? Bearer(HttpContext ctx)
     {

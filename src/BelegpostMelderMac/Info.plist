@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>Belegpost Melder</string>
+  <key>CFBundleDisplayName</key><string>Belegpost Melder</string>
+  <key>CFBundleIdentifier</key><string>at.belegpost.melder</string>
+  <key>CFBundleExecutable</key><string>BelegpostMelder</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>0.1.0</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleDevelopmentRegion</key><string>de</string>
+  <key>LSMinimumSystemVersion</key><string>13.0</string>
+  <!-- nur Menüleiste, kein Dock-Symbol -->
+  <key>LSUIElement</key><true/>
+  <!-- Link „belegpost-melder:koppeln?c=…“ aus dem Portal -->
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key><string>Belegpost Melder</string>
+      <key>CFBundleURLSchemes</key><array><string>belegpost-melder</string></array>
+    </dict>
+  </array>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Der Belegpost Melder öffnet die E-Mail eines Belegs mit Text und Anhängen als Entwurf in Outlook.</string>
+</dict>
+</plist>

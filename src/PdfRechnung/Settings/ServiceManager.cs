@@ -59,6 +59,8 @@ public static class ServiceManager
             if (string.Equals(Path.GetFullPath(src).TrimEnd('\\'), Path.GetFullPath(dst).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) return false;
             var melder = Path.Combine(src, Services.MelderApi.ExeName);
             if (File.Exists(melder) && !SameFile(melder, Path.Combine(dst, Services.MelderApi.ExeName))) return true;
+            var mac = Path.Combine(src, Services.MelderApi.MacZipName);
+            if (File.Exists(mac) && !SameFile(mac, Path.Combine(dst, Services.MelderApi.MacZipName))) return true;
             var www = Path.Combine(src, "wwwroot");
             if (!Directory.Exists(www)) return false;
             foreach (var f in Directory.EnumerateFiles(www, "*", SearchOption.AllDirectories))
@@ -114,6 +116,8 @@ public static class ServiceManager
         // Melder für die Benutzer-PCs (wird im Portal zum Download angeboten)
         var melder = Path.Combine(src, PdfRechnung.Services.MelderApi.ExeName);
         if (File.Exists(melder)) CopyWithRetry(melder, Path.Combine(dst, PdfRechnung.Services.MelderApi.ExeName));
+        var melderMac = Path.Combine(src, PdfRechnung.Services.MelderApi.MacZipName);
+        if (File.Exists(melderMac)) CopyWithRetry(melderMac, Path.Combine(dst, PdfRechnung.Services.MelderApi.MacZipName));
         foreach (var dir in new[] { "wwwroot", "sql" })
         {
             var from = Path.Combine(src, dir);

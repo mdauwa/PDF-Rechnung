@@ -23,6 +23,8 @@ public sealed class MelderClient : IDisposable
 
     public event Action<MelderState, string>? StateChanged;
     public event Action<BelegEvent>? Received;
+    /// <summary>Freigabe „über Outlook senden“ hat sich geändert.</summary>
+    public event Action? PermissionsChanged;
     public MelderState State { get; private set; } = MelderState.NotPaired;
 
     public void Start()
@@ -61,7 +63,7 @@ public sealed class MelderClient : IDisposable
     }
 
     /// <summary>Verbindung prüfen (beim Koppeln): liefert Benutzer und Portal-Titel oder wirft mit verständlicher Meldung.</summary>
-    public static async Task<(string User, string Title)> Hello(string server, string token, string? thumbprint)
+    public static async Task<(string User, string Title, bool Outlook)> Hello(string server, string token, string? thumbprint)
     {
         using var http = CreateHttp(thumbprint, TimeSpan.FromSeconds(15));
         using var req = new HttpRequestMessage(HttpMethod.Get, server.TrimEnd('/') + "/melder/api/hallo");
@@ -75,7 +77,8 @@ public sealed class MelderClient : IDisposable
             if (res.StatusCode == HttpStatusCode.Unauthorized) throw new InvalidOperationException("Der Code ist nicht (mehr) gültig – im Portal bitte neu verbinden.");
             res.EnsureSuccessStatusCode();
             using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
-            return (doc.RootElement.GetProperty("user").GetString() ?? "", doc.RootElement.TryGetProperty("title", out var t) ? t.GetString() ?? "Belegpost" : "Belegpost");
+            return (doc.RootElement.GetProperty("user").GetString() ?? "", doc.RootElement.TryGetProperty("title", out var t) ? t.GetString() ?? "Belegpost" : "Belegpost",
+                doc.RootElement.TryGetProperty("outlook", out var o) && o.ValueKind == JsonValueKind.True);
         }
     }
 
@@ -133,10 +136,14 @@ public sealed class MelderClient : IDisposable
             using var http = CreateHttp(_cfg.Thumbprint, TimeSpan.FromSeconds(15));
             using var req = new HttpRequestMessage(HttpMethod.Post, _cfg.Server.TrimEnd('/') + "/melder/api/einstellungen")
             {
-                Content = new StringContent(JsonSerializer.Serialize(new { outlook = _cfg.Action == "outlook" }), System.Text.Encoding.UTF8, "application/json")
+                Content = new StringContent(JsonSerializer.Serialize(new { outlook = _cfg.OnNewDocument == "outlook" }), System.Text.Encoding.UTF8, "application/json")
             };
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            using var _ = await http.SendAsync(req);
+            using var res = await http.SendAsync(req);
+            if (!res.IsSuccessStatusCode) return;
+            using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
+            var allowed = doc.RootElement.TryGetProperty("outlookAllowed", out var a) && a.ValueKind == JsonValueKind.True;
+            if (allowed != _cfg.OutlookAllowed) { _cfg.OutlookAllowed = allowed; try { _cfg.Save(); } catch { } PermissionsChanged?.Invoke(); }
         }
         catch { /* beim nächsten Verbinden erneut */ }
     }

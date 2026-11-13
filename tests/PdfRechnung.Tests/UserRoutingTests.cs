@@ -188,8 +188,9 @@ public sealed class OutlookHandoverTests : IDisposable
         var users = new UserStore(_dir);
         users.Replace(new List<PortalUser> { new() { Id = "martin", Name = "Martin", Email = "m@firma.at", OperatorNumbers = { "007" } } });
         var (dev, _) = users.AddDevice("martin", "PC");
-        Assert.False(users.UsesOutlook("martin"));
         users.SetDeviceOutlook(dev.Id, true);
+        Assert.False(users.UsesOutlook("martin")); // ohne Freigabe kein Outlook
+        users.Update(d => d.Users[0].SendViaOutlook = true);
         Assert.True(users.UsesOutlook("martin"));
 
         var settings = new SettingsStore(_dir);

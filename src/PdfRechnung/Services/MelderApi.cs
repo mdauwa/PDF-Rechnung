@@ -80,7 +80,7 @@ public static class MelderApi
             var found = users.FindDevice(Bearer(ctx));
             if (found is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
             users.TouchDevice(f.Device.Id);
-            return Results.Ok(new { user = f.User.Name, device = f.Device.Name, title = portal.Value.Title });
+            return Results.Ok(new { user = f.User.Name, device = f.Device.Name, title = portal.Value.Title, outlook = f.User.SendViaOutlook });
         });
 
         app.MapGet("/melder/api/ereignisse", async (HttpContext ctx, UserStore users, EventHub hub) =>
@@ -101,8 +101,8 @@ public static class MelderApi
         app.MapPost("/melder/api/einstellungen", (MelderSettingsRequest req, HttpContext ctx, UserStore users) =>
         {
             if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
-            users.SetDeviceOutlook(f.Device.Id, req.Outlook);
-            return Results.Ok(new { saved = true });
+            users.SetDeviceOutlook(f.Device.Id, req.Outlook && f.User.SendViaOutlook);
+            return Results.Ok(new { saved = true, outlookAllowed = f.User.SendViaOutlook });
         });
 
         // Mail eines Vorgangs für Outlook: Empfänger, Betreff, HTML-Text, Logo (inline) und alle Anlagen
@@ -112,6 +112,7 @@ public static class MelderApi
             if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
             var v = store.Get(id);
             if (v is null || !PortalAccess.ForUser(f.User).CanSee(v)) return Results.NotFound(new { error = "Vorgang nicht gefunden." });
+            if (!f.User.SendViaOutlook) return Results.Json(new { error = "Senden über Outlook ist für dich nicht freigeschaltet (Einstellungen → Benutzer)." }, statusCode: 403);
             if (!v.Mail.Enabled) return Results.Json(new { error = "Für diesen Beleg ist kein E-Mail-Versand vorgesehen (@@ml0@@)." }, statusCode: 409);
             var (mail, err) = await send.BuildMail(v, ct);
             if (mail is null) return Results.Json(new { error = err }, statusCode: 409);
@@ -135,6 +136,7 @@ public static class MelderApi
             if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
             var v = store.Get(id);
             if (v is null || !PortalAccess.ForUser(f.User).CanSee(v)) return Results.NotFound(new { error = "Vorgang nicht gefunden." });
+            if (!f.User.SendViaOutlook) return Results.Json(new { error = "Senden über Outlook ist für dich nicht freigeschaltet (Einstellungen → Benutzer)." }, statusCode: 403);
             var (mail, err) = await send.BuildMail(v, ct);
             if (mail is null) return Results.Json(new { error = err }, statusCode: 409);
             var msg = MailSender.BuildMime(mailOpt.CurrentValue, mail, includeCopyTo: false);
@@ -150,7 +152,7 @@ public static class MelderApi
         {
             if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
             var v = store.Get(id);
-            if (v is null || !PortalAccess.ForUser(f.User).CanSee(v)) return Results.NotFound();
+            if (v is null || !PortalAccess.ForUser(f.User).CanSee(v) || !f.User.SendViaOutlook) return Results.NotFound();
             send.MarkOutlook(id, $"{f.User.Name} (Outlook, {f.Device.Name})");
             return Results.Ok(new { ok = true });
         });
@@ -162,6 +164,9 @@ public static class MelderApi
             var v = store.Get(id);
             if (v is null || !a.CanSee(v)) return Results.NotFound();
             if (a.UserId is null) return Results.BadRequest(new { error = "Nur mit einem Portal-Benutzer möglich (Melder ist an den Benutzer gekoppelt)." });
+            if (!a.Outlook || !a.CanSend) return Results.Json(new { error = "Senden über Outlook ist für dich nicht freigeschaltet – bitte an einen Administrator wenden." }, statusCode: 403);
+            if (!v.Mail.Enabled) return Results.BadRequest(new { error = "Für diesen Beleg ist kein E-Mail-Versand vorgesehen." });
+            if (v.Status == VorgangStatus.Error) return Results.BadRequest(new { error = "Der Vorgang hat Fehler – bitte zuerst beheben (z. B. Empfänger, Anlagen)." });
             if (hub.Subscribers(a.UserId) == 0) return Results.BadRequest(new { error = "Kein Melder verbunden – bitte den Belegpost Melder auf diesem PC starten." });
             var title = string.Join(" ", new[] { v.DocumentType, v.VoucherId }.Where(x => !string.IsNullOrWhiteSpace(x)));
             hub.Publish(a.UserId, "outlook", v.Id, title.Length > 0 ? title : v.OriginalFileName ?? v.Id, v.Status, null, v.Mail.Enabled);

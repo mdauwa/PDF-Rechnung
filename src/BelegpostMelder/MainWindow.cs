@@ -164,6 +164,8 @@ internal sealed class MainWindow : Form
         y = _statusCard.Bottom + (int)(12 * s);
 
         // ---- Einstellungen ----
+        if (_cfg.OutlookAllowed) _action.SetItems(("portal", "Portal"), ("outlook", "Outlook"), ("hinweis", "Nur Hinweis"));
+        else _action.SetItems(("portal", "Portal"), ("hinweis", "Nur Hinweis"));
         _action.Value = _cfg.Action;
         UpdateActionHint();
         try { _tStart.Checked = Program.Autostart; } catch { }

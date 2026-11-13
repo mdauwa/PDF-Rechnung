@@ -241,6 +241,7 @@ app.MapGet("/api/portal", (IOptionsSnapshot<PortalOptions> portal, HttpContext c
         isLocalAdmin = a.IsLocalAdmin,
         canSend = a.CanSend,
         userId = a.UserId,
+        sendViaOutlook = a.Outlook,
         setupMode = rt.SetupMode,
         mailEnabled = a.Authenticated && mail.Value.Enabled,
         autoSend = a.Authenticated && mail.Value.Enabled && mail.Value.AutoSend,

@@ -18,10 +18,13 @@ public sealed class MelderConfig
     public bool AutoOpen { get; set; } = true;
     /// <summary>Was passiert bei einem neuen Beleg: "portal" (Ansicht im Browser), "outlook" (Mail-Entwurf in Outlook), "hinweis" (nur Meldung).</summary>
     public string? OnNewDocument { get; set; }
-    public string Action => OnNewDocument is "portal" or "outlook" or "hinweis" ? OnNewDocument : AutoOpen ? "portal" : "hinweis";
+    public string Action => OnNewDocument is "outlook" && !OutlookAllowed ? "portal"
+        : OnNewDocument is "portal" or "outlook" or "hinweis" ? OnNewDocument : AutoOpen ? "portal" : "hinweis";
     public long? LastSeq { get; set; }
     public string? LastDocumentPath { get; set; }
     public string? LastDocumentId { get; set; }
+    /// <summary>Darf dieser Benutzer über Outlook senden (Freigabe im Portal)?</summary>
+    public bool OutlookAllowed { get; set; }
 
     public static string Folder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Belegpost");
     public static string FilePath => Path.Combine(Folder, "melder.json");

@@ -69,7 +69,9 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
   - Er legt den Entwurf per COM im klassischen Outlook an und zeigt ihn an (`Display`). Es werden nur Eigenschaften gesetzt, deshalb gibt es keine Sicherheitsabfrage.
   - Ohne klassisches Outlook: `.eml` mit `X-Unsent` (`/melder/api/vorgang/{id}/eml`).
   - Danach steht der Vorgang auf Status `outlook` („In Outlook“).
-  - Benutzer, deren Melder „Outlook“ eingestellt hat, sind vom Autoversand ausgenommen (`MelderDevice.OpenInOutlook`).
+  - **Freigabe je Benutzer:** Spalte „Outlook“ (`PortalUser.SendViaOutlook`). Nur dann gibt es „Freigeben & in Outlook senden“ und die Melder-Einstellung „Outlook“; die Endpunkte prüfen das ebenfalls.
+  - Die Belege solcher Benutzer werden nicht automatisch versendet.
+  - Ablauf: Im ERP drucken → Melder meldet und öffnet das Portal mit dem Vorgang → „Freigeben & in Outlook senden“ → Outlook öffnet die fertige Mail.
   - Absender ist das Standardkonto in Outlook.
 - **Firmenportal:**
   - Übergabe der Anmeldung per HS256-JWT an `/auth/firmenportal` (`HandoverLogin`, einmalige `jti`, höchstens 5 Minuten).

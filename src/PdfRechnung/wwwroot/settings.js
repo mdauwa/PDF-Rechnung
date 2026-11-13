@@ -246,7 +246,7 @@ async function onAction(e) {
       case "unit-add": ST.s.invoice.units[""] = ""; drawTab(); document.querySelector('.unit .key[value=""]')?.focus(); break;
       case "unit-del": delete ST.s.invoice.units[btn.dataset.key]; markDirty(); drawTab(); break;
       case "user-add":
-        ST.users.users.push({ id: "", name: "", email: "", logins: [], printNames: [], operatorNumbers: [], visibility: "eigene", alsoSees: [], canSend: true, isAdmin: false, active: true });
+        ST.users.users.push({ id: "", name: "", email: "", logins: [], printNames: [], operatorNumbers: [], visibility: "eigene", alsoSees: [], sendViaOutlook: false, canSend: true, isAdmin: false, active: true });
         ST.usersDirty = true; drawTab(); break;
       case "user-del": {
         const u = ST.users.users[+btn.dataset.i];
@@ -798,24 +798,25 @@ function tabUsers() {
   const fmtLogin = d => d ? new Date(d).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–";
   return section("Benutzer",
     `<p class="help">Anmeldung mit dem Microsoft-365-Konto (E-Mail-Adresse). <b>Versenden</b> = darf Versanddaten ändern, senden und verwerfen; ohne dieses Recht nur ansehen.
-      <b>Admin</b> = zusätzlich Einstellungen. <b>Aktiv</b> abgewählt = keine Anmeldung.
+      <b>Outlook</b> = darf lokal über das eigene Outlook senden („Freigeben &amp; in Outlook senden“ öffnet die fertige Mail mit Anhängen über den Melder); seine Belege werden nicht automatisch versendet. <b>Admin</b> = zusätzlich Einstellungen. <b>Aktiv</b> abgewählt = keine Anmeldung.
       <b>ERP-Nr.</b> = dreistellige ERP-Bedienernummer; das ERP druckt sie als <code>@@pb007@@</code>. Der Beleg gehört dann diesem Benutzer und öffnet sich über seinen Melder.
       <b>Druck-Benutzer</b> = Windows- oder ERP-Benutzer dieser Person (aus dem Druckauftrag oder <code>@@pu…@@</code>). Ohne Eintrag wird der Anmeldename ohne Domäne verglichen.
       So landet ein gedruckter Beleg bei „Meine Belege“ und öffnet sich über den Melder auf dem PC dieser Person.
       <b>Sieht Belege</b>: nur eigene, eigene plus die ausgewählter Kollegen (z. B. Vertretung, Sekretariat) oder alle. Admins sehen immer alle; Belege ohne zugeordneten Benutzer sehen nur „alle“ und Admins.</p>
     ${U.users.length ? `<div class="table-wrap"><table class="list mini users"><thead><tr><th>Name</th><th title="ERP-Bedienernummer, 3-stellig – im Druck @@pb007@@">ERP-Nr.</th><th>E-Mail (Anmeldename)</th><th>Weitere Anmeldenamen</th>
-      <th>Versenden</th><th>Admin</th><th>Aktiv</th><th>Letzte Anmeldung</th><th></th></tr></thead><tbody>
+      <th>Versenden</th><th title="Darf Belege lokal über das eigene Outlook senden (über den Belegpost Melder)">Outlook</th><th>Admin</th><th>Aktiv</th><th>Letzte Anmeldung</th><th></th></tr></thead><tbody>
       ${U.users.map((u, i) => `<tr class="${u.active ? "" : "inactive"}">
         <td><input data-u="${i}|name" value="${esc(u.name)}" placeholder="Vorname Nachname"></td>
         <td><input class="erp-no" data-u="${i}|operatorNumbers" value="${esc((u.operatorNumbers || []).join(", "))}" placeholder="007" inputmode="numeric" title="ERP-Bedienernummer (3 Ziffern). Mehrere mit Komma."></td>
         <td><input data-u="${i}|email" value="${esc(u.email || "")}" placeholder="name@firma.at"></td>
         <td><input data-u="${i}|logins" value="${esc((u.logins || []).join(", "))}" placeholder="optional"></td>
         <td><input type="checkbox" data-u="${i}|canSend" ${u.canSend ? "checked" : ""}></td>
+        <td><input type="checkbox" data-u="${i}|sendViaOutlook" ${u.sendViaOutlook ? "checked" : ""} title="Lokal über Outlook senden"></td>
         <td><input type="checkbox" data-u="${i}|isAdmin" ${u.isAdmin ? "checked" : ""}></td>
         <td><input type="checkbox" data-u="${i}|active" ${u.active ? "checked" : ""}></td>
         <td class="meta-inline">${fmtLogin(u.lastLogin)}</td>
         <td><button class="icon-btn" data-st="user-del" data-i="${i}" title="Entfernen">✕</button></td></tr>
-        <tr class="user-sub ${u.active ? "" : "inactive"}"><td colspan="9"><div class="user-sub-grid">
+        <tr class="user-sub ${u.active ? "" : "inactive"}"><td colspan="10"><div class="user-sub-grid">
           <label>Windows-Benutzer (Druckauftrag)<input data-u="${i}|printNames" value="${esc((u.printNames || []).join(", "))}" placeholder="z. B. FIRMA\\mmuster"></label>
           <span class="user-melder">${(U.melder?.[u.id] || []).length
             ? `Melder: ${U.melder[u.id].map(m => esc(m.name)).join(", ")}` : "kein Melder verbunden"}</span>

@@ -61,6 +61,7 @@ public sealed class TrayContext : ApplicationContext
             Refresh();
         });
         _client.Received += e => Post(() => OnBeleg(e));
+        _client.PermissionsChanged += () => Post(Refresh);
 
         Refresh();
         if (_cfg.Paired) _client.Start();
@@ -93,6 +94,7 @@ public sealed class TrayContext : ApplicationContext
     {
         _actPortal.Checked = _cfg.Action == "portal";
         _actOutlook.Checked = _cfg.Action == "outlook";
+        _actOutlook.Visible = _lastOutlook.Visible = _cfg.OutlookAllowed;
         _actHint.Checked = _cfg.Action == "hinweis";
         _lastOutlook.Enabled = _cfg.Paired && _cfg.LastDocumentId is not null;
         try { _autostart.Checked = Program.Autostart; } catch { }
@@ -154,10 +156,10 @@ public sealed class TrayContext : ApplicationContext
             _ => "Neuer Beleg."
         };
         var title = e.Title.Length > 0 ? e.Title : "Neuer Beleg";
-        Action? outlook = e.Mail ? () => _ = OpenOutlook(e.Id, title) : null;
+        Action? outlook = e.Mail && _cfg.OutlookAllowed ? () => _ = OpenOutlook(e.Id, title) : null;
         switch (_cfg.Action)
         {
-            case "outlook" when e.Mail:
+            case "outlook" when e.Mail && _cfg.OutlookAllowed:
                 _ = OpenOutlook(e.Id, title);
                 ToastWindow.Show(title, text + "\nAls E-Mail in Outlook geöffnet.", kind, () => OpenPath(e.Path), "Im Portal", 6);
                 break;
@@ -187,10 +189,10 @@ public sealed class TrayContext : ApplicationContext
         Refresh();
         try
         {
-            var (user, title) = await MelderClient.Hello(p.Server, p.Token, p.Thumbprint);
+            var (user, title, outlook) = await MelderClient.Hello(p.Server, p.Token, p.Thumbprint);
             _client.Stop();
             _cfg.Server = p.Server; _cfg.Token = p.Token; _cfg.Thumbprint = p.Thumbprint;
-            _cfg.UserName = user; _cfg.PortalTitle = title; _cfg.LastSeq = null; _cfg.LastDocumentPath = null;
+            _cfg.UserName = user; _cfg.PortalTitle = title; _cfg.OutlookAllowed = outlook; _cfg.LastSeq = null; _cfg.LastDocumentPath = null;
             _cfg.Save();
             try { if (!Program.Autostart) Program.Autostart = true; } catch { }
             _client.Start();

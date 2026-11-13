@@ -204,8 +204,10 @@ function drawVorgang(view, data) {
 
   const actions = [];
   if (portal.canSend) {
-    if (["bereit", "warnung", "versandfehler", "outlook"].includes(v.status) && v.mail.enabled) actions.push(`<button class="btn" data-a="senden">${icon("send")} Jetzt senden</button>`);
-    if (portal.userId && v.mail.enabled && !["verworfen", "inVersand"].includes(v.status)) actions.push(`<button class="btn ghost" data-a="outlook" title="Öffnet die E-Mail mit Text und Anhängen als Entwurf in deinem Outlook (über den Belegpost Melder)">In Outlook öffnen</button>`);
+    const canOutlook = portal.sendViaOutlook && portal.userId && v.mail.enabled && !["verworfen", "inVersand", "fehler"].includes(v.status);
+    if (canOutlook) actions.push(`<button class="btn" data-a="outlook" title="Öffnet die fertige E-Mail mit Text und Anhängen in deinem Outlook (über den Belegpost Melder) – dort nur noch auf Senden klicken">${icon("send")} Freigeben &amp; in Outlook senden</button>`);
+    if (["bereit", "warnung", "versandfehler", "outlook"].includes(v.status) && v.mail.enabled)
+      actions.push(`<button class="btn${canOutlook ? " ghost" : ""}" data-a="senden">${canOutlook ? "Über Server senden" : `${icon("send")} Jetzt senden`}</button>`);
     if (v.status === "fehler" && v.mail.enabled) actions.push(`<button class="btn danger-ghost" data-a="senden-force">Trotz Fehler senden …</button>`);
     if (v.status === "versendet") actions.push(`<button class="btn ghost" data-a="erneut">Erneut senden …</button>`);
     if (!["versendet", "inVersand", "verworfen"].includes(v.status)) actions.push(`<button class="btn ghost" data-a="pruefen">Neu prüfen</button>`, `<button class="btn ghost" data-a="verwerfen">Verwerfen</button>`);
@@ -262,7 +264,7 @@ function drawVorgang(view, data) {
             ${v.mail.noDocument ? `<p class="meta">Ohne Beleg als Anhang (@@md@@).</p>` : ""}
             <p class="meta">${v.mail.template ? `Mail-Vorlage <b>${esc(v.mail.template)}</b> (${esc(v.mail.templateReason || "")})` : "Ohne Mail-Vorlage (schlichte Mail)"}${v.mail.fromAddress ? ` · Absender ${esc(v.mail.fromName ? v.mail.fromName + " <" + v.mail.fromAddress + ">" : v.mail.fromAddress)}` : ""}
               · <a href="#" id="mPreviewBtn">So sieht die Mail aus</a>
-              ${portal.userId && v.mail.enabled ? ` · <a href="#" data-a="outlook">In Outlook öffnen</a>` : ""}</p>
+              ${portal.sendViaOutlook && portal.userId && v.mail.enabled && v.status !== "fehler" ? ` · <a href="#" data-a="outlook">In Outlook öffnen</a>` : ""}</p>
             <div id="mPreview"></div>
             ${editable ? `<div class="actions"><button class="btn" data-a="mail-save" disabled>Versanddaten speichern</button><span class="meta-inline">Änderungen werden geprüft und bleiben bei „Neu prüfen“ erhalten.</span></div>` : ""}
           </div>

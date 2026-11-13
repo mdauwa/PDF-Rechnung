@@ -14,6 +14,8 @@ public sealed class PortalUser
     public List<string> Logins { get; set; } = new();
     /// <summary>Darf Vorgänge versenden, verwerfen und Versanddaten ändern. Ohne dieses Recht: nur ansehen.</summary>
     public bool CanSend { get; set; } = true;
+    /// <summary>Darf Belege lokal über das eigene Outlook senden (Entwurf über den Melder). Dann kein Autoversand seiner Belege.</summary>
+    public bool SendViaOutlook { get; set; }
     public bool IsAdmin { get; set; }
     public bool Active { get; set; } = true;
     public DateTimeOffset? LastLogin { get; set; }
@@ -264,7 +266,7 @@ public sealed class UserStore
     public bool UsesOutlook(string? userId)
     {
         if (userId is null) return false;
-        lock (_lock) return _data.Devices.Any(d => d.UserId == userId && d.OpenInOutlook);
+        lock (_lock) return _data.Users.Any(u => u.Id == userId && u.Active && u.SendViaOutlook);
     }
 
     public void TouchDevice(string id)

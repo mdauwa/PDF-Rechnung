@@ -12,7 +12,7 @@
     <!-- Ziel: Windows Server / Windows 10/11 x64 -->
     <RuntimeIdentifier Condition="'$(OS)' == 'Windows_NT' Or '$(Configuration)' == 'Release'">win-x64</RuntimeIdentifier>
     <InvariantGlobalization>false</InvariantGlobalization>
-    <ApplicationIcon Condition="Exists('PdfRechnung.ico')">PdfRechnung.ico</ApplicationIcon>
+    <ApplicationIcon>PdfRechnung.ico</ApplicationIcon>
   </PropertyGroup>
 
   <!-- dotnet publish -c Release → eine PdfRechnung.exe inkl. .NET-Laufzeit (auf dem Server muss nichts installiert werden) + wwwroot -->

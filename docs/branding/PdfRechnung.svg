@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Beleg -->
+  <path d="M62 14H160L214 68V222a18 18 0 0 1-18 18H62a18 18 0 0 1-18-18V32a18 18 0 0 1 18-18Z" fill="#ffffff" stroke="#1c2a3d" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M160 14V50a18 18 0 0 0 18 18H214" fill="#dbe6f6" stroke="#1c2a3d" stroke-width="8" stroke-linejoin="round"/>
+  <!-- XML (E-Rechnung) -->
+  <g fill="none" stroke="#1f5fbf" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M86 38L70 54L86 70"/><path d="M122 38L138 54L122 70"/><path d="M110 34L98 74"/>
+  </g>
+  <!-- Zeilen -->
+  <g stroke="#c3cfdf" stroke-width="10" stroke-linecap="round">
+    <path d="M72 102H186"/><path d="M72 128H170"/>
+  </g>
+  <!-- PDF -->
+  <rect x="26" y="150" width="124" height="60" rx="12" fill="#d1453b"/>
+  <g fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M46 194V166H59a8 8 0 0 1 0 16H46"/>
+    <path d="M78 166V194H85a14 14 0 0 0 0-28Z"/>
+    <path d="M114 194V166H132M114 180H128"/>
+  </g>
+  <!-- Euro -->
+  <circle cx="190" cy="196" r="50" fill="#1f5fbf" stroke="#ffffff" stroke-width="8"/>
+  <g fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round">
+    <path d="M211 177A25 25 0 1 0 211 215"/>
+    <path d="M164 189H196"/><path d="M164 203H193"/>
+  </g>
+</svg>

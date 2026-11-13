@@ -1,3 +1,5 @@
+<img src="docs/branding/PdfRechnung-256.png" width="96" align="right" alt="">
+
 # PDF Rechnung – Druckdienst und Versand-Portal für E-Rechnungen
 
 Eigener Ersatz für gotomaxx PDFMAILER.

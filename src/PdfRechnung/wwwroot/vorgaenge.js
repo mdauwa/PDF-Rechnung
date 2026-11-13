@@ -17,7 +17,7 @@ const STATUS = {
 };
 const FILTERS = {
   offen: { title: "Zu prüfen", status: "fehler,warnung,bereit,versandfehler,inVersand" },
-  meine: { title: "Meine Belege", status: "", mine: true },
+  meine: { title: "Meine Belege", status: "fehler,warnung,bereit,versandfehler,inVersand", mine: true },
   alle: { title: "Alle Vorgänge", status: "" },
   versendet: { title: "Versendet", status: "versendet,outlook" },
   verworfen: { title: "Verworfen", status: "verworfen" }
@@ -44,6 +44,8 @@ async function renderVorgaenge(view) {
     <div class="toolbar">
       <div class="filters">
         <input type="search" id="vlSearch" placeholder="Beleg, Kunde, Empfänger suchen" value="${esc(search)}" aria-label="Suchen">
+        ${fkey === "meine" ? `<select id="vlStatus" aria-label="Status"><option value="${f.status}">Noch nicht versendet</option><option value="*">Alle eigenen</option>
+          ${Object.entries(STATUS).map(([k, [t]]) => `<option value="${k}">${esc(t)}</option>`).join("")}</select>` : ""}
         ${fkey === "alle" ? `<select id="vlStatus" aria-label="Status"><option value="">Alle Status</option>
           ${Object.entries(STATUS).map(([k, [t]]) => `<option value="${k}">${esc(t)}</option>`).join("")}</select>` : ""}
         <input type="date" id="vlFrom" aria-label="Von" title="Eingang von">
@@ -64,7 +66,8 @@ async function renderVorgaenge(view) {
 
   const load = async () => {
     const p = new URLSearchParams();
-    const st = $("#vlStatus")?.value || f.status;
+    const sel = $("#vlStatus")?.value;
+    const st = sel === "*" ? "" : (sel || f.status);
     if (st) p.set("status", st);
     if (f.mine) p.set("mine", "1");
     const s = $("#vlSearch").value.trim(); if (s) p.set("q", s);

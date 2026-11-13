@@ -53,7 +53,8 @@ public static class VorgangApi
             {
                 items = list.Take(2000).Select(v => v.Summary()),
                 counts = VorgangStatus.All.ToDictionary(s => s, s => all.Count(v => v.Status == s)),
-                mine = me is null ? 0 : all.Count(v => v.OwnerUserId == me && v.Status is not (VorgangStatus.Sent or VorgangStatus.Discarded)),
+                mine = me is null ? 0 : all.Count(v => v.OwnerUserId == me
+                    && v.Status is VorgangStatus.Error or VorgangStatus.Warning or VorgangStatus.Ready or VorgangStatus.SendError or VorgangStatus.Sending),
                 sentToday = all.Count(v => v.SentAt is { } sa && DateOnly.FromDateTime(sa.LocalDateTime) == today)
             });
         });

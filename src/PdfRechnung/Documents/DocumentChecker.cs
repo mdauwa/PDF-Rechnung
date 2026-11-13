@@ -28,7 +28,8 @@ public static class DocumentChecker
         foreach (var att in v.Mail.Attachments)
             if (!File.Exists(att)) W($"Anlage nicht gefunden (am Server): {att}");
         if (p.BodyFile is not null && !File.Exists(p.BodyFile)) W($"Textdatei für den Mailtext nicht gefunden (am Server): {p.BodyFile}");
-        if (p.Stationery is not null) I($"Briefpapier „{p.Stationery}“ angefordert – wird mit dem Druckdienst unterlegt.");
+        m.AddRange(v.LayoutMessages);
+        if (v.Stationery is not null) I($"Briefpapier „{v.Stationery}“ unterlegt.");
         if (p.SplitAfterPages.Count > 0) W("Der Druckauftrag enthält mehrere Belege (@@nd@@) – das Aufteilen folgt mit dem Druckdienst.");
         if (p.RemovePages.Count > 0) I($"Seite(n) {string.Join(", ", p.RemovePages.Distinct())} sollen entfernt werden (@@rpc@@) – folgt mit dem Druckdienst.");
         if (p.AppendPdfs.Count > 0 || p.EmbedFiles.Count > 0) I("PDFs anhängen/Dateien einbetten (@@af@@/@@ef@@) folgt mit dem Druckdienst.");

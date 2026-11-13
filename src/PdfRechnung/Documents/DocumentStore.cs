@@ -10,7 +10,7 @@ namespace PdfRechnung.Documents;
 /// </summary>
 public sealed class DocumentStore
 {
-    public const string PdfFile = "beleg.pdf", TextFile = "text.txt", MetaFile = "meta.json";
+    public const string PdfFile = "beleg.pdf", SendFile = "versand.pdf", TextFile = "text.txt", MetaFile = "meta.json";
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -57,11 +57,12 @@ public sealed class DocumentStore
     public static string NewId(DateTimeOffset at) => $"{at:yyyyMMdd-HHmmss}-{Guid.NewGuid().ToString("N")[..6]}";
 
     /// <summary>Legt einen neuen Vorgang mit seinen Dateien an.</summary>
-    public void Create(Vorgang v, byte[] pdf, string text)
+    public void Create(Vorgang v, byte[] pdf, string text, byte[]? sendPdf = null)
     {
         var dir = Path.Combine(Root, v.CreatedAt.ToString("yyyy"), v.CreatedAt.ToString("MM"), v.Id);
         Directory.CreateDirectory(dir);
         File.WriteAllBytes(Path.Combine(dir, PdfFile), pdf);
+        if (sendPdf is not null) File.WriteAllBytes(Path.Combine(dir, SendFile), sendPdf);
         File.WriteAllText(Path.Combine(dir, TextFile), text);
         lock (_lock)
         {
@@ -88,6 +89,18 @@ public sealed class DocumentStore
         if (dir is null) return null;
         var p = Path.Combine(dir, file);
         return File.Exists(p) ? p : null;
+    }
+
+    /// <summary>Datei eines Vorgangs schreiben (z. B. neu erzeugtes Versand-PDF); null = löschen.</summary>
+    public void WriteFile(string id, string file, byte[]? data)
+    {
+        var dir = Directory_(id);
+        if (dir is null) return;
+        var path = Path.Combine(dir, file);
+        if (data is null) { if (File.Exists(path)) File.Delete(path); return; }
+        var tmp = path + ".tmp";
+        File.WriteAllBytes(tmp, data);
+        File.Move(tmp, path, overwrite: true);
     }
 
     public List<Vorgang> All()

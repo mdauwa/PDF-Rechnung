@@ -16,17 +16,49 @@ public static class PdfText
         var lines = new List<(int, string)>();
         using var doc = PdfDocument.Open(pdf);
         foreach (var page in doc.GetPages())
-        {
-            var letters = page.Letters.Where(l => !string.IsNullOrEmpty(l.Value)).ToList();
-            foreach (var line in BuildLines(letters))
-                lines.Add((page.Number, line));
-        }
+            foreach (var (text, _) in BuildLines(page.Letters.Where(l => !string.IsNullOrEmpty(l.Value)).ToList()))
+                lines.Add((page.Number, text));
         return (doc.NumberOfPages, lines);
     }
 
-    private static IEnumerable<string> BuildLines(List<UglyToad.PdfPig.Content.Letter> letters)
+    /// <summary>
+    /// Umrisse des gedruckten Inhalts je Seite (PDF-Koordinaten, Ursprung unten links) ohne die Steuerzeichen –
+    /// für die Prüfung, ob der Inhalt in die Ränder des Briefpapiers ragt.
+    /// </summary>
+    public static List<List<(double X1, double Y1, double X2, double Y2)>> ContentBoxes(byte[] pdf)
     {
-        // Richtung der Grundlinie (waagrecht, senkrecht, gedreht) auf 1° gerundet
+        var result = new List<List<(double, double, double, double)>>();
+        using var doc = PdfDocument.Open(pdf);
+        foreach (var page in doc.GetPages())
+        {
+            var boxes = new List<(double, double, double, double)>();
+            foreach (var (text, letters) in BuildLines(page.Letters.Where(l => !string.IsNullOrEmpty(l.Value)).ToList()))
+            {
+                var isCode = new bool[text.Length];
+                foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, @"@@[A-Za-z<]{2}.*?@@"))
+                    for (var i = m.Index; i < m.Index + m.Length; i++) isCode[i] = true;
+                for (var i = 0; i < letters.Count; i++)
+                {
+                    var l = letters[i];
+                    if (l is null || isCode[i] || string.IsNullOrWhiteSpace(l.Value)) continue;
+                    var r = l.GlyphRectangle;
+                    if (r.Width <= 0 && r.Height <= 0) continue;
+                    boxes.Add((r.Left, r.Bottom, r.Right, r.Top));
+                }
+            }
+            foreach (var img in page.GetImages())
+            {
+                var r = img.Bounds;
+                boxes.Add((r.Left, r.Bottom, r.Right, r.Top));
+            }
+            result.Add(boxes);
+        }
+        return result;
+    }
+
+    /// <summary>Zeilen aus Buchstaben: Text und je Zeichen der zugehörige Buchstabe (null = eingefügtes Leerzeichen).</summary>
+    private static IEnumerable<(string Text, List<UglyToad.PdfPig.Content.Letter?> Letters)> BuildLines(List<UglyToad.PdfPig.Content.Letter> letters)
+    {
         static int Angle(UglyToad.PdfPig.Content.Letter l)
         {
             var dx = l.EndBaseLine.X - l.StartBaseLine.X; var dy = l.EndBaseLine.Y - l.StartBaseLine.Y;
@@ -36,29 +68,28 @@ public static class PdfText
         {
             var rad = dir.Key * Math.PI / 180;
             var (cos, sin) = (Math.Cos(rad), Math.Sin(rad));
-            // Position entlang der Schreibrichtung (u) und quer dazu (v)
             double U(UglyToad.PdfPig.Content.Letter l) => l.StartBaseLine.X * cos + l.StartBaseLine.Y * sin;
             double V(UglyToad.PdfPig.Content.Letter l) => -l.StartBaseLine.X * sin + l.StartBaseLine.Y * cos;
             var groups = dir.GroupBy(l => (V: Math.Round(V(l) * 4) / 4, Size: Math.Round(l.PointSize * 10) / 10))
                             .OrderByDescending(g => g.Key.V);
             foreach (var g in groups)
             {
-                var sorted = g.OrderBy(U).ToList();
                 var sb = new System.Text.StringBuilder();
+                var map = new List<UglyToad.PdfPig.Content.Letter?>();
                 UglyToad.PdfPig.Content.Letter? prev = null;
-                foreach (var l in sorted)
+                foreach (var l in g.OrderBy(U))
                 {
                     if (prev is not null)
                     {
                         var prevEnd = prev.EndBaseLine.X * cos + prev.EndBaseLine.Y * sin;
-                        var gap = U(l) - prevEnd;
                         // Lücke breiter als ein Drittel der Schriftgröße = Leerzeichen (falls nicht schon gedruckt)
-                        if (gap > l.PointSize * 0.3 && sb.Length > 0 && sb[^1] != ' ' && l.Value != " ") sb.Append(' ');
+                        if (U(l) - prevEnd > l.PointSize * 0.3 && sb.Length > 0 && sb[^1] != ' ' && l.Value != " ") { sb.Append(' '); map.Add(null); }
                     }
                     sb.Append(l.Value);
+                    for (var k = 0; k < l.Value.Length; k++) map.Add(l);
                     prev = l;
                 }
-                yield return sb.ToString();
+                yield return (sb.ToString(), map);
             }
         }
     }
@@ -98,9 +129,33 @@ public sealed class DocumentProcessor
     private readonly ILogger<DocumentProcessor> _log;
 
     public DocumentProcessor(DocumentStore store, IOptionsMonitor<MailOptions> mail, IOptionsMonitor<InvoiceOptions> invoice, ILogger<DocumentProcessor> log,
-        IOptionsMonitor<InboxOptions>? inbox = null)
+        IOptionsMonitor<InboxOptions>? inbox = null, IOptionsMonitor<StationeryOptions>? stationery = null, Settings.SettingsStore? settings = null)
     {
-        _store = store; _mail = mail; _invoice = invoice; _log = log; _inbox = inbox;
+        _store = store; _mail = mail; _invoice = invoice; _log = log; _inbox = inbox; _stationery = stationery;
+        _stationeryDir = PdfComposer.StationeryDirectory(settings?.DataDirectory ?? Path.GetDirectoryName(store.Root)!);
+    }
+
+    private readonly IOptionsMonitor<StationeryOptions>? _stationery;
+    private readonly string _stationeryDir;
+
+    /// <summary>Versand-PDF erzeugen: Steuerzeichen entfernen, Briefpapier unterlegen. Fehler werden zu Meldungen.</summary>
+    private byte[]? Compose(Vorgang v, byte[] original, ParsedCodes p)
+    {
+        try
+        {
+            var r = PdfComposer.Compose(original, p, _stationery?.CurrentValue ?? new StationeryOptions(), _stationeryDir);
+            v.Stationery = r.StationeryName;
+            v.RemovedCodes = r.RemovedCodes;
+            v.LayoutMessages = r.Messages;
+            return r.Pdf;
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Versand-PDF für {Id} konnte nicht erzeugt werden", v.Id);
+            v.Stationery = null; v.RemovedCodes = 0;
+            v.LayoutMessages = new() { new CheckMessage(DocumentChecker.Error, "Das Versand-PDF konnte nicht erzeugt werden: " + ex.Message) };
+            return null;
+        }
     }
 
     private readonly IOptionsMonitor<InboxOptions>? _inbox;
@@ -152,11 +207,12 @@ public sealed class DocumentProcessor
         }
 
         Fill(v, p, overwriteMail: true);
+        var sendPdf = v.Messages.Count == 0 ? Compose(v, pdf, p) : null;
         if (v.Messages.Count == 0) v.Messages = DocumentChecker.Check(v, p, CurrentSettings());
         v.UpdateStatus();
         v.History.Add(new HistoryEntry(now, user ?? source, "eingang",
             $"{source}{(fileName is null ? "" : $": {fileName}")} · {v.Pages} Seite(n) · {v.Codes.Count} Steuerzeichen"));
-        _store.Create(v, pdf, text);
+        _store.Create(v, pdf, text, sendPdf);
         _log.LogInformation("Vorgang {Id} angelegt: {Type} {No} → {Status}", v.Id, v.DocumentType, v.VoucherId, v.Status);
         return v;
     }
@@ -167,11 +223,13 @@ public sealed class DocumentProcessor
         var path = _store.FilePath(id, DocumentStore.PdfFile);
         if (path is null) return null;
         ParsedCodes p;
-        try { p = Map(ControlCodeParser.Parse(PdfText.Extract(File.ReadAllBytes(path)).Lines)); }
+        var original = File.ReadAllBytes(path);
+        try { p = Map(ControlCodeParser.Parse(PdfText.Extract(original).Lines)); }
         catch { p = new ParsedCodes(); }
         return _store.Update(id, v =>
         {
             Fill(v, p, overwriteMail: !v.Mail.Edited);
+            _store.WriteFile(id, DocumentStore.SendFile, Compose(v, original, p));
             v.Messages = DocumentChecker.Check(v, p, CurrentSettings());
             if (v.Status is VorgangStatus.SendError) v.Status = VorgangStatus.Warning;
             v.UpdateStatus();
@@ -207,7 +265,6 @@ public sealed class DocumentProcessor
         v.BuyerName = p.Field("BUYER_NAME");
         v.Currency = p.Field("CURRENCY") ?? "EUR";
         v.GrossAmount = inv.PrintedGrossAmount ?? (inv.Lines.Count > 0 ? inv.GrossAmount : null);
-        v.Stationery = p.Stationery;
 
         if (!overwriteMail) return;
         var o = _mail.CurrentValue;

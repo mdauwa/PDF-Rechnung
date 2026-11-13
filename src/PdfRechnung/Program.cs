@@ -72,6 +72,7 @@ builder.Services.Configure<InboxOptions>(builder.Configuration.GetSection("Inbox
 builder.Services.Configure<MailOptions>(builder.Configuration.GetSection("Mail"));
 builder.Services.Configure<InvoiceOptions>(builder.Configuration.GetSection("Invoice"));
 builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection("Storage"));
+builder.Services.Configure<StationeryOptions>(builder.Configuration.GetSection("Stationery"));
 builder.Services.AddSingleton(sp => new RuntimeControl(sp.GetRequiredService<IHostApplicationLifetime>(), isService));
 
 // ---- Vorgänge ----

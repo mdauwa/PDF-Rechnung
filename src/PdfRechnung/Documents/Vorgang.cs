@@ -56,7 +56,12 @@ public sealed class Vorgang
     public string Currency { get; set; } = "EUR";
     public string? FormatCode { get; set; }
     public string? FormatName { get; set; }
+    /// <summary>Unterlegtes Briefpapier (Name) im Versand-PDF.</summary>
     public string? Stationery { get; set; }
+    /// <summary>Anzahl der aus dem Versand-PDF entfernten Steuerzeichen-Textbefehle.</summary>
+    public int RemovedCodes { get; set; }
+    /// <summary>Meldungen beim Erzeugen des Versand-PDFs (Briefpapier, Ränder) – Teil der Prüfung.</summary>
+    public List<CheckMessage> LayoutMessages { get; set; } = new();
 
     public MailData Mail { get; set; } = new();
     public InvoiceData Invoice { get; set; } = new();

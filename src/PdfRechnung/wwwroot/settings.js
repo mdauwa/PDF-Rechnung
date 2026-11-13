@@ -12,6 +12,7 @@ const TABS = [
   ["dienst", "Dienst"],
   ["server", "Server & Zertifikat"],
   ["eingang", "Drucker & Eingang"],
+  ["briefpapier", "Briefpapier"],
   ["mail", "E-Mail & Versand"],
   ["erechnung", "E-Rechnung"],
   ["ablage", "Ablage"],
@@ -69,7 +70,7 @@ function drawTab() {
   document.querySelectorAll("#stTabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === ST.tab));
   const body = $("#stBody");
   if (!ST.s) return;
-  const fn = { dienst: tabService, server: tabServer, eingang: tabInbox, mail: tabMail, erechnung: tabInvoice, ablage: tabStorage, benutzer: tabUsers, anmeldung: tabAuth }[ST.tab] || tabService;
+  const fn = { dienst: tabService, server: tabServer, eingang: tabInbox, briefpapier: tabStationery, mail: tabMail, erechnung: tabInvoice, ablage: tabStorage, benutzer: tabUsers, anmeldung: tabAuth }[ST.tab] || tabService;
   body.innerHTML = fn();
   if (ST.tab === "benutzer" && !ST.users) loadUsers();
   if (ST.tab === "dienst") loadService();
@@ -104,6 +105,8 @@ function onInput(e) {
   if (el.dataset.entrasecret !== undefined) { ST.entraSecret = el.value; markDirty(); return; }
   if (el.dataset.mailpw !== undefined) { ST.mailPassword = el.value; markDirty(); return; }
   if (el.dataset.graphsecret !== undefined) { ST.graphSecret = el.value; markDirty(); return; }
+  if (el.dataset.bpdefault !== undefined) { ST.s.stationery.default = el.checked ? el.value : ""; markDirty(); return; }
+  if (el.dataset.bpup !== undefined && e.type === "change") { uploadStationery(el); return; }
   if (el.dataset.unit !== undefined) {
     if (e.type !== "change") return;
     const units = ST.s.invoice.units, old = el.dataset.unit, row = el.closest(".unit");
@@ -113,6 +116,9 @@ function onInput(e) {
     markDirty(); drawTab(); return;
   }
   if (el.dataset.path) {
+    // Standard-Briefpapier mitziehen, wenn sein Name geändert wird
+    const bp = el.dataset.path.match(/^stationery\.items\.(\d+)\.name$/);
+    if (bp && ST.s.stationery.default === ST.s.stationery.items[+bp[1]].name) ST.s.stationery.default = el.value;
     let v = el.type === "checkbox" ? el.checked : el.value;
     if (el.dataset.type === "int") v = v === "" ? 0 : parseInt(v, 10);
     if (el.dataset.type === "dec") v = v === "" ? 0 : parseFloat(String(v).replace(",", "."));
@@ -159,6 +165,23 @@ async function onAction(e) {
         drawTab();
         break;
       }
+      case "bp-add": {
+        const items = (ST.s.stationery ||= { items: [], default: "" }).items;
+        items.push({ name: items.length ? "" : "Standard", firstPageFile: "", followingMode: "same", followingPageFile: "",
+          marginTop: 0, marginBottom: 0, marginLeft: 0, marginRight: 0, followingOwnMargins: false, followingMarginTop: 0, followingMarginBottom: 0,
+          fitContent: false, offsetX: 0, offsetY: 0, scale: 100 });
+        if (!ST.s.stationery.default && items.length === 1) ST.s.stationery.default = "Standard";
+        markDirty(); drawTab(); break;
+      }
+      case "bp-del": {
+        const items = ST.s.stationery.items, it = items[+btn.dataset.i];
+        if (await confirmDialog("Briefpapier entfernen", `„${esc(it.name || "ohne Namen")}“ entfernen? Belege mit @@bp${esc(it.name)}@@ werden danach als Fehler gemeldet.`, "Entfernen", true)) {
+          if (ST.s.stationery.default === it.name) ST.s.stationery.default = "";
+          items.splice(+btn.dataset.i, 1); markDirty(); drawTab();
+        }
+        break;
+      }
+      case "bp-preview": await previewStationery(+btn.dataset.i); break;
       case "unit-add": ST.s.invoice.units[""] = ""; drawTab(); document.querySelector('.unit .key[value=""]')?.focus(); break;
       case "unit-del": delete ST.s.invoice.units[btn.dataset.key]; markDirty(); drawTab(); break;
       case "user-add":
@@ -359,6 +382,77 @@ function tabInbox() {
          </ol>
          Zum Testen: PDF-Dateien in den Eingangsordner kopieren oder in der Vorgangsliste über „PDF hochladen“ einspielen.
        </div>`);
+}
+
+/* ---------------- Tab: Briefpapier ---------------- */
+
+function tabStationery() {
+  const S = ST.s.stationery ||= { items: [], default: "" };
+  const fileLink = f => f ? `<a href="api/admin/stationery/file/${encodeURIComponent(f)}" target="_blank" rel="noopener">${esc(f)}</a>` : '<span class="muted">noch keine Datei</span>';
+  const mm = (path, label) => field(label, inNum(path, 0, 150, 0.5));
+  const items = S.items.map((b, i) => {
+    const P = `stationery.items.${i}`;
+    return section(`Briefpapier ${esc(b.name || "(ohne Namen)")}`,
+      `<div class="grid2">
+         ${field("Name", inText(`${P}.name`, "z. B. ERP Austria GmbH"), `Steuerzeichen: <code>@@bp${esc(b.name || "Name")}@@</code> – Groß-/Kleinschreibung wird beachtet.`)}
+         <div class="plain-field"><span class="lbl">Verwendung</span>
+           <label class="check"><input type="checkbox" data-bpdefault value="${esc(b.name)}" ${S.default && S.default === b.name ? "checked" : ""}> Standard-Briefpapier (ohne @@bp@@ im Beleg)</label></div>
+       </div>
+       <div class="grid2">
+         <div class="field"><span class="lbl">Erste Seite (PDF)</span><div class="bp-file">${fileLink(b.firstPageFile)}
+           <label class="btn ghost small">PDF hochladen<input type="file" accept="application/pdf,.pdf" data-bpup="${i}|firstPageFile" hidden></label></div></div>
+         <div class="field"><span class="lbl">Folgeseiten</span>
+           <select data-path="${P}.followingMode" data-redraw="1">
+             <option value="same" ${b.followingMode === "same" ? "selected" : ""}>wie erste Seite</option>
+             <option value="file" ${b.followingMode === "file" ? "selected" : ""}>eigenes PDF</option>
+             <option value="none" ${b.followingMode === "none" ? "selected" : ""}>kein Briefpapier</option>
+           </select>
+           ${b.followingMode === "file" ? `<div class="bp-file">${fileLink(b.followingPageFile)}
+             <label class="btn ghost small">PDF hochladen<input type="file" accept="application/pdf,.pdf" data-bpup="${i}|followingPageFile" hidden></label></div>` : ""}</div>
+       </div>
+       <h4>Druckbereich – Ränder in mm</h4>
+       <p class="help">Bereiche des Briefpapiers (Logo/Kopf, Fußzeile, seitliche Leiste), in die der gedruckte Beleg nicht ragen soll.
+         Ragt er hinein, meldet das Portal eine Warnung – oder der Inhalt wird automatisch eingepasst.</p>
+       <div class="grid4">${mm(`${P}.marginTop`, "oben")}${mm(`${P}.marginBottom`, "unten")}${mm(`${P}.marginLeft`, "links")}${mm(`${P}.marginRight`, "rechts")}</div>
+       ${inCheck(`${P}.followingOwnMargins`, "Folgeseiten mit eigenen Rändern oben/unten (z. B. kleinerer Kopf)")}
+       ${b.followingOwnMargins ? `<div class="grid4">${mm(`${P}.followingMarginTop`, "Folgeseiten oben")}${mm(`${P}.followingMarginBottom`, "Folgeseiten unten")}</div>` : ""}
+       ${inCheck(`${P}.fitContent`, "Inhalt in den Druckbereich einpassen (verkleinern und verschieben, damit Kopf und Fuß frei bleiben)")}
+       <details><summary>Feinjustierung des Briefpapiers</summary>
+         <div class="grid3">${field("Versatz waagrecht (mm, + = rechts)", inNum(`${P}.offsetX`, -50, 50, 0.5))}
+           ${field("Versatz senkrecht (mm, + = oben)", inNum(`${P}.offsetY`, -50, 50, 0.5))}
+           ${field("Skalierung (%)", inNum(`${P}.scale`, 10, 200, 1))}</div>
+       </details>
+       <div class="actions"><button class="btn ghost" data-st="bp-preview" data-i="${i}">Vorschau</button>
+         <span class="meta-inline">zeigt erste Seite und Folgeseite mit dem Druckbereich (rot) – auch vor dem Speichern</span></div>
+       <div id="bpPreview${i}"></div>`,
+      `<button class="icon-btn" data-st="bp-del" data-i="${i}" title="Briefpapier entfernen">✕</button>`);
+  }).join("");
+  return section("Briefpapiere",
+    `<p class="help">Das Briefpapier wird beim Erzeugen des Versand-PDFs unter den gedruckten Beleg gelegt. Mehrere Briefpapiere, z. B. je Firma:
+      Im Formular wählt das Steuerzeichen <code>@@bpName@@</code> das passende aus; ohne Steuerzeichen gilt das Standard-Briefpapier,
+      <code>@@bp@@</code> ohne Namen bedeutet „kein Briefpapier“. Ist ein angefordertes Briefpapier nicht angelegt, wird der Vorgang als Fehler gemeldet und nicht automatisch versendet.</p>
+     <p class="help">Das PDF sollte A4 sein (eine Seite für die erste Seite; für Folgeseiten optional ein zweites PDF). Druckt das ERP Logo und Fußzeile selbst, braucht es kein Briefpapier.</p>`,
+    `<button class="btn ghost" data-st="bp-add">+ Briefpapier</button>`) + items;
+}
+
+async function uploadStationery(el) {
+  const [i, key] = el.dataset.bpup.split("|");
+  const f = el.files[0]; if (!f) return;
+  const fd = new FormData(); fd.append("file", f);
+  try {
+    const r = await api("POST", "api/admin/stationery/file", fd, true);
+    ST.s.stationery.items[+i][key] = r.file;
+    markDirty(); drawTab();
+    msg(`„${f.name}“ hochgeladen (${r.pages} Seite(n), ${r.width} × ${r.height} mm).${r.hint ? " " + r.hint : ""} Zum Übernehmen speichern.`, !r.hint);
+  } catch (e) { msg(e.message); }
+}
+
+async function previewStationery(i) {
+  const b = ST.s.stationery.items[i];
+  const res = await fetch("api/admin/stationery/preview", { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "PdfRechnung" }, body: JSON.stringify(b) });
+  if (!res.ok) throw new Error("Vorschau fehlgeschlagen.");
+  const url = URL.createObjectURL(await res.blob());
+  $(`#bpPreview${i}`).innerHTML = `<iframe class="bp-preview" src="${url}#view=FitH" title="Vorschau Briefpapier"></iframe>`;
 }
 
 /* ---------------- Tab: E-Mail & Versand ---------------- */

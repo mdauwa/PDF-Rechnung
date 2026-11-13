@@ -25,7 +25,9 @@ Technik und Aufbau sind wie im **Firmenportal**:
 | Steuerzeichen lesen (gotomaxx-kompatibel, inkl. ERP-Vorlage SEBELK/SEBELP) | ✅ |
 | Prüfung: Pflichtfelder EN 16931/XRechnung, Summen und Steuer nachgerechnet, Einheiten, Empfänger | ✅ |
 | Drucker „Microsoft Print to PDF“ mit eigenem Anschluss automatisch einrichten | ⏳ nächster Schritt |
-| Steuerzeichen aus dem PDF entfernen, Briefpapier (`@@bp@@`) unterlegen, `@@af@@`, `@@nd@@` | ⏳ |
+| Versand-PDF: Steuerzeichen aus dem PDF entfernt (Textbefehle gelöscht), Briefpapier je Firma per `@@bpName@@` oder Standard, erste Seite/Folgeseiten, Druckbereich (Ränder) mit Warnung oder automatischem Einpassen, Versatz/Skalierung, Vorschau in den Einstellungen | ✅ |
+| `@@af@@`, `@@nd@@`, `@@rpc@@` | ⏳ |
+| PDF/A-3 (Pflicht für ZUGFeRD) | ⏳ mit ZUGFeRD |
 | E-Rechnung erzeugen (ZUGFeRD/Factur-X PDF/A-3, XRechnung, Peppol) | ⏳ – bis dahin meldet ein angefordertes Format **Fehler** (kein Autoversand) |
 
 ## Bauen
@@ -89,7 +91,8 @@ Updates: die neue EXE doppelklicken.
 | `C:\ProgramData\PdfRechnung\settings.json` | Einstellungen, Passwörter verschlüsselt (`enc:…`) |
 | `C:\ProgramData\PdfRechnung\users.json` | Benutzer, Hash des Administrator-Kennworts |
 | `C:\ProgramData\PdfRechnung\eingang\` | Eingangsordner (Standard); nicht lesbare Dateien landen in `fehler\` |
-| `C:\ProgramData\PdfRechnung\vorgaenge\JJJJ\MM\<Id>\` | `meta.json` (Daten, Prüfung, Verlauf), `beleg.pdf`, `text.txt` (ausgelesener Text) |
+| `C:\ProgramData\PdfRechnung\vorgaenge\JJJJ\MM\<Id>\` | `meta.json` (Daten, Prüfung, Verlauf), `beleg.pdf` (Ausdruck wie eingegangen), `versand.pdf` (ohne Steuerzeichen, mit Briefpapier – wird versendet), `text.txt` (ausgelesener Text) |
+| `C:\ProgramData\PdfRechnung\briefpapier\` | hochgeladene Briefpapier-PDFs |
 | `keys\`, `cert\` | Schlüssel für die Verschlüsselung und Zertifikate. **Nicht löschen.** |
 
 Für Entwicklung und Tests gibt es zwei Umgebungsvariablen:
@@ -128,5 +131,6 @@ docs/                  Konzept und Feldzuordnung
 | Paket | Lizenz | Zweck |
 |---|---|---|
 | PdfPig | Apache-2.0 | PDF lesen |
+| PDFsharp | MIT | Versand-PDF: Steuerzeichen entfernen, Briefpapier unterlegen |
 | MailKit | MIT | SMTP |
 | Microsoft.Extensions.Hosting.WindowsServices, Microsoft.AspNetCore.Authentication.OpenIdConnect | MIT | Windows-Dienst, Microsoft-Anmeldung |

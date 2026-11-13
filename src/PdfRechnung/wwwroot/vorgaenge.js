@@ -221,9 +221,13 @@ function drawVorgang(view, data) {
   view.innerHTML = `
     <div class="vd">
       <div class="vd-pdf card">
-        <div class="card-head"><h2>Vorschau</h2><span class="meta-inline">${v.pages} Seite(n) · ${esc(v.source)}${v.originalFileName ? " · " + esc(v.originalFileName) : ""}</span></div>
-        <iframe src="api/vorgaenge/${encodeURIComponent(v.id)}/pdf#view=FitH" title="PDF-Vorschau"></iframe>
-        <p class="help">Die Vorschau zeigt den Ausdruck, wie er eingegangen ist. Steuerzeichen entfernen und Briefpapier unterlegen folgen mit dem Druckdienst.</p>
+        <div class="card-head"><h2>Vorschau</h2>
+          ${data.hasSendPdf ? `<div class="pdf-switch"><button data-pdf="versand" class="active">Versand-PDF</button><button data-pdf="original">Original</button></div>` : ""}
+          <span class="meta-inline">${v.pages} Seite(n) · ${esc(v.source)}${v.originalFileName ? " · " + esc(v.originalFileName) : ""}</span></div>
+        <iframe id="vdFrame" src="api/vorgaenge/${encodeURIComponent(v.id)}/pdf#view=FitH" title="PDF-Vorschau"></iframe>
+        <p class="help" id="vdPdfHelp">${data.hasSendPdf
+          ? `Versand-PDF: so geht der Beleg hinaus – ${v.removedCodes ? `${v.removedCodes} Steuerzeichen entfernt` : "keine Steuerzeichen"}${v.stationery ? `, Briefpapier „${esc(v.stationery)}“` : ", ohne Briefpapier"}.`
+          : "Kein Versand-PDF – bitte die Meldungen prüfen und „Neu prüfen“."}</p>
       </div>
       <div class="vd-side">
         <div class="card">
@@ -288,6 +292,12 @@ function drawVorgang(view, data) {
         </div>
       </div>
     </div>`;
+
+  view.querySelector(".pdf-switch")?.addEventListener("click", e => {
+    const b = e.target.closest("[data-pdf]"); if (!b) return;
+    view.querySelectorAll(".pdf-switch button").forEach(x => x.classList.toggle("active", x === b));
+    $("#vdFrame").src = `api/vorgaenge/${encodeURIComponent(v.id)}/pdf${b.dataset.pdf === "original" ? "?variant=original" : ""}#view=FitH`;
+  });
 
   const msg = (t, ok) => { const el = $("#vdMsg"); el.hidden = !t; el.className = "notice" + (ok ? " ok" : ""); el.textContent = t || ""; };
   const split = s => s.split(/[;,\s]+/).map(x => x.trim()).filter(Boolean);

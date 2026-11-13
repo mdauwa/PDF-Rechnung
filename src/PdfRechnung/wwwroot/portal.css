@@ -86,3 +86,15 @@ details summary { cursor: pointer; padding: 6px 0; }
 .vlist td:last-child { white-space: normal; min-width: 170px; }
 .vlist td:last-child small { white-space: nowrap; }
 .actions input, .filters input[type=date] { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; }
+
+/* Briefpapier */
+.grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 14px; }
+.bp-file { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 0; }
+.btn.small { padding: 4px 10px; font-size: 13px; }
+.st-card h4 { margin: 16px 0 4px; font-size: 13px; }
+.bp-preview { width: 100%; height: 620px; border: 1px solid var(--border); border-radius: 8px; margin-top: 10px; background: #888; }
+.pdf-switch { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.pdf-switch button { border: 0; background: transparent; padding: 4px 10px; font: inherit; color: var(--text); cursor: pointer; }
+.pdf-switch button.active { background: var(--accent); color: #fff; }
+.plain-field { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.plain-field .lbl { font-size: 13px; color: var(--muted); }

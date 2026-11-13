@@ -10,6 +10,7 @@ public sealed class AppSettings
     public MailOptions Mail { get; set; } = new();
     public InvoiceOptions Invoice { get; set; } = new();
     public StorageOptions Storage { get; set; } = new();
+    public StationeryOptions Stationery { get; set; } = new();
 }
 
 public sealed class PortalOptions
@@ -126,4 +127,40 @@ public sealed class StorageOptions
     public int RetentionDays { get; set; } = 400;
     /// <summary>Zusätzlich versendete PDFs/XML hierhin kopieren (z. B. Archiv/DMS). Leer = aus.</summary>
     public string ExportFolder { get; set; } = "";
+}
+
+/// <summary>Briefpapiere (z. B. je Firma). Auswahl per Steuerzeichen @@bpName@@, sonst das Standard-Briefpapier.</summary>
+public sealed class StationeryOptions
+{
+    public List<Stationery> Items { get; set; } = new();
+    /// <summary>Name des Standard-Briefpapiers (ohne @@bp@@). Leer = kein Briefpapier.</summary>
+    public string Default { get; set; } = "";
+}
+
+public sealed class Stationery
+{
+    /// <summary>Name wie im Steuerzeichen @@bpName@@ (Groß-/Kleinschreibung wird beachtet).</summary>
+    public string Name { get; set; } = "";
+    /// <summary>PDF für die erste Seite (Datei im Ordner „briefpapier“ des Datenverzeichnisses).</summary>
+    public string FirstPageFile { get; set; } = "";
+    /// <summary>Folgeseiten: "same" = wie erste Seite, "file" = eigenes PDF, "none" = kein Briefpapier.</summary>
+    public string FollowingMode { get; set; } = "same";
+    public string FollowingPageFile { get; set; } = "";
+
+    /// <summary>Druckbereich: Ränder in mm, in die der gedruckte Inhalt nicht ragen soll (Kopf, Fuß, Seiten).</summary>
+    public double MarginTop { get; set; }
+    public double MarginBottom { get; set; }
+    public double MarginLeft { get; set; }
+    public double MarginRight { get; set; }
+    /// <summary>Folgeseiten mit eigenen Rändern (z. B. kleinerer Kopf). false = wie erste Seite.</summary>
+    public bool FollowingOwnMargins { get; set; }
+    public double FollowingMarginTop { get; set; }
+    public double FollowingMarginBottom { get; set; }
+    /// <summary>Gedruckten Inhalt verkleinern und in den Druckbereich verschieben, damit er Kopf/Fuß nicht überdeckt.</summary>
+    public bool FitContent { get; set; }
+
+    /// <summary>Feinjustierung des Briefpapiers: Versatz in mm und Skalierung in %.</summary>
+    public double OffsetX { get; set; }
+    public double OffsetY { get; set; }
+    public double Scale { get; set; } = 100;
 }

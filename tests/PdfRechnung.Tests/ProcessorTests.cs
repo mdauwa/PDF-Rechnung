@@ -38,6 +38,13 @@ public sealed class ProcessorTests : IDisposable
         Assert.Equal("Sehr geehrte Damen und Herren,\n\nanbei Ihre Rechnung.", v.Mail.Body);
         // ZUGFeRD-Erzeugung folgt erst → Fehler, kein Autoversand
         Assert.Equal(VorgangStatus.Error, v.Status);
+        // Versand-PDF ohne Steuerzeichen
+        var send = store.FilePath(v.Id, DocumentStore.SendFile);
+        Assert.NotNull(send);
+        Assert.Empty(ControlCodeParser.Parse(PdfText.Extract(File.ReadAllBytes(send!)).Lines).Codes);
+        Assert.True(v.RemovedCodes > 0);
+        // Briefpapier „Briefpapier Standard“ ist nicht angelegt → Fehler
+        Assert.Contains(v.Messages, m => m.Text.Contains("Briefpapier „Briefpapier Standard“ ist nicht angelegt"));
 
         // neu laden (wie nach einem Neustart)
         var store2 = new DocumentStore(new SettingsStore(_dir), NullLogger<DocumentStore>.Instance);
@@ -61,7 +68,7 @@ public sealed class ProcessorTests : IDisposable
     public void Versanddaten_bleiben_bei_neuer_Pruefung_erhalten()
     {
         var (store, proc) = Create(s => s.Mail.Enabled = true);
-        var codes = TestData.InvoiceCodes.Where(c => !c.StartsWith("@@xt") && !c.StartsWith("@@xi") && !c.StartsWith("@@xr") && !c.StartsWith("@@<<")).ToArray();
+        var codes = TestData.InvoiceCodes.Where(c => !c.StartsWith("@@xt") && !c.StartsWith("@@xi") && !c.StartsWith("@@xr") && !c.StartsWith("@@<<") && !c.StartsWith("@@bp")).ToArray();
         var v = proc.Process(TestData.Pdf(codes), "Upload", "brief.pdf");
         Assert.Equal(VorgangStatus.Ready, v.Status);
         store.Update(v.Id, x => { x.Mail.To = new() { "neu@kunde.at" }; x.Mail.Edited = true; return true; });

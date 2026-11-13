@@ -48,6 +48,7 @@ public static class VorgangApi
             return Results.Ok(new
             {
                 vorgang = v,
+                hasSendPdf = store.FilePath(id, DocumentStore.SendFile) is not null,
                 mailEnabled = mail.Enabled,
                 autoSend = mail.Enabled && mail.AutoSend,
                 autoSendAt = mail.Enabled && mail.AutoSend && v.SendAttempts == 0 && (v.Status == VorgangStatus.Ready || (mail.AutoSendWithWarnings && v.Status == VorgangStatus.Warning))
@@ -55,10 +56,12 @@ public static class VorgangApi
             });
         });
 
-        g.MapGet("/{id}/pdf", (string id, bool? download, DocumentStore store) =>
+        g.MapGet("/{id}/pdf", (string id, bool? download, string? variant, DocumentStore store) =>
         {
             var v = store.Get(id);
-            var path = store.FilePath(id, DocumentStore.PdfFile);
+            // Standard: das Versand-PDF (ohne Steuerzeichen, mit Briefpapier); "original" = Ausdruck wie eingegangen
+            var path = variant == "original" ? store.FilePath(id, DocumentStore.PdfFile)
+                : store.FilePath(id, DocumentStore.SendFile) ?? store.FilePath(id, DocumentStore.PdfFile);
             if (v is null || path is null) return Results.NotFound();
             var name = MailTemplate.SafeFileName(v.Mail.FileName) + ".pdf";
             return download == true

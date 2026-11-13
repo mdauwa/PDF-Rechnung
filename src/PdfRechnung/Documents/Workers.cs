@@ -36,8 +36,8 @@ public sealed class SendService
             mail.To.AddRange(v.Mail.To); mail.Cc.AddRange(v.Mail.Cc); mail.Bcc.AddRange(v.Mail.Bcc);
             if (!v.Mail.NoDocument)
             {
-                var pdf = _store.FilePath(id, DocumentStore.PdfFile);
-                if (pdf is null) return (false, "Die PDF-Datei des Vorgangs fehlt.");
+                var pdf = _store.FilePath(id, DocumentStore.SendFile);
+                if (pdf is null) return (false, "Das Versand-PDF fehlt – bitte „Neu prüfen“.");
                 mail.Attachments.Add((MailTemplate.SafeFileName(v.Mail.FileName) + ".pdf", await File.ReadAllBytesAsync(pdf, ct), "application/pdf"));
             }
             foreach (var a in v.Mail.Attachments)
@@ -85,7 +85,7 @@ public sealed class SendService
         try
         {
             Directory.CreateDirectory(folder);
-            var pdf = _store.FilePath(id, DocumentStore.PdfFile);
+            var pdf = _store.FilePath(id, DocumentStore.SendFile);
             if (pdf is not null)
             {
                 var name = MailTemplate.SafeFileName(v.Mail.FileName);

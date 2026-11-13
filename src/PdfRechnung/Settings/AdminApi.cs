@@ -119,6 +119,45 @@ public static class AdminApi
             catch (Exception ex) { return Results.Ok(new { ok = false, message = ex.Message }); }
         });
 
+        // ---------- Briefpapier ----------
+        // PDF hochladen (wird erst mit „Speichern“ einem Briefpapier zugeordnet)
+        g.MapPost("/stationery/file", async (HttpRequest request, SettingsStore store) =>
+        {
+            var form = await request.ReadFormAsync();
+            var file = form.Files.GetFile("file");
+            if (file is not { Length: > 0 }) return Results.BadRequest(new { error = "Bitte eine PDF-Datei auswählen." });
+            using var ms = new MemoryStream();
+            await file.CopyToAsync(ms);
+            var data = ms.ToArray();
+            int pages; double width, height;
+            try
+            {
+                using var pdf = UglyToad.PdfPig.PdfDocument.Open(data);
+                pages = pdf.NumberOfPages;
+                var first = pdf.GetPage(1);
+                width = first.Width / PdfComposer.MmToPt; height = first.Height / PdfComposer.MmToPt;
+            }
+            catch (Exception ex) { return Results.BadRequest(new { error = "Keine gültige PDF-Datei: " + ex.Message }); }
+            var dir = PdfComposer.StationeryDirectory(store.DataDirectory);
+            Directory.CreateDirectory(dir);
+            var baseName = new string(Path.GetFileNameWithoutExtension(file.FileName).Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' ? c : '_').ToArray());
+            var name = $"{(baseName.Length == 0 ? "briefpapier" : baseName[..Math.Min(40, baseName.Length)])}_{Guid.NewGuid().ToString("N")[..6]}.pdf";
+            await File.WriteAllBytesAsync(Path.Combine(dir, name), data);
+            var hint = Math.Abs(width - 210) > 2 || Math.Abs(height - 297) > 2 ? $"Achtung: Das PDF ist {width:0} × {height:0} mm, nicht A4 – es wird auf die Seitengröße skaliert." : null;
+            return Results.Ok(new { file = name, pages, width = Math.Round(width), height = Math.Round(height), hint });
+        }).DisableAntiforgery();
+
+        g.MapGet("/stationery/file/{name}", (string name, SettingsStore store) =>
+        {
+            if (name.Contains("..") || name.Contains('/') || name.Contains('\\')) return Results.BadRequest();
+            var path = Path.Combine(PdfComposer.StationeryDirectory(store.DataDirectory), name);
+            return File.Exists(path) ? Results.File(path, "application/pdf") : Results.NotFound();
+        });
+
+        // Vorschau mit den (auch noch nicht gespeicherten) Werten aus der Oberfläche
+        g.MapPost("/stationery/preview", (Stationery st, SettingsStore store) =>
+            Results.File(PdfComposer.Preview(st, PdfComposer.StationeryDirectory(store.DataDirectory)), "application/pdf"));
+
         // ---------- Zertifikat ----------
         g.MapGet("/certificate/download", (CertificateProvider certs) =>
             certs.Current is null ? Results.NotFound()
@@ -253,6 +292,20 @@ public static class AdminApi
         if (s.Mail.AutoSendDelayMinutes < 0) e.Add("Die Wartezeit für den Autoversand darf nicht negativ sein.");
         if (s.Storage.RetentionDays < 0) e.Add("Die Aufbewahrungsdauer darf nicht negativ sein.");
         if (s.Invoice.SumTolerance < 0) e.Add("Die Toleranz der Summenprüfung darf nicht negativ sein.");
+        foreach (var st in s.Stationery.Items)
+        {
+            if (string.IsNullOrWhiteSpace(st.Name)) e.Add("Jedes Briefpapier braucht einen Namen (wie im Steuerzeichen @@bpName@@).");
+            else if (st.Name != st.Name.Trim()) e.Add($"Briefpapier „{st.Name}“: Der Name darf nicht mit Leerzeichen beginnen oder enden.");
+            if (string.IsNullOrWhiteSpace(st.FirstPageFile)) e.Add($"Briefpapier „{st.Name}“: Bitte ein PDF für die erste Seite hochladen.");
+            if (st.FollowingMode == "file" && string.IsNullOrWhiteSpace(st.FollowingPageFile)) e.Add($"Briefpapier „{st.Name}“: Bitte ein PDF für die Folgeseiten hochladen.");
+            if (st.FollowingMode is not ("same" or "file" or "none")) e.Add($"Briefpapier „{st.Name}“: Ungültige Einstellung für Folgeseiten.");
+            if (new[] { st.MarginTop, st.MarginBottom, st.MarginLeft, st.MarginRight, st.FollowingMarginTop, st.FollowingMarginBottom }.Any(x => x < 0 || x > 150))
+                e.Add($"Briefpapier „{st.Name}“: Ränder müssen zwischen 0 und 150 mm liegen.");
+            if (st.Scale is < 10 or > 200) e.Add($"Briefpapier „{st.Name}“: Die Skalierung muss zwischen 10 und 200 % liegen.");
+        }
+        if (s.Stationery.Items.GroupBy(x => x.Name).Any(g => g.Count() > 1)) e.Add("Briefpapier-Namen müssen eindeutig sein.");
+        if (!string.IsNullOrEmpty(s.Stationery.Default) && s.Stationery.Items.All(x => x.Name != s.Stationery.Default))
+            e.Add($"Das Standard-Briefpapier „{s.Stationery.Default}“ gibt es nicht.");
         return e.Distinct().ToList();
     }
 }

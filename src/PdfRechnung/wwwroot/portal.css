@@ -131,3 +131,7 @@ table.users tr.user-sub td { border-top: 0; padding-top: 0; padding-bottom: 12px
 /* Eingebettet im Firmenportal */
 body.embedded .sidebar .brand { display: none; }
 body.embedded .sidebar-foot a[href="auth/logout"] { display: none; }
+
+table.users input.erp-no { width: 64px; font-family: Consolas, monospace; text-align: center; }
+table.users input.invalid { border-color: var(--bad, #d1453b); background: #fbeae8; }
+.user-melder { font-size: 12px; color: var(--muted, #667085); align-self: center; }

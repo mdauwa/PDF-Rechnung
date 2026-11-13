@@ -48,6 +48,10 @@ public sealed class ParsedCodes
     public string? Sender { get; set; }
     /// <summary>@@pu benutzer@@ – wer gedruckt hat (Windows- oder ERP-Benutzer); überschreibt den Benutzer des Druckauftrags.</summary>
     public string? PrintUser { get; set; }
+    /// <summary>@@pb007@@ – ERP-Bedienernummer (3-stellig, numerisch). Ordnet den Beleg dem Benutzer mit dieser Nummer zu.</summary>
+    public string? OperatorNumber { get; set; }
+    /// <summary>@@pb…@@ mit ungültigem Wert (nicht numerisch).</summary>
+    public string? InvalidOperatorNumber { get; set; }
 
     // ---- Bearbeiten / Allgemein ----
     public string? Stationery { get; set; }
@@ -146,6 +150,10 @@ public static partial class ControlCodeParser
             case "pt": r.MailTemplate = t.Length > 0 ? t : null; break;
             case "pf": r.Sender = t.Length > 0 ? t : null; break;
             case "pu": r.PrintUser = t.Length > 0 ? t : null; break;
+            case "pb":
+                if (Settings.UserStore.NormalizeOperator(t) is { } no) r.OperatorNumber = no;
+                else r.InvalidOperatorNumber = t;
+                break;
 
             // ---------- Mail ----------
             case "ml": r.MailEnabled = t != "0"; break;

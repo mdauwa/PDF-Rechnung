@@ -213,8 +213,11 @@ public sealed class DocumentProcessor
         }
 
         // Wem gehört der Beleg? @@pu@@ vor Druckauftrag; beim Upload der hochladende Benutzer
+        // Reihenfolge: @@pb@@ (Bedienernummer) → @@pu@@ → Benutzer des Druckauftrags
         if (!string.IsNullOrWhiteSpace(p.PrintUser)) v.PrintUser = p.PrintUser.Trim();
-        var owner = ownerUserId is not null ? _users?.FindById(ownerUserId) : _users?.FindByPrintName(v.PrintUser);
+        if (p.OperatorNumber is not null) v.OperatorNumber = p.OperatorNumber;
+        var owner = ownerUserId is not null ? _users?.FindById(ownerUserId)
+            : (p.OperatorNumber is not null ? _users?.FindByOperator(p.OperatorNumber) : null) ?? _users?.FindByPrintName(v.PrintUser);
         v.OwnerUserId = owner?.Id ?? ownerUserId;
         v.OwnerName = owner?.Name;
 

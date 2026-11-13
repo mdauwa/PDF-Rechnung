@@ -175,6 +175,22 @@ public sealed class UserStore
         static bool Eq(string? a, string? b) => string.Equals(a?.Trim(), b?.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>ERP-Bedienernummer vereinheitlichen: nur Ziffern, 3-stellig mit Vornullen („7“ → „007“); sonst null.</summary>
+    public static string? NormalizeOperator(string? s)
+    {
+        var t = s?.Trim();
+        if (string.IsNullOrEmpty(t) || t.Length > 3 || !t.All(char.IsAsciiDigit)) return null;
+        return t.PadLeft(3, '0');
+    }
+
+    /// <summary>Benutzer zur ERP-Bedienernummer (nur aktive).</summary>
+    public PortalUser? FindByOperator(string? number)
+    {
+        var no = NormalizeOperator(number);
+        if (no is null) return null;
+        lock (_lock) return _data.Users.FirstOrDefault(u => u.Active && u.OperatorNumbers.Any(n => NormalizeOperator(n) == no));
+    }
+
     /// <summary>Bedienernummer als Zahl („007“ → 7), sonst null.</summary>
     public static int? OperatorNumber(string? s) =>
         s is not null && s.Trim().Length is > 0 and <= 6 && s.Trim().All(char.IsAsciiDigit) ? int.Parse(s.Trim()) : null;

@@ -73,6 +73,38 @@ public sealed class UserRoutingTests : IDisposable
         Assert.False(For("martin").CanSee(new Vorgang())); // ohne Zuordnung nur „alle“/Admin
     }
 
+    [Theory]
+    [InlineData("007", "007")]
+    [InlineData("7", "007")]
+    [InlineData(" 042 ", "042")]
+    [InlineData("1234", null)]
+    [InlineData("A07", null)]
+    [InlineData("", null)]
+    public void Bedienernummer_wird_vereinheitlicht(string input, string? expected) =>
+        Assert.Equal(expected, UserStore.NormalizeOperator(input));
+
+    [Fact]
+    public void Steuerzeichen_pb_ordnet_ueber_Bedienernummer_zu_und_warnt_bei_unbekannter()
+    {
+        var users = Users();
+        var settings = new SettingsStore(_dir);
+        var s = DefaultSettings.Create();
+        var store = new DocumentStore(settings, NullLogger<DocumentStore>.Instance);
+        var proc = new DocumentProcessor(store, new StaticOptions<MailOptions>(s.Mail), new StaticOptions<InvoiceOptions>(s.Invoice),
+            NullLogger<DocumentProcessor>.Instance, settings: settings, users: users);
+
+        var v = proc.Process(TestData.Pdf(new[] { "@@pb007@@" }), "Eingang", "a.pdf", "TS01\\eva");
+        Assert.Equal("martin", v.OwnerUserId); // Bedienernummer vor Windows-Benutzer
+        Assert.Equal("007", v.OperatorNumber);
+
+        var u = proc.Process(TestData.Pdf(new[] { "@@pb099@@" }), "Eingang", "b.pdf");
+        Assert.Null(u.OwnerUserId);
+        Assert.Contains(u.Messages, m => m.Text.Contains("099") && m.Text.Contains("keinem Benutzer"));
+
+        var bad = proc.Process(TestData.Pdf(new[] { "@@pbXY@@" }), "Eingang", "c.pdf");
+        Assert.Contains(bad.Messages, m => m.Text.Contains("ungültig"));
+    }
+
     [Fact]
     public void EventHub_liefert_verpasste_Ereignisse_nach()
     {

@@ -34,7 +34,7 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 - **Erst normale PDFs, dann ZUGFeRD (13.11.2026):** Zuerst läuft der komplette Weg ohne E-Rechnung: Drucker, Steuerzeichen entfernen, Briefpapier, Versand. ZUGFeRD kommt erst dazu, wenn das stabil funktioniert.
 - **ERP-Ausgabe der Steuerzeichen:** Dass die Steuerzeichen jetzt gedruckt werden, lag an einer internen ERP-Einstellung. Für das Projekt ist das nicht relevant.
 
-## Stand (fertig, getestet, 77 Tests grün)
+## Stand (fertig, getestet, 84 Tests grün)
 
 - **Portal:**
   - Vorgangsliste mit Filtern und Menüzählern
@@ -51,7 +51,7 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 - **Textkorrektur (`TextFixer`):** UTF-8-als-ANSI („Ã¼“), Ersatzzeichen in bekannten Wörtern, NFC, Ligaturen, weiche Trennstriche, Steuerzeichen; `@@mb@@`-Dateien in ANSI/UTF-8. Korrekturen erscheinen als Hinweis.
 - **IP-Bindung:** Einstellungen → Server & Zertifikat → „Gebunden an“; leer = alle Adressen, 127.0.0.1 immer dabei, fehlende Adressen werden beim Start übersprungen (`NetworkBinding`).
 - **Benutzer erkennen und Sicht (13.11.2026):**
-  - `@@pu…@@` gibt an, wer gedruckt hat (Windows-/ERP-Name oder Bedienernummer `007`). Den Druckauftrag-Benutzer liefert später der Drucker.
+  - **`@@pb007@@` = ERP-Bedienernummer** (3-stellig, numerisch; Benutzer → Spalte „ERP-Nr.“). Vorrang vor `@@pu…@@` (Windows-/ERP-Name) und dem Benutzer des Druckauftrags (liefert später der Drucker). Unbekannte/ungültige Nummer → Warnung im Vorgang.
   - Zuordnung unter Benutzer: Bediener-Nr., Druck-Benutzer, E-Mail ohne Domäne.
   - `Vorgang.OwnerUserId`, Menü „Meine Belege“.
   - Sicht je Benutzer: `eigene`, `auswahl` (+ `AlsoSees`) oder `alle`. Admins sehen alles.

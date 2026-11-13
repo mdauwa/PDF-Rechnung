@@ -799,14 +799,15 @@ function tabUsers() {
   return section("Benutzer",
     `<p class="help">Anmeldung mit dem Microsoft-365-Konto (E-Mail-Adresse). <b>Versenden</b> = darf Versanddaten ändern, senden und verwerfen; ohne dieses Recht nur ansehen.
       <b>Admin</b> = zusätzlich Einstellungen. <b>Aktiv</b> abgewählt = keine Anmeldung.
-      <b>ERP-Bediener-Nr.</b> = dreistellige Bedienernummer aus dem ERP; im Druck <code>@@pu007@@</code> (führende Nullen egal).
+      <b>ERP-Nr.</b> = dreistellige ERP-Bedienernummer; das ERP druckt sie als <code>@@pb007@@</code>. Der Beleg gehört dann diesem Benutzer und öffnet sich über seinen Melder.
       <b>Druck-Benutzer</b> = Windows- oder ERP-Benutzer dieser Person (aus dem Druckauftrag oder <code>@@pu…@@</code>). Ohne Eintrag wird der Anmeldename ohne Domäne verglichen.
       So landet ein gedruckter Beleg bei „Meine Belege“ und öffnet sich über den Melder auf dem PC dieser Person.
       <b>Sieht Belege</b>: nur eigene, eigene plus die ausgewählter Kollegen (z. B. Vertretung, Sekretariat) oder alle. Admins sehen immer alle; Belege ohne zugeordneten Benutzer sehen nur „alle“ und Admins.</p>
-    ${U.users.length ? `<div class="table-wrap"><table class="list mini users"><thead><tr><th>Name</th><th>E-Mail (Anmeldename)</th><th>Weitere Anmeldenamen</th>
+    ${U.users.length ? `<div class="table-wrap"><table class="list mini users"><thead><tr><th>Name</th><th title="ERP-Bedienernummer, 3-stellig – im Druck @@pb007@@">ERP-Nr.</th><th>E-Mail (Anmeldename)</th><th>Weitere Anmeldenamen</th>
       <th>Versenden</th><th>Admin</th><th>Aktiv</th><th>Letzte Anmeldung</th><th></th></tr></thead><tbody>
       ${U.users.map((u, i) => `<tr class="${u.active ? "" : "inactive"}">
         <td><input data-u="${i}|name" value="${esc(u.name)}" placeholder="Vorname Nachname"></td>
+        <td><input class="erp-no" data-u="${i}|operatorNumbers" value="${esc((u.operatorNumbers || []).join(", "))}" placeholder="007" inputmode="numeric" title="ERP-Bedienernummer (3 Ziffern). Mehrere mit Komma."></td>
         <td><input data-u="${i}|email" value="${esc(u.email || "")}" placeholder="name@firma.at"></td>
         <td><input data-u="${i}|logins" value="${esc((u.logins || []).join(", "))}" placeholder="optional"></td>
         <td><input type="checkbox" data-u="${i}|canSend" ${u.canSend ? "checked" : ""}></td>
@@ -814,9 +815,10 @@ function tabUsers() {
         <td><input type="checkbox" data-u="${i}|active" ${u.active ? "checked" : ""}></td>
         <td class="meta-inline">${fmtLogin(u.lastLogin)}</td>
         <td><button class="icon-btn" data-st="user-del" data-i="${i}" title="Entfernen">✕</button></td></tr>
-        <tr class="user-sub ${u.active ? "" : "inactive"}"><td colspan="8"><div class="user-sub-grid">
-          <label>ERP-Bediener-Nr.<input data-u="${i}|operatorNumbers" value="${esc((u.operatorNumbers || []).join(", "))}" placeholder="z. B. 007" inputmode="numeric"></label>
-          <label>Druck-Benutzer (Windows/ERP)<input data-u="${i}|printNames" value="${esc((u.printNames || []).join(", "))}" placeholder="z. B. FIRMA\\mmuster"></label>
+        <tr class="user-sub ${u.active ? "" : "inactive"}"><td colspan="9"><div class="user-sub-grid">
+          <label>Windows-Benutzer (Druckauftrag)<input data-u="${i}|printNames" value="${esc((u.printNames || []).join(", "))}" placeholder="z. B. FIRMA\\mmuster"></label>
+          <span class="user-melder">${(U.melder?.[u.id] || []).length
+            ? `Melder: ${U.melder[u.id].map(m => esc(m.name)).join(", ")}` : "kein Melder verbunden"}</span>
           <label>Sieht Belege<select data-u="${i}|visibility" ${u.isAdmin ? "disabled" : ""}>
             ${[["eigene", "nur eigene"], ["auswahl", "eigene + ausgewählte Benutzer"], ["alle", "alle"]].map(([k, t]) =>
               `<option value="${k}" ${(u.isAdmin ? "alle" : (u.visibility || "eigene")) === k ? "selected" : ""}>${t}</option>`).join("")}</select></label>
@@ -843,7 +845,12 @@ function onUsersInput(el, e) {
   }
   if (!el.dataset.u) return false;
   const [i, k] = el.dataset.u.split("|"), u = ST.users.users[+i];
-  if (k === "operatorNumbers") u.operatorNumbers = el.value.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
+  if (k === "operatorNumbers") {
+    u.operatorNumbers = el.value.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
+    const bad = u.operatorNumbers.some(x => !/^\d{1,3}$/.test(x));
+    el.classList.toggle("invalid", bad);
+    el.title = bad ? "Bitte 3 Ziffern, z. B. 007" : "ERP-Bedienernummer (3 Ziffern). Mehrere mit Komma.";
+  }
   else if (k === "visibility") { u.visibility = el.value; markUsersDirty(); drawTab(); return true; }
   else if (k === "printNames") u.printNames = el.value.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
   else if (k === "logins") u.logins = el.value.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);

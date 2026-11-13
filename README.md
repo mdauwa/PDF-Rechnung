@@ -32,7 +32,7 @@ Technik und Aufbau sind wie im **Firmenportal**:
 | HTML-Mails im CI: Vorlagen mit Logo, Farben, Schrift, Kopfzeile, Infokasten, Signatur, Fußzeile oder eigenem HTML; Auswahl per `@@pt@@`, Briefpapier, Absender oder Standard; Vorschau in Einstellungen und Vorgang | ✅ |
 | Platzhalter `{Name}` / `{Name\|Ersatztext}` in Betreff, Text, Signatur, Dateiname; eigene Werte per `@@pvName=Wert@@`, Absender per `@@pf@@` | ✅ |
 | Automatische Korrektur kaputter Umlaute/Sonderzeichen (UTF-8 als ANSI, Ersatzzeichen, Ligaturen), `@@mb@@`-Dateien in ANSI oder UTF-8 | ✅ |
-| Wer hat gedruckt: `@@pu…@@` (Windows-/ERP-Benutzer oder ERP-Bedienernummer `007`), Zuordnung zu Portal-Benutzern, „Meine Belege“ | ✅ |
+| Wer hat gedruckt: `@@pb007@@` (ERP-Bedienernummer) oder `@@pu…@@` (Windows-/ERP-Name), Zuordnung zu Portal-Benutzern, „Meine Belege“ | ✅ |
 | Rollen/Sicht: nur eigene, eigene + ausgewählte Kollegen, alle; Admins sehen alles | ✅ |
 | Live-Hinweise: offener Portal-Tab springt zum neuen eigenen Beleg | ✅ |
 | **Belegpost Melder** (`Belegpost-Melder.exe`, Infobereich am PC): öffnet neu gedruckte eigene Belege automatisch im Browser, auch bei Druck aus RDP | ✅ |
@@ -123,7 +123,7 @@ Syntax wie bei gotomaxx: `@@` + 2 Zeichen Befehl + Wert + `@@`, eine Zeile, Cour
 | E-Rechnung | `xt` (Format), `xi FELD=Wert`, `xr table=…\|…`, `<<\|…` (Fortsetzung der vorigen Tabellenzeile wie in der ERP-Vorlage), `pe` |
 | Mail | `ml`, `to`/`aa`, `cc`, `bc`, `ed`, `sa`, `mb`, `ma`, `mc`, `md`, `mf` (Dateiname aus der ERP-Vorlage) (`mo`/`ms`/`mp` werden ignoriert – der Server sendet) |
 | Bearbeiten | `bp`, `fn`, `di`, `af`, `ef`, `rpc`, `nd`, `ca`, `cf` (teilweise erst mit dem Druckdienst wirksam) |
-| Eigene (Belegpost) | `pvName=Wert` (Platzhalter), `ptVorlage` (Mail-Vorlage), `pfadresse@firma.at` (Absender), `puBenutzer` (wer gedruckt hat: Windows-/ERP-Name oder Bedienernummer, z. B. `@@pu007@@`) |
+| Eigene (Belegpost) | `pvName=Wert` (Platzhalter), `ptVorlage` (Mail-Vorlage), `pfadresse@firma.at` (Absender), `pb007` (ERP-Bedienernummer, 3-stellig: Beleg gehört dem Benutzer mit dieser Nummer), `puBenutzer` (Windows-/ERP-Name) |
 
 ### Mail-Texte, Platzhalter und Vorlagen
 

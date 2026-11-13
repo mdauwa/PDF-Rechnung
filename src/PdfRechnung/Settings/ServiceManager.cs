@@ -146,6 +146,14 @@ public static class ServiceManager
         return new WindowsPrincipal(id).IsInRole(WindowsBuiltInRole.Administrator);
     }
 
+    /// <summary>Älterer Dienst „PdfRechnung“ (vor der Umbenennung) installiert?</summary>
+    [SupportedOSPlatform("windows")]
+    public static bool LegacyInstalled()
+    {
+        try { return ServiceController.GetServices().Any(s => s.ServiceName.Equals(LegacyServiceName, StringComparison.OrdinalIgnoreCase)); }
+        catch { return false; }
+    }
+
     [SupportedOSPlatform("windows")]
     public static bool IsInstalled()
     {

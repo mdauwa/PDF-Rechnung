@@ -78,6 +78,7 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
   - Einbettung über `frame-ancestors`; Cookie `SameSite=None`, wenn aktiv.
   - Spezifikation und Beispielcode: `docs/Firmenportal-Anbindung.md`.
   - Das Firmenportal baut der Benutzer selbst um: **dort nichts ändern**.
+- **Update per Doppelklick:** Startet man eine neue `Belegpost.exe`, während der Dienst installiert ist, aktualisiert sie ihn automatisch (Adminabfrage, `--install --open-browser`) und beendet sich. Das passiert, wenn die Datei abweicht, der alte Dienst `PdfRechnung` noch existiert oder der Dienst nicht läuft. Läuft der Dienst schon mit derselben Datei, öffnet sich nur der Browser.
 - **Symbol:** eigenes Symbol für EXE, Portal und README (`docs/branding`).
 - **Eingang:** Eingangsordner `C:\ProgramData\Belegpost\eingang` und Upload im Portal.
 - **Steuerzeichen-Auswertung:**

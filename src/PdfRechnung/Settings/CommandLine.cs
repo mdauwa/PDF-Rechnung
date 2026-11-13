@@ -79,7 +79,7 @@ public static class CommandLine
             }
             else
             {
-                Log("Achtung: Der Dienst antwortet nicht. Details in der Ereignisanzeige (Anwendung, Quelle PdfRechnung).");
+                Log("Achtung: Der Dienst antwortet nicht. Details in der Ereignisanzeige (Anwendung, Quelle Belegpost).");
             }
             return 0;
         }

@@ -22,13 +22,23 @@ if (CommandLine.Handles(args)) return CommandLine.Run(args, store);
 if (int.TryParse(CommandLine.Value(args, "--wait-pid"), out var waitPid))
     ServiceManager.WaitForProcessExit(waitPid, TimeSpan.FromSeconds(30));
 
-if (!isService && OperatingSystem.IsWindows() && ServiceManager.IsInstalled())
+// Doppelklick auf eine neue Belegpost.exe (z. B. frisch auf den Server kopiert):
+// läuft bereits ein Dienst, wird er automatisch aktualisiert und neu gestartet – diese Instanz beendet sich danach.
+if (!isService && OperatingSystem.IsWindows() && (ServiceManager.IsInstalled() || ServiceManager.LegacyInstalled()))
 {
-    var installed = ServiceManager.ServiceExecutable();
-    if (installed is not null && !ServiceManager.SameFile(installed, ServiceManager.ExecutablePath))
+    var installed = ServiceManager.IsInstalled() ? ServiceManager.ServiceExecutable() : null;
+    string? reason =
+        !ServiceManager.IsInstalled() ? "Älterer Dienst „PdfRechnung“ gefunden – er wird durch „Belegpost Portal“ ersetzt"
+        : installed is not null && !ServiceManager.SameFile(installed, ServiceManager.ExecutablePath) ? $"Neue Programmversion – aktualisiere den Dienst ({installed})"
+        : !ServiceManager.IsRunning() ? "Der Dienst ist installiert, läuft aber nicht – starte ihn"
+        : null;
+    if (reason is not null)
     {
-        Console.WriteLine($"Neue Programmversion – aktualisiere den Dienst ({installed}) …");
-        return ServiceManager.RunElevated("--install --open-browser") ? 0 : 1223;
+        Console.WriteLine(reason + " …");
+        Console.WriteLine("(Windows fragt nach Administratorrechten. Danach öffnet sich das Portal im Browser.)");
+        var ok = ServiceManager.RunElevated("--install --open-browser");
+        if (!ok) { Console.WriteLine("Abgebrochen – der Dienst wurde nicht aktualisiert."); Thread.Sleep(4000); }
+        return ok ? 0 : 1223;
     }
 }
 

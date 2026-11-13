@@ -108,6 +108,16 @@ function onInput(e) {
   if (el.dataset.graphsecret !== undefined) { ST.graphSecret = el.value; markDirty(); return; }
   if (el.dataset.bpdefault !== undefined) { ST.s.stationery.default = el.checked ? el.value : ""; markDirty(); return; }
   if (el.dataset.bpup !== undefined && e.type === "change") { uploadStationery(el); return; }
+  if (el.dataset.bindall !== undefined) {
+    ST.s.server.bindAddresses = el.checked ? [] : (ST.data.localAddresses || []).slice(0, 1);
+    markDirty(); drawTab(); return;
+  }
+  if (el.dataset.bind !== undefined) {
+    const list = (ST.s.server.bindAddresses || []).filter(x => x !== el.value);
+    if (el.checked) list.push(el.value);
+    if (list.length === 0) { el.checked = true; msg("Mindestens eine Adresse wählen – oder „alle IP-Adressen“."); return; }
+    ST.s.server.bindAddresses = list; markDirty(); return;
+  }
   if (el.dataset.mtbp !== undefined) {
     const t = ST.s.mailTemplates.items[+el.dataset.mtbp];
     t.stationeries = (t.stationeries || []).filter(x => x.toLowerCase() !== el.value.toLowerCase());
@@ -375,6 +385,7 @@ function tabServer() {
     </div>
     ${inCheck("server.enableHttp", "Zusätzlich HTTP anbieten")}
     ${inCheck("server.redirectHttpToHttps", "HTTP automatisch auf HTTPS umleiten")}
+    ${bindField()}
     ${field("Titel des Portals", inText("portal.title", "Belegpost"))}
     <p class="help">Die Firewall-Regel (Domänen- und privates Netz) wird beim Dienststart automatisch an die Ports angepasst.</p>`) +
     section("Aktuelles Zertifikat", certInfo || '<p class="meta">Kein Zertifikat geladen.</p>') +
@@ -390,6 +401,20 @@ function tabServer() {
     section("Selbst signiertes Zertifikat",
       field("Weitere DNS-Namen", inLines("server.additionalHostNames", "rechnung.firma.local"),
         "Ein Name pro Zeile. Das Zertifikat wird beim Neustart passend erneuert."));
+}
+
+function bindField() {
+  const sel = ST.s.server.bindAddresses ||= [];
+  const known = ST.data.localAddresses || [];
+  const extra = sel.filter(x => !known.includes(x));
+  const all = sel.length === 0;
+  return `<div class="plain-field"><span class="lbl">Gebunden an (IP-Adressen)</span>
+      <label class="check"><input type="checkbox" data-bindall ${all ? "checked" : ""}> alle IP-Adressen des Servers</label>
+      ${all ? "" : `<div class="check-list">${known.map(ip => `<label class="check"><input type="checkbox" data-bind value="${esc(ip)}" ${sel.includes(ip) ? "checked" : ""}> <code>${esc(ip)}</code></label>`).join("")}
+        ${extra.map(ip => `<label class="check"><input type="checkbox" data-bind value="${esc(ip)}" checked> <code>${esc(ip)}</code> <span class="badge missing">nicht vorhanden</span></label>`).join("")}</div>`}
+      <p class="help">Nur an die gewählten Adressen binden, z. B. nur das interne Netz. <code>127.0.0.1</code> (localhost) ist immer dabei –
+        für die Einrichtung und die Administrator-Anmeldung am Server. Gilt für HTTPS und HTTP und erst nach einem Neustart des Dienstes.
+        Fehlt eine Adresse später (andere Netzwerkkarte), startet der Dienst trotzdem und meldet es im Protokoll.</p></div>`;
 }
 
 async function uploadCert() {

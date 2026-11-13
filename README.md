@@ -21,6 +21,7 @@ Technik und Aufbau sind wie im **Firmenportal**:
 | Teil | Stand |
 |---|---|
 | Portal: Vorgangsliste, Filter, PDF-Vorschau, Prüfung, Versanddaten bearbeiten, Senden, Massenversand, Verwerfen, Verlauf | ✅ |
+| Portal nur an bestimmte IP-Adressen binden (Server & Zertifikat → „Gebunden an“; localhost immer) | ✅ |
 | Autoversand korrekter Vorgänge (Einstellung, mit Wartezeit) | ✅ |
 | E-Mail-Versand über Microsoft 365 (Graph-API, App-Registrierung mit Mail.Send, große Anlagen per Upload-Sitzung) oder SMTP, Testmail | ✅ |
 | Eingangsordner (jede PDF-Datei → Vorgang), Upload im Portal | ✅ |

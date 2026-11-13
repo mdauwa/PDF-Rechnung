@@ -63,6 +63,7 @@ public static class AdminApi
                 entraRedirectUris = CertificateProvider.HostNames(s.Server).Select(h => $"https://{h}:{s.Server.HttpsPort}/signin-oidc"),
                 certificate = certs.Info,
                 hostNames = CertificateProvider.HostNames(s.Server),
+                localAddresses = NetworkBinding.LocalAddresses(),
                 dataDirectory = store.DataDirectory,
                 inboxFolder = InboxWatcher.ResolveFolder(s.Inbox, store),
                 documentsFolder = docs.Root,
@@ -317,6 +318,8 @@ public static class AdminApi
         bool PortOk(int p) => p is > 0 and <= 65535;
         if (!PortOk(s.Server.HttpsPort)) e.Add("HTTPS-Port ist ungültig.");
         if (s.Server.EnableHttp && !PortOk(s.Server.HttpPort)) e.Add("HTTP-Port ist ungültig.");
+        foreach (var ip in s.Server.BindAddresses.Where(x => !string.IsNullOrWhiteSpace(x)))
+            if (!System.Net.IPAddress.TryParse(ip.Trim(), out _)) e.Add($"„{ip}“ ist keine gültige IP-Adresse (Server → Gebunden an).");
         if (s.Server.EnableHttp && s.Server.HttpPort == s.Server.HttpsPort) e.Add("HTTP- und HTTPS-Port müssen verschieden sein.");
         if (!MailSender.Transports.Contains(s.Mail.Transport)) e.Add("Unbekannte Versandart.");
         if (s.Mail.Enabled)

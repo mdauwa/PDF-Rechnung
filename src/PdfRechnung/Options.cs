@@ -53,6 +53,11 @@ public sealed class ServerOptions
     public string? CertificatePassword { get; set; }
     /// <summary>Weitere DNS-Namen für das selbst signierte Zertifikat.</summary>
     public string[] AdditionalHostNames { get; set; } = Array.Empty<string>();
+    /// <summary>
+    /// IP-Adressen, an die das Portal gebunden wird. Leer = alle Adressen des Servers.
+    /// 127.0.0.1 ist immer dabei (Einrichtung und Administrator-Anmeldung am Server).
+    /// </summary>
+    public List<string> BindAddresses { get; set; } = new();
 }
 
 /// <summary>

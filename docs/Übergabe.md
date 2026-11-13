@@ -34,7 +34,7 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 - **Erst normale PDFs, dann ZUGFeRD (13.11.2026):** Zuerst läuft der komplette Weg ohne E-Rechnung: Drucker, Steuerzeichen entfernen, Briefpapier, Versand. ZUGFeRD kommt erst dazu, wenn das stabil funktioniert.
 - **ERP-Ausgabe der Steuerzeichen:** Dass die Steuerzeichen jetzt gedruckt werden, lag an einer internen ERP-Einstellung. Für das Projekt ist das nicht relevant.
 
-## Stand (fertig, getestet, 60 Tests grün)
+## Stand (fertig, getestet, 63 Tests grün)
 
 - **Portal:**
   - Vorgangsliste mit Filtern und Menüzählern
@@ -49,6 +49,7 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
   - Versand als multipart (HTML + Text) über SMTP und Graph (Inline-Anlage mit `contentId`, abweichender Absender).
 - **Platzhalter:** `{Name}` und `{Name|Ersatztext}`, eingebaute plus eigene per `@@pvName=Wert@@`. Fehlende → Warnung.
 - **Textkorrektur (`TextFixer`):** UTF-8-als-ANSI („Ã¼“), Ersatzzeichen in bekannten Wörtern, NFC, Ligaturen, weiche Trennstriche, Steuerzeichen; `@@mb@@`-Dateien in ANSI/UTF-8. Korrekturen erscheinen als Hinweis.
+- **IP-Bindung:** Einstellungen → Server & Zertifikat → „Gebunden an“; leer = alle Adressen, 127.0.0.1 immer dabei, fehlende Adressen werden beim Start übersprungen (`NetworkBinding`).
 - **Symbol:** eigenes Symbol für EXE, Portal und README (`docs/branding`).
 - **Eingang:** Eingangsordner `C:\ProgramData\Belegpost\eingang` und Upload im Portal.
 - **Steuerzeichen-Auswertung:**

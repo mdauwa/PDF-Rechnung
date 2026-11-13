@@ -5,17 +5,17 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>PdfRechnung</RootNamespace>
-    <AssemblyName>PdfRechnung</AssemblyName>
+    <AssemblyName>Belegpost</AssemblyName>
     <Version>0.1.0</Version>
-    <Product>PDF Rechnung</Product>
-    <Company>ERP Austria</Company>
+    <Product>Belegpost</Product>
+    <Company>Belegpost</Company>
     <!-- Ziel: Windows Server / Windows 10/11 x64 -->
     <RuntimeIdentifier Condition="'$(OS)' == 'Windows_NT' Or '$(Configuration)' == 'Release'">win-x64</RuntimeIdentifier>
     <InvariantGlobalization>false</InvariantGlobalization>
-    <ApplicationIcon>PdfRechnung.ico</ApplicationIcon>
+    <ApplicationIcon>Belegpost.ico</ApplicationIcon>
   </PropertyGroup>
 
-  <!-- dotnet publish -c Release → eine PdfRechnung.exe inkl. .NET-Laufzeit (auf dem Server muss nichts installiert werden) + wwwroot -->
+  <!-- dotnet publish -c Release → eine Belegpost.exe inkl. .NET-Laufzeit (auf dem Server muss nichts installiert werden) + wwwroot -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>

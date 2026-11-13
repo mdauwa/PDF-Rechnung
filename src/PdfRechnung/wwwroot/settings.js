@@ -14,6 +14,7 @@ const TABS = [
   ["eingang", "Drucker & Eingang"],
   ["briefpapier", "Briefpapier"],
   ["mail", "E-Mail & Versand"],
+  ["mailvorlagen", "Mail-Vorlagen"],
   ["erechnung", "E-Rechnung"],
   ["ablage", "Ablage"],
   ["benutzer", "Benutzer"],
@@ -70,7 +71,7 @@ function drawTab() {
   document.querySelectorAll("#stTabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === ST.tab));
   const body = $("#stBody");
   if (!ST.s) return;
-  const fn = { dienst: tabService, server: tabServer, eingang: tabInbox, briefpapier: tabStationery, mail: tabMail, erechnung: tabInvoice, ablage: tabStorage, benutzer: tabUsers, anmeldung: tabAuth }[ST.tab] || tabService;
+  const fn = { dienst: tabService, server: tabServer, eingang: tabInbox, briefpapier: tabStationery, mail: tabMail, mailvorlagen: tabTemplates, erechnung: tabInvoice, ablage: tabStorage, benutzer: tabUsers, anmeldung: tabAuth }[ST.tab] || tabService;
   body.innerHTML = fn();
   if (ST.tab === "benutzer" && !ST.users) loadUsers();
   if (ST.tab === "dienst") loadService();
@@ -107,6 +108,19 @@ function onInput(e) {
   if (el.dataset.graphsecret !== undefined) { ST.graphSecret = el.value; markDirty(); return; }
   if (el.dataset.bpdefault !== undefined) { ST.s.stationery.default = el.checked ? el.value : ""; markDirty(); return; }
   if (el.dataset.bpup !== undefined && e.type === "change") { uploadStationery(el); return; }
+  if (el.dataset.mtbp !== undefined) {
+    const t = ST.s.mailTemplates.items[+el.dataset.mtbp];
+    t.stationeries = (t.stationeries || []).filter(x => x.toLowerCase() !== el.value.toLowerCase());
+    if (el.checked) t.stationeries.push(el.value);
+    markDirty(); return;
+  }
+  if (el.dataset.mtdefault !== undefined) { ST.s.mailTemplates.default = el.checked ? el.value : ""; markDirty(); return; }
+  if (el.dataset.mtlogo !== undefined && e.type === "change") { uploadLogo(el); return; }
+  if (el.dataset.colortext !== undefined) {
+    // Farbwähler und Textfeld synchron halten
+    const other = el.parentElement.querySelector(el.type === "color" ? "input[type=text]" : "input[type=color]");
+    if (/^#[0-9a-fA-F]{6}$/.test(el.value) && other) other.value = el.value;
+  }
   if (el.dataset.unit !== undefined) {
     if (e.type !== "change") return;
     const units = ST.s.invoice.units, old = el.dataset.unit, row = el.closest(".unit");
@@ -119,6 +133,8 @@ function onInput(e) {
     // Standard-Briefpapier mitziehen, wenn sein Name geändert wird
     const bp = el.dataset.path.match(/^stationery\.items\.(\d+)\.name$/);
     if (bp && ST.s.stationery.default === ST.s.stationery.items[+bp[1]].name) ST.s.stationery.default = el.value;
+    const mt = el.dataset.path.match(/^mailTemplates\.items\.(\d+)\.name$/);
+    if (mt && ST.s.mailTemplates.default === ST.s.mailTemplates.items[+mt[1]].name) ST.s.mailTemplates.default = el.value;
     let v = el.type === "checkbox" ? el.checked : el.value;
     if (el.dataset.type === "int") v = v === "" ? 0 : parseInt(v, 10);
     if (el.dataset.type === "dec") v = v === "" ? 0 : parseFloat(String(v).replace(",", "."));
@@ -182,6 +198,34 @@ async function onAction(e) {
         break;
       }
       case "bp-preview": await previewStationery(+btn.dataset.i); break;
+      case "mt-add": {
+        const T = (ST.s.mailTemplates ||= { items: [], default: "" });
+        T.items.push({ name: T.items.length ? "" : "Standard", kind: "simple", stationeries: [], senders: [], fromAddress: "", fromName: "", replyTo: "",
+          subject: "", body: "", logoFile: "", logoWidth: 180, logoAlign: "left", primaryColor: "#1f5fbf", backgroundColor: "#f4f5f7", textColor: "#1c2330",
+          fontFamily: "Segoe UI, Arial, Helvetica, sans-serif", headerText: "", showDocumentBox: true,
+          signature: "Mit freundlichen Grüßen\n{Absender}", footer: "", customHtml: "" });
+        if (!T.default && T.items.length === 1) T.default = "Standard";
+        markDirty(); drawTab(); break;
+      }
+      case "mt-copy": {
+        const T = ST.s.mailTemplates, src = T.items[+btn.dataset.i];
+        T.items.push({ ...structuredClone(src), name: (src.name || "Vorlage") + " (Kopie)", stationeries: [], senders: [] });
+        markDirty(); drawTab(); break;
+      }
+      case "mt-del": {
+        const T = ST.s.mailTemplates, it = T.items[+btn.dataset.i];
+        if (await confirmDialog("Mail-Vorlage entfernen", `„${esc(it.name || "ohne Namen")}“ entfernen?`, "Entfernen", true)) {
+          if (T.default === it.name) T.default = "";
+          T.items.splice(+btn.dataset.i, 1); markDirty(); drawTab();
+        }
+        break;
+      }
+      case "mt-logo-del": ST.s.mailTemplates.items[+btn.dataset.i].logoFile = ""; markDirty(); drawTab(); break;
+      case "mt-preview": await previewTemplate(+btn.dataset.i); break;
+      case "mt-html": {
+        const t = ST.s.mailTemplates.items[+btn.dataset.i];
+        t.customHtml = t.customHtml || DEFAULT_HTML; markDirty(); drawTab(); break;
+      }
       case "unit-add": ST.s.invoice.units[""] = ""; drawTab(); document.querySelector('.unit .key[value=""]')?.focus(); break;
       case "unit-del": delete ST.s.invoice.units[btn.dataset.key]; markDirty(); drawTab(); break;
       case "user-add":
@@ -331,7 +375,7 @@ function tabServer() {
     </div>
     ${inCheck("server.enableHttp", "Zusätzlich HTTP anbieten")}
     ${inCheck("server.redirectHttpToHttps", "HTTP automatisch auf HTTPS umleiten")}
-    ${field("Titel des Portals", inText("portal.title", "PDF Rechnung"))}
+    ${field("Titel des Portals", inText("portal.title", "Belegpost"))}
     <p class="help">Die Firewall-Regel (Domänen- und privates Netz) wird beim Dienststart automatisch an die Ports angepasst.</p>`) +
     section("Aktuelles Zertifikat", certInfo || '<p class="meta">Kein Zertifikat geladen.</p>') +
     section("Eigenes Zertifikat (PFX) hinterlegen",
@@ -372,7 +416,7 @@ function tabInbox() {
         "Der Dienst läuft als SYSTEM und sieht keine Netzlaufwerke. Eine Zuordnung pro Zeile: <code>K:\\=\\\\server\\freigabe\\</code>. " +
         "Das Computerkonto des Servers braucht Leserechte auf die Freigabe.")) +
     section("Drucker",
-      `${field("Name des Druckers", inText("inbox.printerName", "PDF Rechnung"))}
+      `${field("Name des Druckers", inText("inbox.printerName", "Belegpost"))}
        <div class="help-box">
          <b>So kommt der Druck in den Eingang</b> (wird im nächsten Schritt hier automatisiert):
          <ol>
@@ -394,7 +438,7 @@ function tabStationery() {
     const P = `stationery.items.${i}`;
     return section(`Briefpapier ${esc(b.name || "(ohne Namen)")}`,
       `<div class="grid2">
-         ${field("Name", inText(`${P}.name`, "z. B. ERP Austria GmbH"), `Steuerzeichen: <code>@@bp${esc(b.name || "Name")}@@</code> – Groß-/Kleinschreibung wird beachtet.`)}
+         ${field("Name", inText(`${P}.name`, "z. B. Firma GmbH"), `Steuerzeichen: <code>@@bp${esc(b.name || "Name")}@@</code> – Groß-/Kleinschreibung wird beachtet.`)}
          <div class="plain-field"><span class="lbl">Verwendung</span>
            <label class="check"><input type="checkbox" data-bpdefault value="${esc(b.name)}" ${S.default && S.default === b.name ? "checked" : ""}> Standard-Briefpapier (ohne @@bp@@ im Beleg)</label></div>
        </div>
@@ -449,7 +493,7 @@ async function uploadStationery(el) {
 
 async function previewStationery(i) {
   const b = ST.s.stationery.items[i];
-  const res = await fetch("api/admin/stationery/preview", { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "PdfRechnung" }, body: JSON.stringify(b) });
+  const res = await fetch("api/admin/stationery/preview", { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "Belegpost" }, body: JSON.stringify(b) });
   if (!res.ok) throw new Error("Vorschau fehlgeschlagen.");
   const url = URL.createObjectURL(await res.blob());
   $(`#bpPreview${i}`).innerHTML = `<iframe class="bp-preview" src="${url}#view=FitH" title="Vorschau Briefpapier"></iframe>`;
@@ -530,6 +574,144 @@ function tabMail() {
        ${field("Mailtext (wenn kein @@sa@@ gedruckt wurde)", inArea("mail.defaultBody", 6))}
        ${field("Dateiname des Anhangs (wenn kein @@fn@@/@@mf@@ gedruckt wurde)", inText("mail.defaultFileName"))}
        <p class="help">Platzhalter: ${ph}</p>`);
+}
+
+/* ---------------- Tab: Mail-Vorlagen ---------------- */
+
+const FONTS = [
+  ["Segoe UI, Arial, Helvetica, sans-serif", "Segoe UI (Windows-Standard)"],
+  ["Arial, Helvetica, sans-serif", "Arial"],
+  ["Calibri, Arial, sans-serif", "Calibri"],
+  ["Verdana, Geneva, sans-serif", "Verdana"],
+  ["Tahoma, Verdana, sans-serif", "Tahoma"],
+  ["Georgia, 'Times New Roman', serif", "Georgia (Serifen)"],
+  ["'Times New Roman', Times, serif", "Times New Roman"]
+];
+
+const DEFAULT_HTML = `<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8"></head>
+<body style="margin:0;background:#f4f5f7;">
+<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px;">
+  <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;font-family:Arial,sans-serif;font-size:15px;color:#1c2330;">
+    <tr><td style="padding:24px 32px;">{Logo}</td></tr>
+    <tr><td style="padding:0 32px;border-top:3px solid {Farbe};">&nbsp;</td></tr>
+    <tr><td style="padding:8px 32px;">{Inhalt}</td></tr>
+    <tr><td style="padding:8px 32px;">{Belegbox}</td></tr>
+    <tr><td style="padding:8px 32px 24px 32px;">{Signatur}</td></tr>
+  </table>
+  <div style="font-family:Arial,sans-serif;font-size:12px;color:#6b7280;padding:12px;">{Fusszeile}</div>
+</td></tr></table>
+</body></html>`;
+
+function colorField(path, label) {
+  const v = get(ST.s, path) || "";
+  return `<div class="field"><span class="lbl">${label}</span><div class="color-field">
+    <input type="color" data-path="${path}" data-colortext value="${/^#[0-9a-fA-F]{6}$/.test(v) ? esc(v) : "#000000"}">
+    <input type="text" data-path="${path}" data-colortext value="${esc(v)}" placeholder="#RRGGBB" maxlength="7"></div></div>`;
+}
+
+function tabTemplates() {
+  const T = ST.s.mailTemplates ||= { items: [], default: "" };
+  const bps = (ST.s.stationery?.items || []).map(b => b.name).filter(Boolean);
+  const ph = (ST.data.placeholders || []).map(p => `<code>${esc(p)}</code>`).join(" ");
+  const items = T.items.map((t, i) => {
+    const P = `mailTemplates.items.${i}`;
+    const logo = t.logoFile
+      ? `<img class="mt-logo" src="api/admin/mailtemplates/logo/${encodeURIComponent(t.logoFile)}" alt="Logo">`
+      : '<span class="muted">kein Logo</span>';
+    const bpChecks = bps.length
+      ? bps.map(n => `<label class="check"><input type="checkbox" data-mtbp="${i}" value="${esc(n)}" ${(t.stationeries || []).some(x => x.toLowerCase() === n.toLowerCase()) ? "checked" : ""}> ${esc(n)}</label>`).join("")
+      : '<span class="muted">Noch keine Briefpapiere angelegt.</span>';
+    const html = t.kind === "html";
+    return section(`Vorlage ${esc(t.name || "(ohne Namen)")}`,
+      `<div class="grid2">
+         ${field("Name", inText(`${P}.name`, "z. B. Firma GmbH"), `Steuerzeichen: <code>@@pt${esc(t.name || "Name")}@@</code>`)}
+         <div class="plain-field"><span class="lbl">Verwendung</span>
+           <label class="check"><input type="checkbox" data-mtdefault value="${esc(t.name)}" ${T.default && T.default === t.name ? "checked" : ""}> Standardvorlage (wenn keine andere passt)</label></div>
+       </div>
+       <h4>Wann wird diese Vorlage verwendet?</h4>
+       <div class="grid2">
+         <div class="plain-field"><span class="lbl">bei Briefpapier</span><div class="check-list">${bpChecks}</div></div>
+         ${field("bei Absender (eine Adresse pro Zeile)", inLines(`${P}.senders`, "rechnung@firma.at"), "Absender aus <code>@@pf…@@</code> oder aus „E-Mail &amp; Versand“.")}
+       </div>
+       <h4>Absender</h4>
+       <div class="grid3">
+         ${field("Absenderadresse", inText(`${P}.fromAddress`, "leer = aus „E-Mail & Versand“"))}
+         ${field("Absendername", inText(`${P}.fromName`, "Firma GmbH – Buchhaltung"))}
+         ${field("Antwort an", inText(`${P}.replyTo`, "optional"))}
+       </div>
+       ${ST.s.mail.transport === "Graph" ? '<p class="help">Bei Microsoft 365 muss die App-Registrierung auch für diese Absenderadresse senden dürfen.</p>' : ""}
+
+       <h4>Gestaltung</h4>
+       <div class="grid2">
+         ${field("Art", `<select data-path="${P}.kind" data-redraw="1">
+             <option value="simple" ${!html ? "selected" : ""}>Baukasten (Logo, Farben, Texte)</option>
+             <option value="html" ${html ? "selected" : ""}>Eigenes HTML (für Profis)</option></select>`)}
+         ${field("Schriftart", inSelect(`${P}.fontFamily`, FONTS))}
+       </div>
+       <div class="grid3">
+         <div class="field"><span class="lbl">Logo (PNG/JPG)</span><div class="bp-file">${logo}
+           <label class="btn ghost small">Logo hochladen<input type="file" accept="image/png,image/jpeg,image/gif" data-mtlogo="${i}" hidden></label>
+           ${t.logoFile ? `<button class="btn ghost small" data-st="mt-logo-del" data-i="${i}">entfernen</button>` : ""}</div></div>
+         ${field("Logobreite (Pixel)", inNum(`${P}.logoWidth`, 40, 560))}
+         ${field("Logo-Position", inSelect(`${P}.logoAlign`, [["left", "links"], ["center", "mittig"], ["right", "rechts"]]))}
+       </div>
+       <div class="grid3">${colorField(`${P}.primaryColor`, "Hauptfarbe (CI)")}${colorField(`${P}.textColor`, "Textfarbe")}${colorField(`${P}.backgroundColor`, "Hintergrund")}</div>
+       ${!html ? field("Kopfzeile (Balken in der Hauptfarbe, optional)", inText(`${P}.headerText`, "z. B. Ihre {Belegart} {Belegnummer}")) : ""}
+       ${inCheck(`${P}.showDocumentBox`, "Infokasten mit Belegnummer, Datum, Betrag und Anhang anzeigen")}
+       ${field("Signatur", inArea(`${P}.signature`, 4))}
+       ${field("Fußzeile (Impressum, klein und grau)", inArea(`${P}.footer`, 3))}
+       ${html ? `${field("Eigenes HTML", `<textarea class="mono" data-path="${P}.customHtml" rows="14">${esc(t.customHtml || "")}</textarea>`,
+            "Pflicht: <code>{Inhalt}</code>. Außerdem: <code>{Logo}</code> <code>{Belegbox}</code> <code>{Signatur}</code> <code>{Fusszeile}</code> <code>{Kopfzeile}</code> <code>{Farbe}</code> und alle Platzhalter unten. Inline-Styles und Tabellen verwenden – Outlook ignoriert &lt;style&gt; und CSS-Layouts weitgehend.")}
+          ${t.customHtml ? "" : `<div class="actions"><button class="btn ghost" data-st="mt-html" data-i="${i}">Beispiel-HTML einsetzen</button></div>`}` : ""}
+
+       <details ${t.subject || t.body ? "open" : ""}><summary>Eigener Betreff und Mailtext für diese Vorlage</summary>
+         <p class="help">Leer = Vorlagen aus „E-Mail &amp; Versand“. Was das ERP mit <code>@@ed@@</code>, <code>@@sa@@</code> oder <code>@@mb@@</code> druckt, hat immer Vorrang.</p>
+         ${field("Betreff", inText(`${P}.subject`, "z. B. {Belegart} {Belegnummer} – Firma GmbH"))}
+         ${field("Mailtext", inArea(`${P}.body`, 7))}
+       </details>
+
+       <div class="actions"><button class="btn" data-st="mt-preview" data-i="${i}">Vorschau</button>
+         <button class="btn ghost" data-st="mt-copy" data-i="${i}">Kopieren</button>
+         <span class="meta-inline">mit Beispieldaten – auch vor dem Speichern</span></div>
+       <div id="mtPreview${i}"></div>`,
+      `<button class="icon-btn" data-st="mt-del" data-i="${i}" title="Vorlage entfernen">✕</button>`);
+  }).join("");
+
+  return section("HTML-Mails im CI",
+    `<p class="help">Jede Mail wird als HTML-Mail mit Logo, Farben und Signatur der Firma versendet (mit Textfassung für Programme ohne HTML).
+       Die Vorlage wird so gewählt: <b>1.</b> Steuerzeichen <code>@@ptName@@</code> → <b>2.</b> Vorlage, der das verwendete Briefpapier zugeordnet ist →
+       <b>3.</b> Vorlage des Absenders → <b>4.</b> Standardvorlage. Ohne Vorlage geht eine schlichte Mail ohne Gestaltung hinaus.</p>
+     <h4>Platzhalter</h4>
+     <p class="help">In Betreff, Mailtext, Kopfzeile, Signatur, Fußzeile und Dateiname: ${ph}</p>
+     <p class="help">Eigene Platzhalter übergibt das ERP mit <code>@@pvName=Wert@@</code>, z. B. <code>@@pvAnrede=Sehr geehrter Herr Maier@@</code> → im Text <code>{Anrede}</code>.
+       Ersatztext, wenn nichts übergeben wurde: <code>{Anrede|Sehr geehrte Damen und Herren}</code>. Fehlt ein Wert ohne Ersatztext, meldet das Portal eine Warnung.</p>
+     <p class="help">Weitere Steuerzeichen: <code>@@ptName@@</code> wählt die Vorlage, <code>@@pfadresse@firma.at@@</code> den Absender.
+       Im Text: <code>**fett**</code>, <code>*kursiv*</code>, Zeilen mit „- “ werden zur Aufzählung, Adressen und Links werden klickbar.
+       Falsch kodierte Umlaute (z. B. „Ã¼“ statt „ü“) werden automatisch korrigiert und im Vorgang als Hinweis angezeigt.</p>`,
+    `<button class="btn ghost" data-st="mt-add">+ Vorlage</button>`) + items;
+}
+
+async function uploadLogo(el) {
+  const i = +el.dataset.mtlogo, f = el.files[0]; if (!f) return;
+  const fd = new FormData(); fd.append("file", f);
+  try {
+    const r = await api("POST", "api/admin/mailtemplates/logo", fd, true);
+    ST.s.mailTemplates.items[i].logoFile = r.file;
+    markDirty(); drawTab();
+    msg(`Logo „${f.name}“ hochgeladen. Zum Übernehmen speichern.`, true);
+  } catch (e) { msg(e.message); }
+}
+
+async function previewTemplate(i) {
+  const t = ST.s.mailTemplates.items[i];
+  const r = await api("POST", "api/admin/mailtemplates/preview", t);
+  const box = $(`#mtPreview${i}`);
+  box.innerHTML = `<div class="mail-preview">
+      <div class="mail-preview-head"><b>Betreff:</b> ${esc(r.subject)}
+        ${r.missing?.length ? `<span class="badge missing">ohne Wert: ${r.missing.map(x => "{" + esc(x) + "}").join(", ")}</span>` : ""}</div>
+      <iframe sandbox="" title="Vorschau Mail"></iframe></div>`;
+  box.querySelector("iframe").srcdoc = r.html;
 }
 
 /* ---------------- Tab: E-Rechnung ---------------- */
@@ -620,7 +802,7 @@ function tabAuth() {
      <div class="help-box">
        <b>Einrichtung im Microsoft-Entra-Admin-Center</b> (entra.microsoft.com → Identität → Anwendungen → App-Registrierungen):
        <ol>
-         <li><b>Neue Registrierung</b> – Name „PDF Rechnung“, Kontotypen: <i>Nur Konten in diesem Organisationsverzeichnis</i>.</li>
+         <li><b>Neue Registrierung</b> – Name „Belegpost“, Kontotypen: <i>Nur Konten in diesem Organisationsverzeichnis</i>.</li>
          <li><b>Umleitungs-URI</b> – Plattform <i>Web</i>, eine oder mehrere dieser Adressen eintragen:
            <ul>${uris.map(u => `<li><code>${esc(u)}</code></li>`).join("")}</ul></li>
          <li><b>Übersicht</b> – <i>Anwendungs-ID (Client)</i> und <i>Verzeichnis-ID (Mandant)</i> oben eintragen.</li>
@@ -638,5 +820,5 @@ function tabAuth() {
            </div>
            <div class="actions"><button class="btn ghost" data-st="local-pw">Kennwort ändern</button></div>`
         : `<p class="help">Das Administrator-Kennwort kann nur angemeldet als Administrator direkt am Server geändert werden.
-           Vergessen? Auf dem Server <code>PdfRechnung.exe --reset-admin-password</code> ausführen.</p>`);
+           Vergessen? Auf dem Server <code>Belegpost.exe --reset-admin-password</code> ausführen.</p>`);
 }

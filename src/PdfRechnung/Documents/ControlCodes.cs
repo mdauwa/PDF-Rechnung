@@ -39,6 +39,14 @@ public sealed class ParsedCodes
     public List<string> AttachmentFolders { get; } = new();
     public bool NoAttachment { get; set; }
 
+    // ---- Eigene Erweiterungen (Belegpost) ----
+    /// <summary><c>@@pv Name=Wert@@</c>: eigene Platzhalter für Betreff, Mailtext und Vorlage, z. B. {Anrede}.</summary>
+    public Dictionary<string, string> Variables { get; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary><c>@@pt Vorlagenname@@</c>: Mail-Vorlage ausdrücklich wählen.</summary>
+    public string? MailTemplate { get; set; }
+    /// <summary><c>@@pf adresse@firma.at@@</c>: Absenderadresse dieses Belegs.</summary>
+    public string? Sender { get; set; }
+
     // ---- Bearbeiten / Allgemein ----
     public string? Stationery { get; set; }
     public bool StationerySet { get; set; }
@@ -124,6 +132,17 @@ public static partial class ControlCodeParser
                 break;
             }
             case "pe": r.PeppolSend = t == "1"; break;
+
+            // ---------- Eigene Erweiterungen ----------
+            case "pv":
+            {
+                var i = t.IndexOf('=');
+                if (i > 0) r.Variables[t[..i].Trim().Trim('{', '}')] = t[(i + 1)..].Trim();
+                else r.Unknown.Add(c);
+                break;
+            }
+            case "pt": r.MailTemplate = t.Length > 0 ? t : null; break;
+            case "pf": r.Sender = t.Length > 0 ? t : null; break;
 
             // ---------- Mail ----------
             case "ml": r.MailEnabled = t != "0"; break;

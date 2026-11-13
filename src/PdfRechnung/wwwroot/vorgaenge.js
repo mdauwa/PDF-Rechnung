@@ -254,6 +254,9 @@ function drawVorgang(view, data) {
             <label class="field"><span class="lbl">Dateiname des Anhangs</span><div class="suffix"><input id="mFile" value="${esc(v.mail.fileName)}" ${editable ? "" : "readonly"}><span>.pdf</span></div></label>
             ${v.mail.attachments?.length ? `<p class="meta">Weitere Anlagen: ${v.mail.attachments.map(esc).join(", ")}</p>` : ""}
             ${v.mail.noDocument ? `<p class="meta">Ohne Beleg als Anhang (@@md@@).</p>` : ""}
+            <p class="meta">${v.mail.template ? `Mail-Vorlage <b>${esc(v.mail.template)}</b> (${esc(v.mail.templateReason || "")})` : "Ohne Mail-Vorlage (schlichte Mail)"}${v.mail.fromAddress ? ` · Absender ${esc(v.mail.fromName ? v.mail.fromName + " <" + v.mail.fromAddress + ">" : v.mail.fromAddress)}` : ""}
+              · <a href="#" id="mPreviewBtn">So sieht die Mail aus</a></p>
+            <div id="mPreview"></div>
             ${editable ? `<div class="actions"><button class="btn" data-a="mail-save" disabled>Versanddaten speichern</button><span class="meta-inline">Änderungen werden geprüft und bleiben bei „Neu prüfen“ erhalten.</span></div>` : ""}
           </div>
         </div>
@@ -292,6 +295,20 @@ function drawVorgang(view, data) {
         </div>
       </div>
     </div>`;
+
+  $("#mPreviewBtn")?.addEventListener("click", async e => {
+    e.preventDefault();
+    const box = $("#mPreview");
+    if (box.innerHTML) { box.innerHTML = ""; return; }
+    try {
+      const r = await api("GET", `api/vorgaenge/${encodeURIComponent(v.id)}/mailvorschau`);
+      box.innerHTML = `<div class="mail-preview"><div class="mail-preview-head">
+          <span><b>Von:</b> ${esc(r.fromName ? `${r.fromName} <${r.from}>` : r.from || "–")}</span><span><b>Betreff:</b> ${esc(r.subject)}</span>
+          <span class="meta-inline">gespeicherter Stand – nach Änderungen zuerst speichern</span></div>
+        <iframe sandbox="" title="Vorschau Mail"></iframe></div>`;
+      box.querySelector("iframe").srcdoc = r.html;
+    } catch (err) { box.innerHTML = `<p class="bad">${esc(err.message)}</p>`; }
+  });
 
   view.querySelector(".pdf-switch")?.addEventListener("click", e => {
     const b = e.target.closest("[data-pdf]"); if (!b) return;

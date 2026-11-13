@@ -11,11 +11,12 @@ public sealed class AppSettings
     public InvoiceOptions Invoice { get; set; } = new();
     public StorageOptions Storage { get; set; } = new();
     public StationeryOptions Stationery { get; set; } = new();
+    public MailTemplateOptions MailTemplates { get; set; } = new();
 }
 
 public sealed class PortalOptions
 {
-    public string Title { get; set; } = "PDF Rechnung";
+    public string Title { get; set; } = "Belegpost";
 }
 
 public sealed class AuthOptions
@@ -64,7 +65,7 @@ public sealed class InboxOptions
     /// <summary>Leer = Unterordner "eingang" im Datenverzeichnis.</summary>
     public string Folder { get; set; } = "";
     /// <summary>Name des Druckers (für die spätere Einrichtung über die Oberfläche).</summary>
-    public string PrinterName { get; set; } = "PDF Rechnung";
+    public string PrinterName { get; set; } = "Belegpost";
     /// <summary>
     /// Pfade aus den Steuerzeichen (@@mb@@, @@ma@@ …) umsetzen, z. B. "K:\=\\server\WebWARE5\".
     /// Das ERP druckt Pfade, wie sie am Arbeitsplatz gelten – der Dienst läuft als SYSTEM und sieht keine Netzlaufwerke.
@@ -163,4 +164,55 @@ public sealed class Stationery
     public double OffsetX { get; set; }
     public double OffsetY { get; set; }
     public double Scale { get; set; } = 100;
+}
+
+/// <summary>
+/// HTML-Mailvorlagen im CI des Kunden. Auswahl: @@pt Name@@ → Vorlage des Briefpapiers → Vorlage des Absenders → Standard.
+/// </summary>
+public sealed class MailTemplateOptions
+{
+    public List<MailDesign> Items { get; set; } = new();
+    /// <summary>Standardvorlage. Leer = einfache Mail ohne Gestaltung.</summary>
+    public string Default { get; set; } = "";
+}
+
+public sealed class MailDesign
+{
+    public string Name { get; set; } = "";
+    /// <summary>"simple" = Baukasten (Logo, Farben, Texte), "html" = eigenes HTML mit Platzhaltern.</summary>
+    public string Kind { get; set; } = "simple";
+
+    // ---- Zuordnung ----
+    /// <summary>Gilt für diese Briefpapiere (Namen wie in @@bpName@@).</summary>
+    public List<string> Stationeries { get; set; } = new();
+    /// <summary>Gilt für diese Absenderadressen (@@pf@@ oder Absender aus den Einstellungen).</summary>
+    public List<string> Senders { get; set; } = new();
+
+    // ---- Absender (leer = aus den Einstellungen) ----
+    public string FromAddress { get; set; } = "";
+    public string FromName { get; set; } = "";
+    public string ReplyTo { get; set; } = "";
+
+    // ---- Texte (leer = Vorlagen aus „E-Mail & Versand“) ----
+    public string Subject { get; set; } = "";
+    public string Body { get; set; } = "";
+
+    // ---- Gestaltung (Baukasten) ----
+    public string LogoFile { get; set; } = "";
+    public int LogoWidth { get; set; } = 180;
+    /// <summary>left, center, right</summary>
+    public string LogoAlign { get; set; } = "left";
+    public string PrimaryColor { get; set; } = "#1f5fbf";
+    public string BackgroundColor { get; set; } = "#f4f5f7";
+    public string TextColor { get; set; } = "#1c2330";
+    public string FontFamily { get; set; } = "Segoe UI, Arial, Helvetica, sans-serif";
+    /// <summary>Optionaler Balken in der Hauptfarbe über dem Text (z. B. „Ihre Rechnung {Belegnummer}“).</summary>
+    public string HeaderText { get; set; } = "";
+    /// <summary>Infokasten mit Belegart, Nummer, Datum, Betrag und Anhang.</summary>
+    public bool ShowDocumentBox { get; set; } = true;
+    public string Signature { get; set; } = "";
+    public string Footer { get; set; } = "";
+
+    /// <summary>Eigenes HTML (Kind = "html") mit Platzhaltern wie {Inhalt}, {Logo}, {Signatur}, {Fusszeile}, {Belegnummer} …</summary>
+    public string CustomHtml { get; set; } = "";
 }

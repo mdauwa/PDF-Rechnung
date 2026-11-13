@@ -28,6 +28,12 @@ public static class DocumentChecker
         foreach (var att in v.Mail.Attachments)
             if (!File.Exists(att)) W($"Anlage nicht gefunden (am Server): {att}");
         if (p.BodyFile is not null && !File.Exists(p.BodyFile)) W($"Textdatei für den Mailtext nicht gefunden (am Server): {p.BodyFile}");
+        foreach (var f in v.Mail.TextFixes)
+            if (f.StartsWith('!')) W(f[1..]); else I("Text automatisch korrigiert – " + f);
+        if (v.Mail.MissingPlaceholders.Count > 0)
+            W($"Platzhalter ohne Wert: {string.Join(", ", v.Mail.MissingPlaceholders.Select(x => "{" + x + "}"))} – mit @@pv{v.Mail.MissingPlaceholders[0]}=…@@ übergeben oder einen Ersatztext angeben: {{{v.Mail.MissingPlaceholders[0]}|…}}.", "body");
+        if (v.Mail.Template is not null) I($"Mail-Vorlage „{v.Mail.Template}“ ({v.Mail.TemplateReason}).");
+        if (!string.IsNullOrWhiteSpace(v.Mail.FromAddress) && !IsMail(v.Mail.FromAddress)) E($"Ungültige Absenderadresse: {v.Mail.FromAddress}", "from");
         m.AddRange(v.LayoutMessages);
         if (v.Stationery is not null) I($"Briefpapier „{v.Stationery}“ unterlegt.");
         if (p.SplitAfterPages.Count > 0) W("Der Druckauftrag enthält mehrere Belege (@@nd@@) – das Aufteilen folgt mit dem Druckdienst.");

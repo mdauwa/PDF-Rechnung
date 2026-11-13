@@ -59,7 +59,7 @@ public sealed class ProcessorTests : IDisposable
         var (_, proc) = Create(s => { s.Mail.Enabled = true; s.Mail.DefaultSubject = "Beleg {Belegnummer}"; });
         var v = proc.Process(TestData.Pdf(Array.Empty<string>(), "Brief"), "Eingang", "brief.pdf");
         Assert.Empty(v.Codes);
-        Assert.Equal("Beleg ", v.Mail.Subject);
+        Assert.Equal("Beleg", v.Mail.Subject);
         Assert.Equal(VorgangStatus.Error, v.Status); // kein Empfänger
         Assert.Contains(v.Messages, m => m.Text.Contains("keine Steuerzeichen"));
     }

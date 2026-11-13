@@ -13,10 +13,24 @@ public sealed class SendService
     private readonly ILogger<SendService> _log;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
-    public SendService(DocumentStore store, SettingsStore settings, IOptionsMonitor<MailOptions> mail, IOptionsMonitor<StorageOptions> storage, ILogger<SendService> log)
+    private readonly IOptionsMonitor<MailTemplateOptions> _templates;
+
+    public SendService(DocumentStore store, SettingsStore settings, IOptionsMonitor<MailOptions> mail, IOptionsMonitor<StorageOptions> storage,
+        IOptionsMonitor<MailTemplateOptions> templates, ILogger<SendService> log)
     {
-        _store = store; _settings = settings; _mail = mail; _storage = storage; _log = log;
+        _store = store; _settings = settings; _mail = mail; _storage = storage; _templates = templates; _log = log;
     }
+
+    /// <summary>Mail eines Vorgangs gestalten (für Versand und Vorschau im Portal).</summary>
+    public static RenderedMail Render(Vorgang v, MailTemplateOptions templates, string dataDirectory)
+    {
+        var design = v.Mail.Template is null ? null
+            : templates.Items.FirstOrDefault(x => string.Equals(x.Name, v.Mail.Template, StringComparison.OrdinalIgnoreCase));
+        var values = v.Mail.Variables.Count > 0 ? v.Mail.Variables : Placeholders.Build(v, null, MailTemplate.SafeFileName(v.Mail.FileName) + ".pdf");
+        return MailDesigner.Render(design, v.Mail.Body, values, MailDesigner.Directory(dataDirectory), MailFacts.From(v));
+    }
+
+    public RenderedMail Render(Vorgang v) => Render(v, _templates.CurrentValue, _settings.DataDirectory);
 
     /// <summary>Versendet den Vorgang. force = auch bei Fehlern (nur manuell, mit Bestätigung).</summary>
     public async Task<(bool Ok, string Message)> SendAsync(string id, string by, bool force, CancellationToken ct)
@@ -32,7 +46,13 @@ public sealed class SendService
             if (v.Status == VorgangStatus.Error && !force) return (false, "Der Vorgang hat Fehler. Bitte zuerst beheben oder „Trotzdem senden“ wählen.");
             if (v.Mail.To.Count == 0) return (false, "Kein Empfänger eingetragen.");
 
-            var mail = new OutgoingMail { Subject = v.Mail.Subject, Body = v.Mail.Body };
+            var rendered = Render(v);
+            var mail = new OutgoingMail
+            {
+                Subject = v.Mail.Subject, Body = rendered.Text, HtmlBody = rendered.Html,
+                FromAddress = v.Mail.FromAddress, FromName = v.Mail.FromName, ReplyTo = v.Mail.ReplyTo
+            };
+            mail.Images.AddRange(rendered.Images);
             mail.To.AddRange(v.Mail.To); mail.Cc.AddRange(v.Mail.Cc); mail.Bcc.AddRange(v.Mail.Bcc);
             if (!v.Mail.NoDocument)
             {

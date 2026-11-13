@@ -7,7 +7,7 @@ using PdfRechnung.Services;
 using PdfRechnung.Settings;
 
 // ======================================================================
-//  PDF Rechnung – Druckdienst und Versand-Portal für E-Rechnungen
+//  Belegpost – Druckdienst und Versand-Portal für Belege und E-Rechnungen
 //  Start-Varianten (wie Firmenportal):
 //   • als Windows-Dienst            → normaler Betrieb (alle Netzwerkkarten)
 //   • per Doppelklick auf die EXE   → Einrichtung im Browser (nur localhost)
@@ -73,6 +73,7 @@ builder.Services.Configure<MailOptions>(builder.Configuration.GetSection("Mail")
 builder.Services.Configure<InvoiceOptions>(builder.Configuration.GetSection("Invoice"));
 builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection("Storage"));
 builder.Services.Configure<StationeryOptions>(builder.Configuration.GetSection("Stationery"));
+builder.Services.Configure<MailTemplateOptions>(builder.Configuration.GetSection("MailTemplates"));
 builder.Services.AddSingleton(sp => new RuntimeControl(sp.GetRequiredService<IHostApplicationLifetime>(), isService));
 
 // ---- Vorgänge ----
@@ -113,7 +114,7 @@ var authBuilder = builder.Services.AddAuthentication(o =>
     o.DefaultChallengeScheme = entra.IsConfigured ? PortalAccess.EntraScheme : PortalAccess.Scheme;
 }).AddCookie(PortalAccess.Scheme, o =>
 {
-    o.Cookie.Name = "pdfrechnung.auth";
+    o.Cookie.Name = "belegpost.auth";
     o.Cookie.HttpOnly = true;
     o.Cookie.SecurePolicy = CookieSecurePolicy.Always;
     o.Cookie.SameSite = SameSiteMode.Lax;
@@ -245,9 +246,9 @@ if (isService && OperatingSystem.IsWindows())
 app.Lifetime.ApplicationStarted.Register(() =>
 {
     var url = $"https://localhost:{server.HttpsPort}/";
-    app.Logger.LogInformation("PDF Rechnung gestartet ({Mode}) – {Url} – Zertifikat: {Cert}",
+    app.Logger.LogInformation("Belegpost gestartet ({Mode}) – {Url} – Zertifikat: {Cert}",
         isService ? "Dienst" : "Einrichtung", url, certs.Info?.Source);
-    if (!isService && Environment.GetEnvironmentVariable("PDFRECHNUNG_NO_BROWSER") is null)
+    if (!isService && Environment.GetEnvironmentVariable("BELEGPOST_NO_BROWSER") is null && Environment.GetEnvironmentVariable("PDFRECHNUNG_NO_BROWSER") is null)
     {
         Console.WriteLine();
         Console.WriteLine("  Einrichtung läuft – im Browser: " + url + "#/einstellungen");

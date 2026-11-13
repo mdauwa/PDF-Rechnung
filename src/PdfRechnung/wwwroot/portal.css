@@ -98,3 +98,13 @@ details summary { cursor: pointer; padding: 6px 0; }
 .pdf-switch button.active { background: var(--accent); color: #fff; }
 .plain-field { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
 .plain-field .lbl { font-size: 13px; color: var(--muted); }
+
+/* Mail-Vorlagen */
+.color-field { display: flex; gap: 6px; align-items: center; }
+.color-field input[type=color] { width: 42px; height: 34px; padding: 2px; border-radius: 6px; cursor: pointer; flex: none; }
+.check-list { display: flex; flex-wrap: wrap; gap: 4px 16px; padding-top: 4px; }
+.mt-logo { max-height: 40px; max-width: 180px; border: 1px solid var(--border, #e2e5ea); border-radius: 4px; background: #fff; padding: 2px; }
+textarea.mono { font-family: Consolas, "Cascadia Mono", monospace; font-size: 12.5px; }
+.mail-preview { border: 1px solid var(--border, #e2e5ea); border-radius: 8px; overflow: hidden; margin-top: 10px; }
+.mail-preview-head { padding: 8px 12px; background: var(--bg-soft, #f6f7f9); font-size: 13px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.mail-preview iframe { width: 100%; height: 560px; border: 0; background: #fff; display: block; }

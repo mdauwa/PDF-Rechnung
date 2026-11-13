@@ -19,7 +19,7 @@ public sealed record CertificateInfo(
 public sealed class CertificateProvider
 {
     private const string SelfSignedFile = "selfsigned.pfx.enc";
-    private const string SelfSignedMarker = "PDF Rechnung selbst signiert";
+    private const string SelfSignedMarker = "Belegpost selbst signiert";
 
     private readonly SettingsStore _store;
     private readonly bool _machineKeys;

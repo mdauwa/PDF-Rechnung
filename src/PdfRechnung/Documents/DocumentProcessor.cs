@@ -129,13 +129,16 @@ public sealed class DocumentProcessor
     private readonly ILogger<DocumentProcessor> _log;
 
     public DocumentProcessor(DocumentStore store, IOptionsMonitor<MailOptions> mail, IOptionsMonitor<InvoiceOptions> invoice, ILogger<DocumentProcessor> log,
-        IOptionsMonitor<InboxOptions>? inbox = null, IOptionsMonitor<StationeryOptions>? stationery = null, Settings.SettingsStore? settings = null)
+        IOptionsMonitor<InboxOptions>? inbox = null, IOptionsMonitor<StationeryOptions>? stationery = null, Settings.SettingsStore? settings = null,
+        IOptionsMonitor<MailTemplateOptions>? templates = null)
     {
-        _store = store; _mail = mail; _invoice = invoice; _log = log; _inbox = inbox; _stationery = stationery;
+        _store = store; _mail = mail; _invoice = invoice; _log = log; _inbox = inbox; _stationery = stationery; _templates = templates;
         _stationeryDir = PdfComposer.StationeryDirectory(settings?.DataDirectory ?? Path.GetDirectoryName(store.Root)!);
     }
 
     private readonly IOptionsMonitor<StationeryOptions>? _stationery;
+    private readonly IOptionsMonitor<MailTemplateOptions>? _templates;
+    public MailTemplateOptions Templates => _templates?.CurrentValue ?? new();
     private readonly string _stationeryDir;
 
     /// <summary>Versand-PDF erzeugen: Steuerzeichen entfernen, Briefpapier unterlegen. Fehler werden zu Meldungen.</summary>
@@ -278,15 +281,61 @@ public sealed class DocumentProcessor
         };
         // Wenn kein Empfänger gedruckt wurde: E-Mail des Käufers aus den Rechnungsdaten (Kassenbelege)
         if (m.To.Count == 0 && p.Field("BUYER_CONTACT_EMAIL") is { } buyerMail && DocumentChecker.IsMail(buyerMail)) m.To.Add(buyerMail);
-        m.Subject = !string.IsNullOrWhiteSpace(p.Subject) ? p.Subject! : MailTemplate.Apply(o.DefaultSubject, v);
-        var body = p.BodyLines.Count > 0 ? string.Join("\n", p.BodyLines)
-            : p.BodyFile is not null && File.Exists(p.BodyFile) ? File.ReadAllText(p.BodyFile)
-            : MailTemplate.Apply(o.DefaultBody, v);
-        m.Body = body.Replace("\r\n", "\n");
+
+        // Texte aus dem ERP säubern (Umlaute, Sonderzeichen)
+        var fixes = new List<string>();
+        string Clean(string? text, string where)
+        {
+            var (t, c) = TextFixer.Fix(text);
+            foreach (var x in c) fixes.Add($"{where}: {x}");
+            return t;
+        }
+        var custom = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (k, val) in p.Variables) custom[k] = Clean(val, $"Platzhalter {{{k}}}");
+
+        // Vorlage und Absender
+        var stationery = _stationery is null ? v.Stationery : PdfComposer.Select(p, _stationery.CurrentValue).Item?.Name ?? v.Stationery;
+        var sender = p.Sender?.Trim();
+        var (design, reason, warn) = MailDesigner.Select(Templates, p.MailTemplate, stationery, sender ?? o.FromAddress);
+        m.Template = design?.Name;
+        m.TemplateReason = reason;
+        if (warn is not null) fixes.Add("!" + warn);
+        m.FromAddress = !string.IsNullOrWhiteSpace(sender) ? sender : !string.IsNullOrWhiteSpace(design?.FromAddress) ? design!.FromAddress.Trim() : null;
+        m.FromName = !string.IsNullOrWhiteSpace(design?.FromName) ? design!.FromName.Trim() : null;
+        m.ReplyTo = !string.IsNullOrWhiteSpace(design?.ReplyTo) ? design!.ReplyTo.Trim() : null;
+
+        var fileTemplate = p.FileName ?? p.MailFileName ?? o.DefaultFileName;
+        var baseValues = Placeholders.Build(v, custom, null, m.FromName ?? o.FromName);
+        var missing = new List<string>();
+        m.FileName = MailTemplate.SafeFileName(Placeholders.Apply(Clean(fileTemplate, "Dateiname"), baseValues, missing));
+        var values = Placeholders.Build(v, custom, m.FileName + ".pdf", m.FromName ?? o.FromName);
+
+        var subject = !string.IsNullOrWhiteSpace(p.Subject) ? p.Subject!
+            : !string.IsNullOrWhiteSpace(design?.Subject) ? design!.Subject : o.DefaultSubject;
+        m.Subject = Placeholders.Apply(Clean(subject, "Betreff"), values, missing).Replace("\n", " ").Trim();
+        string body;
+        if (p.BodyLines.Count > 0) body = string.Join("\n", p.BodyLines);
+        else if (p.BodyFile is not null && File.Exists(p.BodyFile))
+        {
+            try { body = TextFixer.ReadTextFile(p.BodyFile); }
+            catch (Exception ex) { body = o.DefaultBody; fixes.Add($"!Textdatei {p.BodyFile} konnte nicht gelesen werden: {ex.Message}"); }
+        }
+        else body = !string.IsNullOrWhiteSpace(design?.Body) ? design!.Body : o.DefaultBody;
+        m.Body = Placeholders.Apply(Clean(body, "Mailtext"), values, missing).Replace("\r\n", "\n");
+        // Platzhalter in Signatur/Fußzeile der Vorlage prüfen
+        if (design is not null)
+        {
+            Placeholders.Apply(design.Signature, values, missing);
+            Placeholders.Apply(design.Footer, values, missing);
+            Placeholders.Apply(design.HeaderText, values, missing);
+        }
+        m.Variables = values;
+        m.TextFixes = fixes.Distinct().ToList();
+        m.MissingPlaceholders = missing;
+
         m.Attachments = p.Attachments.ToList();
         foreach (var folder in p.AttachmentFolders)
             if (Directory.Exists(folder)) m.Attachments.AddRange(Directory.EnumerateFiles(folder).Take(20));
-        m.FileName = MailTemplate.SafeFileName(p.FileName ?? p.MailFileName ?? MailTemplate.Apply(o.DefaultFileName, v));
         v.Mail = m;
     }
 }

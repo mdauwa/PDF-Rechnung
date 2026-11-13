@@ -1,4 +1,4 @@
-# Übergabe – Projekt PDF Rechnung (Stand 13.11.2026)
+# Übergabe – Projekt Belegpost (Repo „pdf-rechnung“, Stand 13.11.2026)
 
 Mit diesem Dokument kann ein neuer Chat nahtlos weiterarbeiten.
 
@@ -28,12 +28,13 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 - **E-Rechnungsformat wie angefordert** (`@@xt@@`, auch ZUGFeRD 1). Wird ein Format nicht unterstützt, bekommt der Vorgang den Status **Fehler** mit einer Meldung im Portal. Er wird dann nicht automatisch versendet.
 - **Rechnungsdaten kommen aus den gedruckten Steuerzeichen.** Die ERP-Webschnittstelle mit Belegindex ist nur eine Option für später.
 - **Steuerzeichen kompatibel zu gotomaxx.** Erweiterungen bekommen einen eigenen Präfix, z. B. `@@ca3@@` für PDF/A-3 oder `@@xi ERP_VOUCHER_INDEX=@@`.
-- **Name und Technik:** Produktname „PDF Rechnung“. .NET 9, Aufbau wie im Firmenportal, Ports 5444/5081. Der Dienst läuft als SYSTEM.
+- **Name (13.11.2026): „Belegpost“** – neutral, ohne Bezug zu ERP Austria/Phoenix Data Systems. Programm `Belegpost.exe`, Dienst `Belegpost`, Daten `C:\ProgramData\Belegpost`, Programmordner `C:\Program Files\Belegpost`. Ein alter Dienst `PdfRechnung` wird bei der Installation entfernt, `C:\ProgramData\PdfRechnung` wird beim Start übernommen. Repo und C#-Namensraum heißen weiter `PdfRechnung` (nicht sichtbar).
+- **Technik:** .NET 9, Aufbau wie im Firmenportal, Ports 5444/5081. Der Dienst läuft als SYSTEM.
 - **Reihenfolge:** Das Portal kam zuerst, jetzt folgt der Druckdienst.
 - **Erst normale PDFs, dann ZUGFeRD (13.11.2026):** Zuerst läuft der komplette Weg ohne E-Rechnung: Drucker, Steuerzeichen entfernen, Briefpapier, Versand. ZUGFeRD kommt erst dazu, wenn das stabil funktioniert.
 - **ERP-Ausgabe der Steuerzeichen:** Dass die Steuerzeichen jetzt gedruckt werden, lag an einer internen ERP-Einstellung. Für das Projekt ist das nicht relevant.
 
-## Stand (fertig, getestet, 38 Tests grün)
+## Stand (fertig, getestet, 60 Tests grün)
 
 - **Portal:**
   - Vorgangsliste mit Filtern und Menüzählern
@@ -42,14 +43,20 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 - **Autoversand** als Einstellung: Wartezeit, optional auch mit Warnungen, nie bei Fehlern.
 - **Versand:** Microsoft 365 über die Graph-API (App-Registrierung mit `Mail.Send`; Anlagen über 3 MB per Upload-Sitzung) oder SMTP mit MailKit, jeweils mit Testmail.
 - **Versand-PDF:** Steuerzeichen werden aus dem PDF gelöscht. Briefpapier je Firma per `@@bpName@@` oder als Standard, mit eigener erster Seite und Folgeseiten. Druckbereich mit Rändern: Warnung, wenn der Inhalt hineinragt, oder automatisches Einpassen. Dazu Versatz, Skalierung und eine Vorschau in den Einstellungen. Das Portal zeigt wahlweise Versand-PDF oder Original.
+- **HTML-Mails im CI (Einstellungen → Mail-Vorlagen):**
+  - Baukasten: Logo (PNG/JPG, eingebettet per cid), Hauptfarbe, Text-/Hintergrundfarbe, Schrift, Kopfzeile, Infokasten (Beleg, Datum, Betrag, Anhang), Signatur, Fußzeile; optional eigener Betreff/Text und Absender je Vorlage. Profis: eigenes HTML mit `{Inhalt}` `{Logo}` `{Belegbox}` `{Signatur}` `{Fusszeile}`.
+  - Auswahl: `@@ptName@@` → Briefpapier → Absender (`@@pf@@`/Einstellungen) → Standard → schlichte Mail. Vorschau in den Einstellungen und im Vorgang („So sieht die Mail aus“).
+  - Versand als multipart (HTML + Text) über SMTP und Graph (Inline-Anlage mit `contentId`, abweichender Absender).
+- **Platzhalter:** `{Name}` und `{Name|Ersatztext}`, eingebaute plus eigene per `@@pvName=Wert@@`. Fehlende → Warnung.
+- **Textkorrektur (`TextFixer`):** UTF-8-als-ANSI („Ã¼“), Ersatzzeichen in bekannten Wörtern, NFC, Ligaturen, weiche Trennstriche, Steuerzeichen; `@@mb@@`-Dateien in ANSI/UTF-8. Korrekturen erscheinen als Hinweis.
 - **Symbol:** eigenes Symbol für EXE, Portal und README (`docs/branding`).
-- **Eingang:** Eingangsordner `C:\ProgramData\PdfRechnung\eingang` und Upload im Portal.
+- **Eingang:** Eingangsordner `C:\ProgramData\Belegpost\eingang` und Upload im Portal.
 - **Steuerzeichen-Auswertung:**
   - Zeilen werden aus den Buchstaben gebildet. Dadurch werden Steuerzeichen an jeder Position erkannt: winzig, neben anderem Text, gedreht, auf jeder Seite.
   - Ausgewertet werden `xt`/`xi`/`xr`/`<<|`, die Mail-Steuerzeichen inkl. `aa` und `mf` sowie `bp`, `fn` usw.
 - **Pfadzuordnung** (Einstellungen → Drucker & Eingang), z. B. `K:\=\\server\freigabe\`.
 - **Prüfung:** Pflichtfelder EN 16931/XRechnung, Summen gegen `GROSS_AMOUNT`, Einheiten (ERP-Text → UN/ECE), Empfänger, Anlagen.
-- **Einstellungsoberfläche:** Dienst, Server & Zertifikat, Drucker & Eingang, E-Mail & Versand, E-Rechnung (Einheiten), Ablage, Benutzer, Anmeldung.
+- **Einstellungsoberfläche:** Dienst, Server & Zertifikat, Drucker & Eingang, E-Mail & Versand, Mail-Vorlagen, E-Rechnung (Einheiten), Ablage, Benutzer, Anmeldung.
 
 ## Erkenntnisse aus echten Ausdrucken
 
@@ -69,7 +76,7 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 
 ## Nächste Schritte (normale PDFs, ohne ZUGFeRD)
 
-1. **Drucker einrichten:** Drucker „PDF Rechnung“ mit Microsoft Print to PDF und eigenem Anschluss aus der Oberfläche anlegen und freigeben (bevorzugt Named Pipe, sonst mfilemon). Den Druckauftrag mit Benutzer und Rechner übernehmen.
+1. **Drucker einrichten:** Drucker „Belegpost“ mit Microsoft Print to PDF und eigenem Anschluss aus der Oberfläche anlegen und freigeben (bevorzugt Named Pipe, sonst mfilemon). Den Druckauftrag mit Benutzer und Rechner übernehmen.
 2. **Weitere Steuerzeichen:** `@@af@@` (PDF anhängen, `no_stationery`), `@@nd@@` (Druckauftrag teilen), `@@rpc@@` (Seite entfernen).
 3. **Ende-zu-Ende-Test** mit echten Briefpapieren je Firma.
 
@@ -80,6 +87,6 @@ Danach kommt ZUGFeRD: `@@xt@@`/`@@xi@@`/`@@xr@@` werden zu CII/UBL, dazu **PDF/A
 
 - **Test-PDFs:** Der Benutzer legt sie in `Y:\Dev\eRechnung` ab oder hängt sie im Chat an.
 - **Steuerzeichen schnell prüfen:** Kleines Konsolenprogramm, das `PdfText.Extract` und `ControlCodeParser.Parse` aufruft. Alternativ `pdftotext -raw <pdf> - | grep @@`.
-- **Bauen und testen:** `dotnet test` im Repo-Stamm. Release: `dotnet publish src/PdfRechnung/PdfRechnung.csproj -c Release`.
+- **Bauen und testen:** `dotnet test` im Repo-Stamm. Release: `dotnet publish src/PdfRechnung/PdfRechnung.csproj -c Release -r win-x64` → `Belegpost.exe`.
 - **Lokaler Ordner:** Nach jeder Änderung auf GitHub pushen und `Y:\Dev\eRechnung` mitziehen. Besser: den Ordner einmal als Git-Klon neu anlegen. Die Benutzerordner `Dokumente` und `PdfDrucker` dabei erhalten.
 - **Sprache:** Antworten auf Deutsch, Ansprache mit „du“.

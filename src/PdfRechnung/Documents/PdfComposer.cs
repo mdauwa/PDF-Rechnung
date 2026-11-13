@@ -100,7 +100,7 @@ public static partial class PdfComposer
                 case "s": doc.Info.Subject = v; break;
                 case "k": doc.Info.Keywords = v; break;
             }
-        doc.Info.Creator = "PDF Rechnung";
+        doc.Info.Creator = "Belegpost";
 
         using var output = new MemoryStream();
         doc.Save(output, closeStream: false);

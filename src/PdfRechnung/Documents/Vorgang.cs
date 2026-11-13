@@ -30,6 +30,20 @@ public sealed class MailData
     public string FileName { get; set; } = "";
     /// <summary>Im Portal geändert – „Neu prüfen“ überschreibt die Versanddaten dann nicht.</summary>
     public bool Edited { get; set; }
+    /// <summary>Mail-Vorlage (Name) für die HTML-Gestaltung; null = einfache Text-Mail.</summary>
+    public string? Template { get; set; }
+    /// <summary>Warum diese Vorlage (Steuerzeichen, Briefpapier, Absender, Standard).</summary>
+    public string? TemplateReason { get; set; }
+    /// <summary>Absender dieses Belegs (@@pf@@ oder aus der Vorlage); leer = Einstellungen.</summary>
+    public string? FromAddress { get; set; }
+    public string? FromName { get; set; }
+    public string? ReplyTo { get; set; }
+    /// <summary>Platzhalterwerte (eingebaute + @@pv@@) für Vorlage, Signatur und Fußzeile.</summary>
+    public Dictionary<string, string> Variables { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Automatische Textkorrekturen (Umlaute, Sonderzeichen).</summary>
+    public List<string> TextFixes { get; set; } = new();
+    /// <summary>Platzhalter ohne Wert (im Text leer ersetzt).</summary>
+    public List<string> MissingPlaceholders { get; set; } = new();
 }
 
 /// <summary>Ein gedruckter Beleg mit Prüfergebnis und Versanddaten (meta.json im Vorgangsordner).</summary>

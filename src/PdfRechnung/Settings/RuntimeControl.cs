@@ -44,7 +44,7 @@ public sealed class RuntimeControl
 
     public static (string File, string Prefix) SelfCommand()
     {
-        var exe = Environment.ProcessPath ?? "PdfRechnung.exe";
+        var exe = Environment.ProcessPath ?? "Belegpost.exe";
         var isDotnetHost = Path.GetFileNameWithoutExtension(exe).Equals("dotnet", StringComparison.OrdinalIgnoreCase);
         return isDotnetHost ? (exe, $"\"{Environment.GetCommandLineArgs()[0]}\" ") : (exe, "");
     }

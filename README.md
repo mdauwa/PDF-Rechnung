@@ -1,6 +1,8 @@
-<img src="docs/branding/PdfRechnung-256.png" width="96" align="right" alt="">
+<img src="docs/branding/Belegpost-256.png" width="96" align="right" alt="">
 
-# PDF Rechnung – Druckdienst und Versand-Portal für E-Rechnungen
+# Belegpost – Druckdienst und Versand-Portal für Belege und E-Rechnungen
+
+(Repository: pdf-rechnung; Programm, Dienst und Datenordner heißen **Belegpost**.)
 
 Eigener Ersatz für gotomaxx PDFMAILER.
 
@@ -26,6 +28,9 @@ Technik und Aufbau sind wie im **Firmenportal**:
 | Prüfung: Pflichtfelder EN 16931/XRechnung, Summen und Steuer nachgerechnet, Einheiten, Empfänger | ✅ |
 | Drucker „Microsoft Print to PDF“ mit eigenem Anschluss automatisch einrichten | ⏳ nächster Schritt |
 | Versand-PDF: Steuerzeichen aus dem PDF entfernt (Textbefehle gelöscht), Briefpapier je Firma per `@@bpName@@` oder Standard, erste Seite/Folgeseiten, Druckbereich (Ränder) mit Warnung oder automatischem Einpassen, Versatz/Skalierung, Vorschau in den Einstellungen | ✅ |
+| HTML-Mails im CI: Vorlagen mit Logo, Farben, Schrift, Kopfzeile, Infokasten, Signatur, Fußzeile oder eigenem HTML; Auswahl per `@@pt@@`, Briefpapier, Absender oder Standard; Vorschau in Einstellungen und Vorgang | ✅ |
+| Platzhalter `{Name}` / `{Name\|Ersatztext}` in Betreff, Text, Signatur, Dateiname; eigene Werte per `@@pvName=Wert@@`, Absender per `@@pf@@` | ✅ |
+| Automatische Korrektur kaputter Umlaute/Sonderzeichen (UTF-8 als ANSI, Ersatzzeichen, Ligaturen), `@@mb@@`-Dateien in ANSI oder UTF-8 | ✅ |
 | `@@af@@`, `@@nd@@`, `@@rpc@@` | ⏳ |
 | PDF/A-3 (Pflicht für ZUGFeRD) | ⏳ mit ZUGFeRD |
 | E-Rechnung erzeugen (ZUGFeRD/Factur-X PDF/A-3, XRechnung, Peppol) | ⏳ – bis dahin meldet ein angefordertes Format **Fehler** (kein Autoversand) |
@@ -34,16 +39,16 @@ Technik und Aufbau sind wie im **Firmenportal**:
 
 ```
 dotnet test
-dotnet publish src/PdfRechnung/PdfRechnung.csproj -c Release -o C:\Dienste\PdfRechnung
+dotnet publish src/PdfRechnung/PdfRechnung.csproj -c Release -o C:\Dienste\Belegpost
 ```
 
-Das Ergebnis ist eine eigenständige `PdfRechnung.exe` mit dem Ordner `wwwroot`. Die .NET-Laufzeit ist enthalten.
+Das Ergebnis ist eine eigenständige `Belegpost.exe` mit dem Ordner `wwwroot`. Die .NET-Laufzeit ist enthalten.
 
 ## Einrichten
 
 Die Einrichtung läuft genau wie beim Firmenportal:
 
-1. `PdfRechnung.exe` doppelklicken. Der Browser öffnet `https://localhost:5444/#/einstellungen`.
+1. `Belegpost.exe` doppelklicken. Der Browser öffnet `https://localhost:5444/#/einstellungen`.
 2. Administrator-Kennwort festlegen.
 3. Die Reiter einstellen:
 
@@ -88,16 +93,19 @@ Updates: die neue EXE doppelklicken.
 
 | Pfad | Inhalt |
 |---|---|
-| `C:\ProgramData\PdfRechnung\settings.json` | Einstellungen, Passwörter verschlüsselt (`enc:…`) |
-| `C:\ProgramData\PdfRechnung\users.json` | Benutzer, Hash des Administrator-Kennworts |
-| `C:\ProgramData\PdfRechnung\eingang\` | Eingangsordner (Standard); nicht lesbare Dateien landen in `fehler\` |
-| `C:\ProgramData\PdfRechnung\vorgaenge\JJJJ\MM\<Id>\` | `meta.json` (Daten, Prüfung, Verlauf), `beleg.pdf` (Ausdruck wie eingegangen), `versand.pdf` (ohne Steuerzeichen, mit Briefpapier – wird versendet), `text.txt` (ausgelesener Text) |
-| `C:\ProgramData\PdfRechnung\briefpapier\` | hochgeladene Briefpapier-PDFs |
+| `C:\ProgramData\Belegpost\settings.json` | Einstellungen, Passwörter verschlüsselt (`enc:…`) |
+| `C:\ProgramData\Belegpost\users.json` | Benutzer, Hash des Administrator-Kennworts |
+| `C:\ProgramData\Belegpost\eingang\` | Eingangsordner (Standard); nicht lesbare Dateien landen in `fehler\` |
+| `C:\ProgramData\Belegpost\vorgaenge\JJJJ\MM\<Id>\` | `meta.json` (Daten, Prüfung, Verlauf), `beleg.pdf` (Ausdruck wie eingegangen), `versand.pdf` (ohne Steuerzeichen, mit Briefpapier – wird versendet), `text.txt` (ausgelesener Text) |
+| `C:\ProgramData\Belegpost\briefpapier\` | hochgeladene Briefpapier-PDFs |
+| `C:\ProgramData\Belegpost\mailvorlagen\` | Logos der Mail-Vorlagen |
 | `keys\`, `cert\` | Schlüssel für die Verschlüsselung und Zertifikate. **Nicht löschen.** |
 
 Für Entwicklung und Tests gibt es zwei Umgebungsvariablen:
-- `PDFRECHNUNG_DATA`: anderes Datenverzeichnis.
-- `PDFRECHNUNG_NO_BROWSER=1`: Browser beim Start nicht öffnen.
+- `BELEGPOST_DATA`: anderes Datenverzeichnis.
+- `BELEGPOST_NO_BROWSER=1`: Browser beim Start nicht öffnen.
+
+(Die alten Namen `PDFRECHNUNG_…` gehen weiterhin.)
 
 ## Steuerzeichen
 
@@ -108,6 +116,15 @@ Syntax wie bei gotomaxx: `@@` + 2 Zeichen Befehl + Wert + `@@`, eine Zeile, Cour
 | E-Rechnung | `xt` (Format), `xi FELD=Wert`, `xr table=…\|…`, `<<\|…` (Fortsetzung der vorigen Tabellenzeile wie in der ERP-Vorlage), `pe` |
 | Mail | `ml`, `to`/`aa`, `cc`, `bc`, `ed`, `sa`, `mb`, `ma`, `mc`, `md`, `mf` (Dateiname aus der ERP-Vorlage) (`mo`/`ms`/`mp` werden ignoriert – der Server sendet) |
 | Bearbeiten | `bp`, `fn`, `di`, `af`, `ef`, `rpc`, `nd`, `ca`, `cf` (teilweise erst mit dem Druckdienst wirksam) |
+| Eigene (Belegpost) | `pvName=Wert` (Platzhalter), `ptVorlage` (Mail-Vorlage), `pfadresse@firma.at` (Absender) |
+
+### Mail-Texte, Platzhalter und Vorlagen
+
+- Platzhalter in Betreff, Mailtext, Kopfzeile, Signatur, Fußzeile und Dateiname: `{Belegart} {Belegnummer} {Belegdatum} {Kunde} {Kundennummer} {Betrag} {Waehrung} {Dateiname} {Absender} {Datum}` und alle mit `@@pvName=Wert@@` übergebenen, z. B. `@@pvAnrede=Sehr geehrter Herr Maier@@` → `{Anrede}`.
+- Ersatztext: `{Anrede|Sehr geehrte Damen und Herren}`. Platzhalter ohne Wert und ohne Ersatztext → Warnung im Vorgang.
+- Im Text: `**fett**`, `*kursiv*`, Zeilen mit `- ` als Aufzählung, Adressen/Links werden klickbar.
+- Vorlagenwahl: `@@ptName@@` → Vorlage des Briefpapiers → Vorlage des Absenders (`@@pf@@` bzw. Einstellungen) → Standardvorlage → schlichte Mail.
+- Texte aus dem ERP werden automatisch korrigiert (z. B. „Ã¼“ → „ü“); jede Korrektur steht als Hinweis im Vorgang.
 
 Die Steuerzeichen dürfen überall auf der Seite stehen (auch winzig, neben anderem Text oder gedreht) und auf jeder Seite. Pfade wie `K:\WebWARE5\…` (@@mb@@, @@ma@@) werden über die Pfadzuordnung (Drucker & Eingang) auf eine Freigabe umgesetzt, weil der Dienst keine Netzlaufwerke sieht. Unbekannte Steuerzeichen erscheinen im Vorgang als Warnung.
 
@@ -132,5 +149,5 @@ docs/                  Konzept und Feldzuordnung
 |---|---|---|
 | PdfPig | Apache-2.0 | PDF lesen |
 | PDFsharp | MIT | Versand-PDF: Steuerzeichen entfernen, Briefpapier unterlegen |
-| MailKit | MIT | SMTP |
+| MailKit | MIT | SMTP (HTML mit eingebettetem Logo) |
 | Microsoft.Extensions.Hosting.WindowsServices, Microsoft.AspNetCore.Authentication.OpenIdConnect | MIT | Windows-Dienst, Microsoft-Anmeldung |

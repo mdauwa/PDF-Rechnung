@@ -13,25 +13,27 @@ public sealed record ServiceStatus(
 /// <summary>
 /// Installation und Steuerung des Windows-Dienstes – ohne PowerShell, über sc.exe und netsh.
 /// Aufruf aus der Oberfläche; fehlen Administratorrechte, startet sich das Programm selbst mit UAC-Abfrage neu
-/// (Befehlszeile: PdfRechnung.exe --install | --uninstall).
+/// (Befehlszeile: Belegpost.exe --install | --uninstall).
 /// </summary>
 public static class ServiceManager
 {
-    /// <summary>Interner Dienstname (sc.exe, Registry) – bleibt gleich, damit bestehende Installationen weiterlaufen.</summary>
-    public const string ServiceName = "PdfRechnung";
+    /// <summary>Interner Dienstname (sc.exe, Registry).</summary>
+    public const string ServiceName = "Belegpost";
     /// <summary>Anzeigename in der Diensteverwaltung.</summary>
-    public const string DisplayName = "ERP Austria PDF Rechnung";
-    private const string FirewallRule = "PDF Rechnung";
+    public const string DisplayName = "Belegpost";
+    private const string FirewallRule = "Belegpost";
+    /// <summary>Name vor der Umbenennung – wird bei der Installation entfernt.</summary>
+    private const string LegacyServiceName = "PdfRechnung", LegacyFirewallRule = "PDF Rechnung";
 
     public static string ExecutablePath =>
-        Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "PdfRechnung.exe");
+        Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "Belegpost.exe");
 
     /// <summary>
     /// Lokaler Programmordner des Dienstes. Der Dienst läuft als SYSTEM und sieht keine verbundenen Netzlaufwerke
     /// (z. B. Y:) – daher wird das Programm bei der Installation hierher kopiert.
     /// </summary>
     public static string InstallDirectory =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "PdfRechnung");
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Belegpost");
 
     /// <summary>Pfad der EXE, die als Dienst eingetragen ist (aus der Registry), oder null.</summary>
     [SupportedOSPlatform("windows")]
@@ -66,7 +68,7 @@ public static class ServiceManager
     {
         var src = Path.GetFullPath(AppContext.BaseDirectory).TrimEnd(Path.DirectorySeparatorChar);
         var dst = Path.GetFullPath(InstallDirectory).TrimEnd(Path.DirectorySeparatorChar);
-        var target = Path.Combine(dst, "PdfRechnung.exe");
+        var target = Path.Combine(dst, "Belegpost.exe");
         if (string.Equals(src, dst, StringComparison.OrdinalIgnoreCase)) return ExecutablePath;
 
         if (IsInstalled() && IsRunning())
@@ -160,7 +162,7 @@ public static class ServiceManager
     }
 
     /// <summary>
-    /// Startet PdfRechnung.exe mit Administratorrechten (UAC-Abfrage). Liefert false, wenn der Benutzer abbricht.
+    /// Startet Belegpost.exe mit Administratorrechten (UAC-Abfrage). Liefert false, wenn der Benutzer abbricht.
     /// </summary>
     [SupportedOSPlatform("windows")]
     public static bool RunElevated(string arguments)
@@ -187,6 +189,7 @@ public static class ServiceManager
     {
         var exe = executable ?? ExecutablePath;
         var bin = $"\"{exe}\"";
+        RemoveLegacy(log);
         if (IsInstalled())
         {
             log("Dienst ist bereits vorhanden – Pfad wird aktualisiert.");
@@ -196,7 +199,7 @@ public static class ServiceManager
         {
             Sc($"create {ServiceName} binPath= \"{bin.Replace("\"", "\\\"")}\" start= delayed-auto DisplayName= \"{DisplayName}\"", log);
         }
-        Sc($"description {ServiceName} \"PDF Rechnung – Druckdienst und Versand-Portal für E-Rechnungen\"", log);
+        Sc($"description {ServiceName} \"Belegpost – Druckdienst und Versand-Portal für Belege und E-Rechnungen\"", log);
         // Bei Absturz oder Neustart-Anforderung (Exitcode ≠ 0) automatisch neu starten
         Sc($"failure {ServiceName} reset= 86400 actions= restart/5000/restart/10000/restart/30000", log);
         Sc($"failureflag {ServiceName} 1", log);
@@ -220,6 +223,29 @@ public static class ServiceManager
         if (key is null || key.GetValue("DisplayName") as string == DisplayName) return;
         Sc($"config {ServiceName} DisplayName= \"{DisplayName}\"", log);
         log($"Anzeigename des Dienstes auf „{DisplayName}“ gesetzt.");
+    }
+
+    /// <summary>Dienst und Firewall-Regel unter dem alten Namen „PdfRechnung“ entfernen (Umbenennung in Belegpost).</summary>
+    [SupportedOSPlatform("windows")]
+    private static void RemoveLegacy(Action<string> log)
+    {
+        bool exists;
+        try { exists = ServiceController.GetServices().Any(s => s.ServiceName.Equals(LegacyServiceName, StringComparison.OrdinalIgnoreCase)); }
+        catch { exists = false; }
+        if (!exists) return;
+        log($"Alten Dienst „{LegacyServiceName}“ gefunden – er wird durch „{ServiceName}“ ersetzt.");
+        Sc($"stop {LegacyServiceName}", log, ignoreErrors: true);
+        try
+        {
+            using var sc = new ServiceController(LegacyServiceName);
+            sc.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(30));
+        }
+        catch { }
+        Sc($"delete {LegacyServiceName}", log, ignoreErrors: true);
+        Run("netsh", $"advfirewall firewall delete rule name=\"{LegacyFirewallRule}\"", log, ignoreErrors: true);
+        var oldDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), LegacyServiceName);
+        try { if (Directory.Exists(oldDir)) { Directory.Delete(oldDir, true); log($"Alten Programmordner {oldDir} entfernt."); } }
+        catch (Exception ex) { log($"Alter Programmordner {oldDir} konnte nicht entfernt werden ({ex.Message}) – bitte später von Hand löschen."); }
     }
 
     [SupportedOSPlatform("windows")]

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using PdfRechnung.Services;
 
 namespace PdfRechnung.Documents;
@@ -73,6 +74,17 @@ public static class VorgangApi
         {
             var path = store.FilePath(id, DocumentStore.TextFile);
             return path is null ? Results.NotFound() : Results.Text(File.ReadAllText(path), "text/plain; charset=utf-8");
+        });
+
+        g.MapGet("/{id}/mailvorschau", (string id, DocumentStore store, SendService send, IOptionsMonitor<MailOptions> mail) =>
+        {
+            var v = store.Get(id);
+            if (v is null) return Results.NotFound();
+            var o = mail.CurrentValue;
+            var r = send.Render(v);
+            var from = string.IsNullOrWhiteSpace(v.Mail.FromAddress) ? o.FromAddress : v.Mail.FromAddress;
+            var name = v.Mail.FromName ?? (string.IsNullOrWhiteSpace(v.Mail.FromAddress) ? o.FromName : null);
+            return Results.Ok(new { html = MailPreview.Inline(r), text = r.Text, subject = v.Mail.Subject, from, fromName = name, template = v.Mail.Template, reason = v.Mail.TemplateReason });
         });
 
         g.MapPut("/{id}/mail", (string id, MailUpdate req, DocumentStore store, DocumentProcessor proc, PortalAccess access, HttpContext ctx) =>

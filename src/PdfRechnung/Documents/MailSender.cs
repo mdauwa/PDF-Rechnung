@@ -15,7 +15,20 @@ public sealed class OutgoingMail
     public List<string> Bcc { get; } = new();
     public string Subject { get; set; } = "";
     public string Body { get; set; } = "";
+    /// <summary>HTML-Fassung (null = nur Text).</summary>
+    public string? HtmlBody { get; set; }
+    /// <summary>Im HTML per cid: eingebundene Bilder (Logo).</summary>
+    public List<InlineImage> Images { get; } = new();
+    /// <summary>Abweichender Absender (Vorlage oder @@pf@@); leer = Einstellungen.</summary>
+    public string? FromAddress { get; set; }
+    public string? FromName { get; set; }
+    public string? ReplyTo { get; set; }
     public List<(string Name, byte[] Data, string ContentType)> Attachments { get; } = new();
+
+    public string From(MailOptions o) => string.IsNullOrWhiteSpace(FromAddress) ? o.FromAddress.Trim() : FromAddress.Trim();
+    public string? Name(MailOptions o) => !string.IsNullOrWhiteSpace(FromName) ? FromName.Trim()
+        : string.IsNullOrWhiteSpace(FromAddress) && !string.IsNullOrWhiteSpace(o.FromName) ? o.FromName.Trim() : null;
+    public string? Reply(MailOptions o) => !string.IsNullOrWhiteSpace(ReplyTo) ? ReplyTo.Trim() : string.IsNullOrWhiteSpace(o.ReplyTo) ? null : o.ReplyTo.Trim();
 }
 
 /// <summary>Entschlüsselte Zugangsdaten für den Versand (nie gespeichert, nur zur Laufzeit).</summary>
@@ -32,7 +45,7 @@ public static class MailSender
 
     public static Task SendAsync(MailOptions o, MailSecrets secrets, OutgoingMail mail, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(o.FromAddress)) throw new InvalidOperationException("Keine Absenderadresse eingetragen (Einstellungen → E-Mail).");
+        if (string.IsNullOrWhiteSpace(mail.From(o))) throw new InvalidOperationException("Keine Absenderadresse eingetragen (Einstellungen → E-Mail).");
         if (mail.To.Count == 0) throw new InvalidOperationException("Kein Empfänger.");
         return o.Transport == "Graph"
             ? GraphMailSender.SendAsync(o, secrets.GraphClientSecret, mail, ct)
@@ -48,14 +61,23 @@ public static class MailSender
         if (string.IsNullOrWhiteSpace(o.Host)) throw new InvalidOperationException("Kein SMTP-Server eingetragen (Einstellungen → E-Mail).");
 
         var msg = new MimeMessage();
-        msg.From.Add(new MailboxAddress(string.IsNullOrWhiteSpace(o.FromName) ? null : o.FromName.Trim(), o.FromAddress.Trim()));
-        if (!string.IsNullOrWhiteSpace(o.ReplyTo)) msg.ReplyTo.Add(MailboxAddress.Parse(o.ReplyTo.Trim()));
+        msg.From.Add(new MailboxAddress(mail.Name(o), mail.From(o)));
+        if (mail.Reply(o) is { } reply) msg.ReplyTo.Add(MailboxAddress.Parse(reply));
         foreach (var a in mail.To) msg.To.Add(MailboxAddress.Parse(a));
         foreach (var a in mail.Cc) msg.Cc.Add(MailboxAddress.Parse(a));
         foreach (var a in mail.Bcc.Concat(CopyTo(o))) msg.Bcc.Add(MailboxAddress.Parse(a));
         msg.Subject = mail.Subject;
 
         var builder = new BodyBuilder { TextBody = mail.Body };
+        if (mail.HtmlBody is not null)
+        {
+            builder.HtmlBody = mail.HtmlBody;
+            foreach (var img in mail.Images)
+            {
+                var res = builder.LinkedResources.Add(img.Name, img.Data, ContentType.Parse(img.ContentType));
+                res.ContentId = img.ContentId;
+            }
+        }
         foreach (var (name, data, type) in mail.Attachments)
             builder.Attachments.Add(name, data, ContentType.Parse(type));
         msg.Body = builder.ToMessageBody();
@@ -99,13 +121,14 @@ public static class GraphMailSender
         if (string.IsNullOrWhiteSpace(o.GraphTenantId) || string.IsNullOrWhiteSpace(o.GraphClientId) || string.IsNullOrWhiteSpace(secret))
             throw new InvalidOperationException("Microsoft 365 ist nicht vollständig eingerichtet: Mandanten-ID, Client-ID und geheimer Clientschlüssel fehlen (Einstellungen → E-Mail).");
         var token = await TokenAsync(o.GraphTenantId.Trim(), o.GraphClientId.Trim(), secret, ct);
-        var user = Uri.EscapeDataString(o.FromAddress.Trim());
+        var user = Uri.EscapeDataString(mail.From(o));
         var message = Message(o, mail);
         var total = mail.Attachments.Sum(a => (long)a.Data.Length);
 
         if (total < InlineLimit)
         {
-            message["attachments"] = new JsonArray(mail.Attachments.Select(a => (JsonNode)FileAttachment(a)).ToArray());
+            message["attachments"] = new JsonArray(mail.Images.Select(i => (JsonNode)InlineAttachment(i))
+                .Concat(mail.Attachments.Select(a => (JsonNode)FileAttachment(a))).ToArray());
             var body = new JsonObject { ["message"] = message, ["saveToSentItems"] = o.GraphSaveToSentItems };
             await Send(HttpMethod.Post, $"{GraphBase}/users/{user}/sendMail", token, body, ct);
             return;
@@ -114,6 +137,8 @@ public static class GraphMailSender
         // Große Anlagen: Entwurf → Anlagen → senden
         var draft = await Send(HttpMethod.Post, $"{GraphBase}/users/{user}/messages", token, message, ct);
         var id = Uri.EscapeDataString(draft?["id"]?.GetValue<string>() ?? throw new InvalidOperationException("Graph hat keinen Entwurf angelegt."));
+        foreach (var img in mail.Images)
+            await Send(HttpMethod.Post, $"{GraphBase}/users/{user}/messages/{id}/attachments", token, InlineAttachment(img), ct);
         foreach (var a in mail.Attachments)
         {
             if (a.Data.Length < InlineLimit)
@@ -144,15 +169,27 @@ public static class GraphMailSender
         var msg = new JsonObject
         {
             ["subject"] = mail.Subject,
-            ["body"] = new JsonObject { ["contentType"] = "Text", ["content"] = mail.Body },
-            ["from"] = new JsonObject { ["emailAddress"] = new JsonObject { ["address"] = o.FromAddress.Trim(), ["name"] = string.IsNullOrWhiteSpace(o.FromName) ? null : o.FromName.Trim() } },
+            ["body"] = mail.HtmlBody is null
+                ? new JsonObject { ["contentType"] = "Text", ["content"] = mail.Body }
+                : new JsonObject { ["contentType"] = "HTML", ["content"] = mail.HtmlBody },
+            ["from"] = new JsonObject { ["emailAddress"] = new JsonObject { ["address"] = mail.From(o), ["name"] = mail.Name(o) } },
             ["toRecipients"] = Recipients(mail.To),
             ["ccRecipients"] = Recipients(mail.Cc),
             ["bccRecipients"] = Recipients(mail.Bcc.Concat(MailSender.CopyTo(o)))
         };
-        if (!string.IsNullOrWhiteSpace(o.ReplyTo)) msg["replyTo"] = Recipients(new[] { o.ReplyTo.Trim() });
+        if (mail.Reply(o) is { } reply) msg["replyTo"] = Recipients(new[] { reply });
         return msg;
     }
+
+    private static JsonObject InlineAttachment(InlineImage i) => new()
+    {
+        ["@odata.type"] = "#microsoft.graph.fileAttachment",
+        ["name"] = i.Name,
+        ["contentType"] = i.ContentType,
+        ["contentBytes"] = Convert.ToBase64String(i.Data),
+        ["contentId"] = i.ContentId,
+        ["isInline"] = true
+    };
 
     private static JsonObject FileAttachment((string Name, byte[] Data, string ContentType) a) => new()
     {

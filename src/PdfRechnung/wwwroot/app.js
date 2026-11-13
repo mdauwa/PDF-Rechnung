@@ -1,7 +1,7 @@
 "use strict";
 
 /* =========================================================
-   PDF Rechnung – Portal-Shell, Anmeldung, Routing
+   Belegpost – Portal-Shell, Anmeldung, Routing
    Ohne externe Bibliotheken (läuft auch ohne Internet).
    ========================================================= */
 
@@ -25,7 +25,7 @@ const store = {
 
 /** API-Aufruf mit CSRF-Header; wirft bei Fehlern eine Exception mit der Meldung des Servers. */
 async function api(method, url, body, isForm) {
-  const opt = { method, headers: { "X-Requested-With": "PdfRechnung" }, cache: "no-store" };
+  const opt = { method, headers: { "X-Requested-With": "Belegpost" }, cache: "no-store" };
   if (body !== undefined) {
     if (isForm) opt.body = body;
     else { opt.body = JSON.stringify(body); opt.headers["Content-Type"] = "application/json"; }
@@ -39,7 +39,7 @@ async function api(method, url, body, isForm) {
 
 /* ---------------- Shell / Menü ---------------- */
 
-let portal = { title: "PDF Rechnung" };
+let portal = { title: "Belegpost" };
 
 const MENU = [
   { key: "vorgaenge", title: "Zu prüfen", icon: "alert", filter: "offen" },
@@ -50,7 +50,7 @@ const MENU = [
 
 async function loadPortal() {
   try { portal = await (await fetch("api/portal", { cache: "no-store" })).json(); }
-  catch { portal = { title: "PDF Rechnung", authenticated: false }; }
+  catch { portal = { title: "Belegpost", authenticated: false }; }
   document.title = portal.title;
   $("#portalTitle").textContent = portal.title;
   $("#userInfo").innerHTML = portal.authenticated
@@ -129,7 +129,7 @@ async function renderLogin(view) {
 
   let body;
   if (st.isLocal && st.needsSetup) {
-    body = `<h2>Willkommen bei PDF Rechnung</h2>
+    body = `<h2>Willkommen bei Belegpost</h2>
       <p>Lege zuerst ein <b>Administrator-Kennwort</b> fest. Damit meldest du dich künftig direkt am Server an
       (Einstellungen, Benutzer). Mindestens 10 Zeichen.</p>
       <form id="loginForm" class="login-form">
@@ -149,7 +149,7 @@ async function renderLogin(view) {
       </form>` : ""}`;
   }
   view.innerHTML = `<div class="login-wrap"><div class="login-card">
-    <div class="login-brand"><span class="brand-mark"></span>${esc(portal.title || "PDF Rechnung")}</div>
+    <div class="login-brand"><span class="brand-mark"></span>${esc(portal.title || "Belegpost")}</div>
     ${errText ? `<div class="notice">${errText}</div>` : ""}${body}<div class="notice" id="loginMsg" hidden></div></div></div>`;
 
   const form = view.querySelector("#loginForm");

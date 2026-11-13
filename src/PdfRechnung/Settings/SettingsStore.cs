@@ -9,7 +9,7 @@ namespace PdfRechnung.Settings;
 
 /// <summary>
 /// Speicherort und Zugriff auf die Einstellungen (settings.json) im Datenverzeichnis.
-/// Windows: C:\ProgramData\PdfRechnung – andere Systeme / Tests: Umgebungsvariable PDFRECHNUNG_DATA.
+/// Windows: C:\ProgramData\Belegpost (ein älteres C:\ProgramData\PdfRechnung wird übernommen) – andere Systeme / Tests: Umgebungsvariable BELEGPOST_DATA.
 /// </summary>
 public sealed class SettingsStore
 {
@@ -43,11 +43,19 @@ public sealed class SettingsStore
 
     public static string DefaultDataDirectory()
     {
-        var env = Environment.GetEnvironmentVariable("PDFRECHNUNG_DATA");
+        var env = Environment.GetEnvironmentVariable("BELEGPOST_DATA") ?? Environment.GetEnvironmentVariable("PDFRECHNUNG_DATA");
         if (!string.IsNullOrWhiteSpace(env)) return env;
-        return OperatingSystem.IsWindows()
-            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "PdfRechnung")
-            : Path.Combine(AppContext.BaseDirectory, "data");
+        if (!OperatingSystem.IsWindows()) return Path.Combine(AppContext.BaseDirectory, "data");
+        var root = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+        var dir = Path.Combine(root, "Belegpost");
+        var legacy = Path.Combine(root, "PdfRechnung");
+        // Ältere Installationen (vor der Umbenennung) übernehmen
+        if (!Directory.Exists(dir) && File.Exists(Path.Combine(legacy, "settings.json")))
+        {
+            try { Directory.Move(legacy, dir); }
+            catch { return legacy; } // z. B. noch vom alten Dienst geöffnet – dann vorerst weiter dort
+        }
+        return dir;
     }
 
     /// <summary>Legt settings.json mit Standardwerten an, falls sie noch nicht existiert.</summary>

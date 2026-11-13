@@ -1,0 +1,84 @@
+# Übergabe – Projekt PDF Rechnung (Stand 13.11.2026)
+
+Mit diesem Dokument kann ein neuer Chat nahtlos weiterarbeiten.
+
+## Ziel
+
+Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
+
+- Das ERP (BüroWARE/erpFlow) druckt Belege mit gotomaxx-Steuerzeichen (`@@XXWert@@`) auf einen virtuellen Drucker.
+- Ein Windows-Dienst am Server liest die Steuerzeichen und erzeugt das PDF mit Briefpapier.
+- Zusätzlich erzeugt er die E-Rechnung im angeforderten Format (ZUGFeRD/Factur-X, XRechnung, Peppol).
+- Das Portal zeigt die Vorgänge zur Prüfung an und versendet sie, manuell oder per Autoversand.
+
+## Wo liegt was
+
+| Ort | Inhalt |
+|---|---|
+| GitHub `mdauwa/pdf-rechnung` (Branch `main`) | Quellcode, maßgeblicher Stand |
+| `Y:\Dev\eRechnung` | lokale Kopie des Codes (noch **kein** Git-Klon) plus Ordner `Dokumente`, `PdfDrucker` und Test-PDFs des Benutzers |
+| `Y:\Dev\Firmenportal` | Vorlage für Dienst, Einrichtung, HTTPS, Anmeldung (Repo `mdauwa/Firmenportal`) |
+| claude.ai-Projekt „eRechnung“ | Konzept, Feldzuordnung, diese Übergabe |
+| `docs/` im Repo | Konzept, Feldzuordnung Steuerzeichen → ZUGFeRD, ERP-Vorlage `ERP-Vorlage-Drucksteuerzeichen.json` |
+
+## Entscheidungen
+
+- **Drucker:** Treiber **Microsoft Print to PDF** mit eigenem Anschluss statt `PORTPROMPT:`, damit kein Speichern-Dialog kommt. Bevorzugt eine Named Pipe, als Ausweichlösung mfilemon. Ein fester Dateiname als Anschluss ist ungeeignet.
+- **Kein eigener Treibercode.** Keine AGPL-Bausteine (Ghostscript, PDFCreator, clawPDF), weil der Drucker eventuell weitergegeben wird.
+- **E-Rechnungsformat wie angefordert** (`@@xt@@`, auch ZUGFeRD 1). Wird ein Format nicht unterstützt, bekommt der Vorgang den Status **Fehler** mit einer Meldung im Portal. Er wird dann nicht automatisch versendet.
+- **Rechnungsdaten kommen aus den gedruckten Steuerzeichen.** Die ERP-Webschnittstelle mit Belegindex ist nur eine Option für später.
+- **Steuerzeichen kompatibel zu gotomaxx.** Erweiterungen bekommen einen eigenen Präfix, z. B. `@@ca3@@` für PDF/A-3 oder `@@xi ERP_VOUCHER_INDEX=@@`.
+- **Name und Technik:** Produktname „PDF Rechnung“. .NET 9, Aufbau wie im Firmenportal, Ports 5444/5081. Der Dienst läuft als SYSTEM.
+- **Reihenfolge:** Das Portal kam zuerst, jetzt folgt der Druckdienst.
+
+## Stand (fertig, getestet, 25 Tests grün)
+
+- **Portal:**
+  - Vorgangsliste mit Filtern und Menüzählern
+  - Detail mit PDF-Vorschau, Prüfmeldungen, Rechnungsdaten mit Positionen und nachgerechneten Summen/Steuer, Verlauf, gelesenen Steuerzeichen
+  - Versanddaten bearbeiten, Senden, Massenversand, „Trotz Fehler senden“, Verwerfen/Wiederherstellen, erneut senden
+- **Autoversand** als Einstellung: Wartezeit, optional auch mit Warnungen, nie bei Fehlern.
+- **Versand:** SMTP mit MailKit, Testmail.
+- **Eingang:** Eingangsordner `C:\ProgramData\PdfRechnung\eingang` und Upload im Portal.
+- **Steuerzeichen-Auswertung:**
+  - Zeilen werden aus den Buchstaben gebildet. Dadurch werden Steuerzeichen an jeder Position erkannt: winzig, neben anderem Text, gedreht, auf jeder Seite.
+  - Ausgewertet werden `xt`/`xi`/`xr`/`<<|`, die Mail-Steuerzeichen inkl. `aa` und `mf` sowie `bp`, `fn` usw.
+- **Pfadzuordnung** (Einstellungen → Drucker & Eingang), z. B. `K:\=\\server\freigabe\`.
+- **Prüfung:** Pflichtfelder EN 16931/XRechnung, Summen gegen `GROSS_AMOUNT`, Einheiten (ERP-Text → UN/ECE), Empfänger, Anlagen.
+- **Einstellungsoberfläche:** Dienst, Server & Zertifikat, Drucker & Eingang, E-Mail & Versand, E-Rechnung (Einheiten), Ablage, Benutzer, Anmeldung.
+
+## Erkenntnisse aus echten Ausdrucken
+
+1. **Der Treiber verändert nichts.** Microsoft Print to PDF übernimmt die Steuerzeichen unverändert. Geprüft mit WordPad: `@@fnTest123@@` und `@@toinfo@test.at@@` wurden erkannt.
+2. **Frühere ERP-Ausdrucke** (Rechnung 41260945, Angebote 11260051/11260056) enthielten statt der Steuerzeichen ein Platzhalterfeld rechts oben: 2,2 pt, 100 Leerzeichen und 20 `*`. Das ERP hat den Inhalt also schon vor dem Druck ersetzt.
+3. **Nach einer Änderung im ERP** (`erechnung.pdf`, Angebot 11260051) druckt das ERP den PDFMAILER-Block rechts oben:
+   ```
+   @@mfAngebot_N11260051_13.11.2026@@
+   @@aa<empfänger>@@
+   @@edAngebot 11260051 13.11.2026@@
+   @@mbK:\WebWARE5\APP\PDFMailer\DAT00004\Angebot.txt@@
+   @@od0@@
+   @@maK:\WebWARE5\APP\PDFMailer\DAT00004\ERP Austria Group Dienstleistungspreise 2027.pdf@@
+   ```
+   - **Offen:** Was genau wurde im ERP geändert? Das muss für alle Formulare festgehalten werden.
+   - Die Pfade auf `K:\` brauchen am Server die Pfadzuordnung.
+4. **Noch nicht gesehen:** ein Ausdruck mit **ZUGFeRD-Steuerzeichen** (`@@xt`/`@@xi`/`@@xr`). Dafür wird eine Rechnung an einen Kunden mit hinterlegtem E-Rechnungsformat benötigt (ADR_6434_2).
+
+## Nächste Schritte
+
+1. **ZUGFeRD-Ausdruck prüfen:** Rechnung mit E-Rechnungs-Steuerzeichen auslesen. Wie werden `xr` und `<<|` gedruckt (eine lange Zeile je Position)?
+2. **Druckdienst:**
+   - Drucker „PDF Rechnung“ mit Microsoft Print to PDF und eigenem Anschluss aus der Oberfläche anlegen und freigeben.
+   - Druckauftrag übernehmen, mit Benutzer und Rechner aus der Warteschlange.
+3. **Steuerzeichen aus dem PDF entfernen** (Textbefehle löschen, nicht überdecken). Dazu Briefpapier (`@@bp@@`, erste und Folgeseiten) und `@@af@@`, `@@nd@@`, `@@rpc@@`.
+4. **E-Rechnung erzeugen:** CII/UBL-XML, PDF/A-3 mit `factur-x.xml`, validieren.
+   - Hinweis: ZUGFeRD-csharp (Apache-2.0) wird laut NuGet ab 1.12.2026 nicht mehr gepflegt. Zur Wahl stehen: trotzdem einsetzen, ein eigener Generator oder ein Fork.
+5. Später: Peppol-Versand (`@@pe1@@`), Microsoft Graph statt SMTP (optional).
+
+## Arbeitsweise
+
+- **Test-PDFs:** Der Benutzer legt sie in `Y:\Dev\eRechnung` ab oder hängt sie im Chat an.
+- **Steuerzeichen schnell prüfen:** Kleines Konsolenprogramm, das `PdfText.Extract` und `ControlCodeParser.Parse` aufruft. Alternativ `pdftotext -raw <pdf> - | grep @@`.
+- **Bauen und testen:** `dotnet test` im Repo-Stamm. Release: `dotnet publish src/PdfRechnung/PdfRechnung.csproj -c Release`.
+- **Lokaler Ordner:** Nach jeder Änderung auf GitHub pushen und `Y:\Dev\eRechnung` mitziehen. Besser: den Ordner einmal als Git-Klon neu anlegen. Die Benutzerordner `Dokumente` und `PdfDrucker` dabei erhalten.
+- **Sprache:** Antworten auf Deutsch, Ansprache mit „du“.

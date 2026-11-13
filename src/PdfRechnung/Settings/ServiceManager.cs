@@ -46,6 +46,28 @@ public static class ServiceManager
         return image.StartsWith('"') ? image[1..image.IndexOf('"', 1)] : image.Split(' ')[0];
     }
 
+    /// <summary>
+    /// true, wenn sich Programm-Dateien neben der gestarteten Exe (wwwroot, Melder) von denen des installierten Dienstes unterscheiden –
+    /// dann ist auch ohne neue Exe ein Update nötig (z. B. nur geänderte Oberfläche).
+    /// </summary>
+    public static bool ContentDiffers(string installedExe)
+    {
+        try
+        {
+            var src = Path.GetDirectoryName(ExecutablePath)!;
+            var dst = Path.GetDirectoryName(installedExe)!;
+            if (string.Equals(Path.GetFullPath(src).TrimEnd('\\'), Path.GetFullPath(dst).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)) return false;
+            var melder = Path.Combine(src, Services.MelderApi.ExeName);
+            if (File.Exists(melder) && !SameFile(melder, Path.Combine(dst, Services.MelderApi.ExeName))) return true;
+            var www = Path.Combine(src, "wwwroot");
+            if (!Directory.Exists(www)) return false;
+            foreach (var f in Directory.EnumerateFiles(www, "*", SearchOption.AllDirectories))
+                if (!SameFile(f, Path.Combine(dst, "wwwroot", Path.GetRelativePath(www, f)))) return true;
+            return false;
+        }
+        catch { return false; }
+    }
+
     /// <summary>true, wenn beide Dateien existieren und inhaltlich gleich sind.</summary>
     public static bool SameFile(string a, string b)
     {

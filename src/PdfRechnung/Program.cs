@@ -30,6 +30,7 @@ if (!isService && OperatingSystem.IsWindows() && (ServiceManager.IsInstalled() |
     string? reason =
         !ServiceManager.IsInstalled() ? "Älterer Dienst „PdfRechnung“ gefunden – er wird durch „Belegpost Portal“ ersetzt"
         : installed is not null && !ServiceManager.SameFile(installed, ServiceManager.ExecutablePath) ? $"Neue Programmversion – aktualisiere den Dienst ({installed})"
+        : installed is not null && ServiceManager.ContentDiffers(installed) ? $"Geänderte Programmdateien (Oberfläche/Melder) – aktualisiere den Dienst ({installed})"
         : !ServiceManager.IsRunning() ? "Der Dienst ist installiert, läuft aber nicht – starte ihn"
         : null;
     if (reason is not null)

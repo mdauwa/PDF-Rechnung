@@ -26,8 +26,8 @@
 /* Detail */
 .view.vd-view { padding-bottom: 24px; }
 .vd { display: grid; grid-template-columns: minmax(380px, 1.05fr) minmax(380px, 1fr); gap: 16px; align-items: start; }
-.vd-pdf { position: sticky; top: 12px; display: flex; flex-direction: column; height: calc(100vh - 110px); margin: 0; }
-.vd-pdf iframe { flex: 1; width: 100%; border: 1px solid var(--border); border-radius: 8px; background: #888; }
+.vd-pdf { position: sticky; top: 0; display: flex; flex-direction: column; height: calc(100vh - 110px); margin: 0; min-width: 0; overflow: hidden; }
+.vd-pdf iframe { flex: 1; width: auto; min-width: 0; min-height: 0; align-self: stretch; box-sizing: border-box; border: 1px solid var(--border); border-radius: 8px; background: #888; }
 .vd-pdf .help { margin: 8px 0 0; }
 .vd-side .card { margin-top: 0; margin-bottom: 16px; }
 .vd-side h3 { font-size: 13px; margin: 14px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
@@ -135,3 +135,5 @@ body.embedded .sidebar-foot a[href="auth/logout"] { display: none; }
 table.users input.erp-no { width: 64px; font-family: Consolas, monospace; text-align: center; }
 table.users input.invalid { border-color: var(--bad, #d1453b); background: #fbeae8; }
 .user-melder { font-size: 12px; color: var(--muted, #667085); align-self: center; }
+
+.vd-side { min-width: 0; }

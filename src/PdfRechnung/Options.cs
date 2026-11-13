@@ -58,6 +58,8 @@ public sealed class ServerOptions
     /// 127.0.0.1 ist immer dabei (Einrichtung und Administrator-Anmeldung am Server).
     /// </summary>
     public List<string> BindAddresses { get; set; } = new();
+    /// <summary>Firewall-Regel auch für das Netzwerkprofil „Öffentlich“ (Standard: nur Domäne und Privat).</summary>
+    public bool FirewallPublic { get; set; }
 }
 
 /// <summary>

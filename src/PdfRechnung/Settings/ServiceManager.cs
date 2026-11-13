@@ -264,7 +264,7 @@ public static class ServiceManager
         var ports = server.EnableHttp ? $"{server.HttpsPort},{server.HttpPort}" : $"{server.HttpsPort}";
         Run("netsh", $"advfirewall firewall delete rule name=\"{FirewallRule}\"", _ => { }, ignoreErrors: true);
         Run("netsh", $"advfirewall firewall add rule name=\"{FirewallRule}\" dir=in action=allow protocol=TCP " +
-                     $"localport={ports} profile=domain,private program=\"{executable ?? ExecutablePath}\"", log, ignoreErrors: true);
+                     $"localport={ports} profile={(server.FirewallPublic ? "any" : "domain,private")} program=\"{executable ?? ExecutablePath}\"", log, ignoreErrors: true);
     }
 
     /// <summary>Wartet, bis ein Prozess beendet ist (z. B. die Einrichtungs-Instanz, die den Port noch belegt).</summary>
@@ -286,6 +286,27 @@ public static class ServiceManager
 
     private static void Sc(string args, Action<string> log, bool ignoreErrors = false) =>
         Run(Path.Combine(Environment.SystemDirectory, "sc.exe"), args, log, ignoreErrors);
+
+    /// <summary>Zur Fehlersuche: Firewall-Regel und Netzwerkprofile (Domäne/Privat/Öffentlich) der Netzwerkkarten.</summary>
+    [SupportedOSPlatform("windows")]
+    public static object Diagnostics()
+    {
+        static string Capture(string file, string args)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo(file, args) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+                using var p = Process.Start(psi)!;
+                var o = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
+                p.WaitForExit(10_000);
+                return o.Trim();
+            }
+            catch (Exception ex) { return ex.Message; }
+        }
+        var rule = Capture("netsh", $"advfirewall firewall show rule name=\"{FirewallRule}\" verbose");
+        var profiles = Capture("powershell", "-NoProfile -NonInteractive -Command \"Get-NetConnectionProfile | ForEach-Object { $_.InterfaceAlias + ': ' + $_.NetworkCategory }\"");
+        return new { firewallRule = rule, networkProfiles = profiles };
+    }
 
     private static void Run(string file, string args, Action<string> log, bool ignoreErrors)
     {

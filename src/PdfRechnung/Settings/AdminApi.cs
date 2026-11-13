@@ -257,13 +257,16 @@ public static class AdminApi
         });
 
         // ---------- Dienst ----------
-        g.MapGet("/service", (SettingsStore store, RuntimeControl rt) =>
+        g.MapGet("/service", (SettingsStore store, RuntimeControl rt, Microsoft.AspNetCore.Hosting.Server.IServer server) =>
         {
             var log = Path.Combine(store.DataDirectory, "install.log");
+            var listening = server.Features.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>()?.Addresses.ToList() ?? new List<string>();
             return Results.Ok(new
             {
                 status = ServiceManager.GetStatus(rt.IsService, store.DataDirectory),
                 setupMode = rt.SetupMode,
+                listening,
+                diagnostics = OperatingSystem.IsWindows() && rt.IsService ? ServiceManager.Diagnostics() : null,
                 installLog = File.Exists(log) ? File.ReadAllText(log) : null
             });
         });
@@ -318,6 +321,7 @@ public static class AdminApi
         bool PortOk(int p) => p is > 0 and <= 65535;
         if (!PortOk(s.Server.HttpsPort)) e.Add("HTTPS-Port ist ungültig.");
         if (s.Server.EnableHttp && !PortOk(s.Server.HttpPort)) e.Add("HTTP-Port ist ungültig.");
+        if (s.Server.BindAddresses is null) s.Server.BindAddresses = new();
         foreach (var ip in s.Server.BindAddresses.Where(x => !string.IsNullOrWhiteSpace(x)))
             if (!System.Net.IPAddress.TryParse(ip.Trim(), out _)) e.Add($"„{ip}“ ist keine gültige IP-Adresse (Server → Gebunden an).");
         if (s.Server.EnableHttp && s.Server.HttpPort == s.Server.HttpsPort) e.Add("HTTP- und HTTPS-Port müssen verschieden sein.");

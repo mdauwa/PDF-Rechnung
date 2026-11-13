@@ -317,7 +317,7 @@ function tabService() {
 async function loadService() {
   try { ST.service = await api("GET", "api/admin/service"); }
   catch (e) { $("#svcBox").innerHTML = `<p class="meta">${esc(e.message)}</p>`; return; }
-  const { status: s, setupMode, installLog } = ST.service;
+  const { status: s, setupMode, installLog, listening, diagnostics } = ST.service;
   const row = (k, v) => `<tr><th>${k}</th><td>${v}</td></tr>`;
   const state = s.installed ? (s.state === "Running" ? '<span class="badge ok">läuft</span>' : `<span class="badge partial">${esc(s.state || "installiert")}</span>`) : '<span class="badge missing">nicht installiert</span>';
   let actions = "";
@@ -339,7 +339,16 @@ async function loadService() {
       ${row("Programm", `<code>${esc(s.executable)}</code>`)}
       ${row("Version", esc(s.version))}
       ${setupMode && s.isWindows ? row("Administratorrechte", s.elevated ? "ja" : "nein – Abfrage bei Installation") : ""}
+      ${row("Lauscht auf", (listening || []).map(a => `<code>${esc(a)}</code>`).join("<br>") || "–")}
     </table>
+    ${setupMode ? `<div class="notice">Im Einrichtungsmodus ist das Portal absichtlich <b>nur über localhost</b> erreichbar.
+      Aus dem Netz (andere PCs, IP-Adresse des Servers) geht es erst, wenn es als Windows-Dienst läuft
+      ${s.installed && s.state === "Running" ? "– der Dienst läuft bereits; bitte diese Einrichtung schließen und das Portal über den Dienst öffnen." : "– unten „Als Windows-Dienst installieren &amp; starten“."}</div>` : ""}
+    ${diagnostics ? `<details class="log"><summary>Netzwerk-Diagnose (Firewall, Netzwerkprofil)</summary>
+      <p class="help">Die Firewall-Regel gilt standardmäßig nur für die Profile <b>Domäne</b> und <b>Privat</b>. Steht die Netzwerkkarte auf
+        <b>Public/Öffentlich</b>, blockt Windows den Zugriff – dann unter „Server &amp; Zertifikat“ die Firewall auch für öffentliche Netze freigeben
+        oder das Netzwerkprofil auf Privat/Domäne stellen.</p>
+      <pre>${esc(diagnostics.networkProfiles || "")}</pre><pre>${esc(diagnostics.firewallRule || "")}</pre></details>` : ""}
     <div class="actions">${actions}</div>
     ${installLog ? `<details class="log"><summary>Protokoll der letzten Installation</summary><pre>${esc(installLog)}</pre></details>` : ""}`;
 }
@@ -386,6 +395,7 @@ function tabServer() {
     ${inCheck("server.enableHttp", "Zusätzlich HTTP anbieten")}
     ${inCheck("server.redirectHttpToHttps", "HTTP automatisch auf HTTPS umleiten")}
     ${bindField()}
+    ${inCheck("server.firewallPublic", "Firewall auch für öffentliche Netzwerke öffnen (nötig, wenn die Netzwerkkarte des Servers als „Öffentlich“ eingestuft ist)")}
     ${field("Titel des Portals", inText("portal.title", "Belegpost"))}
     <p class="help">Die Firewall-Regel (Domänen- und privates Netz) wird beim Dienststart automatisch an die Ports angepasst.</p>`) +
     section("Aktuelles Zertifikat", certInfo || '<p class="meta">Kein Zertifikat geladen.</p>') +

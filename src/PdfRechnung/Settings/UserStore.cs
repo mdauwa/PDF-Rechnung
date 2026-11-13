@@ -178,9 +178,11 @@ public sealed class UserStore
     /// <summary>ERP-Bedienernummer vereinheitlichen: nur Ziffern, 3-stellig mit Vornullen („7“ → „007“); sonst null.</summary>
     public static string? NormalizeOperator(string? s)
     {
+        // Ziffern mit beliebig vielen Vornullen („7“, „07“, „007“, „0007“) → „007“; höchstens 999
         var t = s?.Trim();
-        if (string.IsNullOrEmpty(t) || t.Length > 3 || !t.All(char.IsAsciiDigit)) return null;
-        return t.PadLeft(3, '0');
+        if (string.IsNullOrEmpty(t) || t.Length > 10 || !t.All(char.IsAsciiDigit)) return null;
+        var n = int.Parse(t);
+        return n > 999 ? null : n.ToString("000");
     }
 
     /// <summary>Benutzer zur ERP-Bedienernummer (nur aktive).</summary>

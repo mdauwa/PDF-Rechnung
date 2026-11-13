@@ -78,6 +78,9 @@ public sealed class UserRoutingTests : IDisposable
     [InlineData("7", "007")]
     [InlineData(" 042 ", "042")]
     [InlineData("1234", null)]
+    [InlineData("0", "000")]
+    [InlineData("000", "000")]
+    [InlineData("0007", "007")]
     [InlineData("A07", null)]
     [InlineData("", null)]
     public void Bedienernummer_wird_vereinheitlicht(string input, string? expected) =>
@@ -100,6 +103,14 @@ public sealed class UserRoutingTests : IDisposable
         var u = proc.Process(TestData.Pdf(new[] { "@@pb099@@" }), "Eingang", "b.pdf");
         Assert.Null(u.OwnerUserId);
         Assert.Contains(u.Messages, m => m.Text.Contains("099") && m.Text.Contains("keinem Benutzer"));
+
+        // Upload: Bedienernummer hat Vorrang vor dem hochladenden Benutzer, „0“ wird zu „000“
+        users.Update(d => d.Users.First(x => x.Id == "eva").OperatorNumbers = new List<string> { "000" });
+        var up = proc.Process(TestData.Pdf(new[] { "@@pb0@@" }), "Upload", "d.pdf", "Chef", null, "chef");
+        Assert.Equal("eva", up.OwnerUserId);
+        Assert.Equal("000", up.OperatorNumber);
+        var plain = proc.Process(TestData.Pdf(new[] { "@@toa@b.at@@" }), "Upload", "e.pdf", "Chef", null, "chef");
+        Assert.Equal("chef", plain.OwnerUserId);
 
         var bad = proc.Process(TestData.Pdf(new[] { "@@pbXY@@" }), "Eingang", "c.pdf");
         Assert.Contains(bad.Messages, m => m.Text.Contains("ungültig"));

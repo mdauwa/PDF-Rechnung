@@ -847,7 +847,7 @@ function onUsersInput(el, e) {
   const [i, k] = el.dataset.u.split("|"), u = ST.users.users[+i];
   if (k === "operatorNumbers") {
     u.operatorNumbers = el.value.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
-    const bad = u.operatorNumbers.some(x => !/^\d{1,3}$/.test(x));
+    const bad = u.operatorNumbers.some(x => !/^\d+$/.test(x) || +x > 999);
     el.classList.toggle("invalid", bad);
     el.title = bad ? "Bitte 3 Ziffern, z. B. 007" : "ERP-Bedienernummer (3 Ziffern). Mehrere mit Komma.";
   }

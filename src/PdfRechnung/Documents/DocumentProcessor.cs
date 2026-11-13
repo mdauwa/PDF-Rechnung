@@ -212,14 +212,7 @@ public sealed class DocumentProcessor
             v.Messages.Add(new CheckMessage(DocumentChecker.Error, "Das PDF konnte nicht gelesen werden: " + ex.Message));
         }
 
-        // Wem gehört der Beleg? @@pu@@ vor Druckauftrag; beim Upload der hochladende Benutzer
-        // Reihenfolge: @@pb@@ (Bedienernummer) → @@pu@@ → Benutzer des Druckauftrags
-        if (!string.IsNullOrWhiteSpace(p.PrintUser)) v.PrintUser = p.PrintUser.Trim();
-        if (p.OperatorNumber is not null) v.OperatorNumber = p.OperatorNumber;
-        var owner = ownerUserId is not null ? _users?.FindById(ownerUserId)
-            : (p.OperatorNumber is not null ? _users?.FindByOperator(p.OperatorNumber) : null) ?? _users?.FindByPrintName(v.PrintUser);
-        v.OwnerUserId = owner?.Id ?? ownerUserId;
-        v.OwnerName = owner?.Name;
+        AssignOwner(v, p, ownerUserId);
 
         Fill(v, p, overwriteMail: true);
         var sendPdf = v.Messages.Count == 0 ? Compose(v, pdf, p) : null;
@@ -240,6 +233,22 @@ public sealed class DocumentProcessor
         return v;
     }
 
+    /// <summary>
+    /// Wem gehört der Beleg? Reihenfolge: @@pb@@ (Bedienernummer) → @@pu@@ (Name) → Benutzer des Druckauftrags
+    /// → beim Upload der hochladende Benutzer.
+    /// </summary>
+    private void AssignOwner(Vorgang v, ParsedCodes p, string? fallbackUserId)
+    {
+        if (!string.IsNullOrWhiteSpace(p.PrintUser)) v.PrintUser = p.PrintUser.Trim();
+        v.OperatorNumber = p.OperatorNumber;
+        var owner = (p.OperatorNumber is not null ? _users?.FindByOperator(p.OperatorNumber) : null)
+            ?? (!string.IsNullOrWhiteSpace(p.PrintUser) ? _users?.FindByPrintName(p.PrintUser) : null)
+            ?? (fallbackUserId is not null ? _users?.FindById(fallbackUserId) : null)
+            ?? _users?.FindByPrintName(v.PrintUser);
+        v.OwnerUserId = owner?.Id ?? fallbackUserId;
+        v.OwnerName = owner?.Name;
+    }
+
     /// <summary>Prüfung wiederholen (z. B. nach geänderten Einstellungen oder Versanddaten).</summary>
     public Vorgang? Recheck(string id, string by)
     {
@@ -251,6 +260,8 @@ public sealed class DocumentProcessor
         catch { p = new ParsedCodes(); }
         return _store.Update(id, v =>
         {
+            // Zuordnung neu (z. B. Bedienernummer inzwischen einem Benutzer zugewiesen); Upload-Besitzer bleibt als Rückfall
+            AssignOwner(v, p, v.Source == "Upload" ? v.OwnerUserId : null);
             Fill(v, p, overwriteMail: !v.Mail.Edited);
             _store.WriteFile(id, DocumentStore.SendFile, Compose(v, original, p));
             v.Messages = DocumentChecker.Check(v, p, CurrentSettings());

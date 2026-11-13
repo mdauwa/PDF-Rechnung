@@ -226,7 +226,8 @@ function drawVorgang(view, data) {
         <div class="card-head"><h2>Vorschau</h2>
           ${data.hasSendPdf ? `<div class="pdf-switch"><button data-pdf="versand" class="active">Versand-PDF</button><button data-pdf="original">Original</button></div>` : ""}
           <span class="meta-inline">${v.pages} Seite(n) · ${esc(v.source)}${v.originalFileName ? " · " + esc(v.originalFileName) : ""}
-            ${v.printUser || v.ownerName ? ` · gedruckt von ${esc(v.ownerName || v.printUser)}${v.ownerName && v.printUser && v.printUser !== v.ownerName ? ` (${esc(v.printUser)})` : ""}${v.printUser && !v.ownerUserId ? ' <span class="badge partial" title="Diesem Druck-Benutzer ist kein Portal-Benutzer zugeordnet (Einstellungen → Benutzer → Druck-Benutzer)">nicht zugeordnet</span>' : ""}` : ""}</span></div>
+            ${v.operatorNumber ? ` · Bediener ${esc(v.operatorNumber)}` : ""}
+            ${v.printUser || v.ownerName ? ` · gedruckt von ${esc(v.ownerName || v.printUser)}${v.ownerName && v.printUser && v.printUser !== v.ownerName ? ` (${esc(v.printUser)})` : ""}${(v.printUser || v.operatorNumber) && !v.ownerUserId ? ' <span class="badge partial" title="Diesem Druck-Benutzer ist kein Portal-Benutzer zugeordnet (Einstellungen → Benutzer → Druck-Benutzer)">nicht zugeordnet</span>' : ""}` : ""}</span></div>
         <iframe id="vdFrame" src="api/vorgaenge/${encodeURIComponent(v.id)}/pdf#view=FitH" title="PDF-Vorschau"></iframe>
         <p class="help" id="vdPdfHelp">${data.hasSendPdf
           ? `Versand-PDF: so geht der Beleg hinaus – ${v.removedCodes ? `${v.removedCodes} Steuerzeichen entfernt` : "keine Steuerzeichen"}${v.stationery ? `, Briefpapier „${esc(v.stationery)}“` : ", ohne Briefpapier"}.`

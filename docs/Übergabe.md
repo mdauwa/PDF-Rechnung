@@ -78,7 +78,7 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
   - Outlook für Mac per AppleScript, Rückfall `.eml` bzw. Apple Mail.
   - Bauen auf einem Mac mit `build.sh` (Universal-Binary, ad-hoc oder Developer-ID-Signatur, optional Notarisierung).
   - Die ZIP liegt neben `Belegpost.exe`; das Portal bietet sie Mac-Benutzern an.
-  - **Noch nie kompiliert** (in der Linux-Umgebung gibt es kein Swift). Der erste Build auf dem Mac kann Korrekturen brauchen.
+  - Auf dem Mac (Apple Silicon, macOS 27) am 14.11.2026 fehlerfrei gebaut (Universal-Binary, ad-hoc signiert). Ein Funktionstest gegen das Portal steht noch aus.
 - **Firmenportal:**
   - Übergabe der Anmeldung per HS256-JWT an `/auth/firmenportal` (`HandoverLogin`, einmalige `jti`, höchstens 5 Minuten).
   - Einbettung über `frame-ancestors`; Cookie `SameSite=None`, wenn aktiv.

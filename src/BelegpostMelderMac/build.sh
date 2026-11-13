@@ -20,7 +20,7 @@ cp "$BIN" "$APP/Contents/MacOS/BelegpostMelder"
 cp Info.plist "$APP/Contents/Info.plist"
 
 # Symbol aus dem Belegpost-Logo
-ICON_SRC="../../docs/branding/Belegpost-256.png"
+ICON_SRC="../../docs/branding/Belegpost-256.png"; [ -f "$ICON_SRC" ] || ICON_SRC="branding/Belegpost-256.png"
 if [ -f "$ICON_SRC" ]; then
   SET="build/AppIcon.iconset"; mkdir -p "$SET"
   for s in 16 32 64 128 256; do

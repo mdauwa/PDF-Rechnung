@@ -33,14 +33,16 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 - **Erst normale PDFs, dann ZUGFeRD (13.11.2026):** Zuerst läuft der komplette Weg ohne E-Rechnung: Drucker, Steuerzeichen entfernen, Briefpapier, Versand. ZUGFeRD kommt erst dazu, wenn das stabil funktioniert.
 - **ERP-Ausgabe der Steuerzeichen:** Dass die Steuerzeichen jetzt gedruckt werden, lag an einer internen ERP-Einstellung. Für das Projekt ist das nicht relevant.
 
-## Stand (fertig, getestet, 25 Tests grün)
+## Stand (fertig, getestet, 38 Tests grün)
 
 - **Portal:**
   - Vorgangsliste mit Filtern und Menüzählern
   - Detail mit PDF-Vorschau, Prüfmeldungen, Rechnungsdaten mit Positionen und nachgerechneten Summen/Steuer, Verlauf, gelesenen Steuerzeichen
   - Versanddaten bearbeiten, Senden, Massenversand, „Trotz Fehler senden“, Verwerfen/Wiederherstellen, erneut senden
 - **Autoversand** als Einstellung: Wartezeit, optional auch mit Warnungen, nie bei Fehlern.
-- **Versand:** SMTP mit MailKit, Testmail.
+- **Versand:** Microsoft 365 über die Graph-API (App-Registrierung mit `Mail.Send`; Anlagen über 3 MB per Upload-Sitzung) oder SMTP mit MailKit, jeweils mit Testmail.
+- **Versand-PDF:** Steuerzeichen werden aus dem PDF gelöscht. Briefpapier je Firma per `@@bpName@@` oder als Standard, mit eigener erster Seite und Folgeseiten. Druckbereich mit Rändern: Warnung, wenn der Inhalt hineinragt, oder automatisches Einpassen. Dazu Versatz, Skalierung und eine Vorschau in den Einstellungen. Das Portal zeigt wahlweise Versand-PDF oder Original.
+- **Symbol:** eigenes Symbol für EXE, Portal und README (`docs/branding`).
 - **Eingang:** Eingangsordner `C:\ProgramData\PdfRechnung\eingang` und Upload im Portal.
 - **Steuerzeichen-Auswertung:**
   - Zeilen werden aus den Buchstaben gebildet. Dadurch werden Steuerzeichen an jeder Position erkannt: winzig, neben anderem Text, gedreht, auf jeder Seite.
@@ -67,13 +69,11 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 
 ## Nächste Schritte (normale PDFs, ohne ZUGFeRD)
 
-1. **Drucker einrichten:** Drucker „PDF Rechnung“ mit Microsoft Print to PDF und eigenem Anschluss aus der Oberfläche anlegen und freigeben. Bevorzugt Named Pipe, sonst mfilemon. Den Druckauftrag mit Benutzer und Rechner aus der Warteschlange übernehmen.
-2. **Steuerzeichen aus dem PDF entfernen:** Die Textbefehle löschen, nicht nur überdecken. Prüfen, dass der übrige Text unverändert bleibt.
-3. **Briefpapier:** Verwaltung in den Einstellungen mit PDF für erste Seite und Folgeseiten sowie Standard-Briefpapier. Auswahl per `@@bp@@`.
-4. **Weitere Steuerzeichen:** `@@af@@` (PDF anhängen, `no_stationery`), `@@nd@@` (Druckauftrag teilen), `@@rpc@@` (Seite entfernen), `@@di@@` (Metadaten).
-5. **Ende-zu-Ende-Test:** ERP-Ausdruck → Drucker → Vorgang → Versand mit bereinigtem PDF und Briefpapier.
+1. **Drucker einrichten:** Drucker „PDF Rechnung“ mit Microsoft Print to PDF und eigenem Anschluss aus der Oberfläche anlegen und freigeben (bevorzugt Named Pipe, sonst mfilemon). Den Druckauftrag mit Benutzer und Rechner übernehmen.
+2. **Weitere Steuerzeichen:** `@@af@@` (PDF anhängen, `no_stationery`), `@@nd@@` (Druckauftrag teilen), `@@rpc@@` (Seite entfernen).
+3. **Ende-zu-Ende-Test** mit echten Briefpapieren je Firma.
 
-Danach: E-Rechnung (`@@xt@@`/`@@xi@@`/`@@xr@@` → CII/UBL, PDF/A-3 mit `factur-x.xml`). Bis dahin meldet ein angefordertes Format im Portal einen Fehler.
+Danach kommt ZUGFeRD: `@@xt@@`/`@@xi@@`/`@@xr@@` werden zu CII/UBL, dazu **PDF/A-3** mit `factur-x.xml`. PDF/A-3 ist für ZUGFeRD Pflicht, und das Versand-PDF wird dafür entsprechend erzeugt.
 - Hinweis: ZUGFeRD-csharp (Apache-2.0) wird laut NuGet ab 1.12.2026 nicht mehr gepflegt. Zur Wahl stehen: trotzdem einsetzen, ein eigener Generator oder ein Fork.
 
 ## Arbeitsweise

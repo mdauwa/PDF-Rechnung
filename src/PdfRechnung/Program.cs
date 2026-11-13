@@ -95,15 +95,16 @@ var server = settings.Server;
 builder.WebHost.ConfigureKestrel(k =>
 {
     k.Limits.MaxRequestBodySize = 100 * 1024 * 1024; // PDF-Upload
+    // Dienst: eingestellte Adressen (leer = alle). Einrichtung per Doppelklick: localhost – und zusätzlich
+    // die ausdrücklich eingestellten Adressen, damit man das Portal auch so im Netz testen kann.
     var bindWarnings = new List<string>();
-    var binds = isService ? NetworkBinding.Resolve(server.BindAddresses, out bindWarnings) : null;
+    var binds = NetworkBinding.Resolve(server.BindAddresses, out bindWarnings);
     if (bindWarnings.Count > 0)
         using (var bootLog = LoggerFactory.Create(b => b.AddConsole()))
             foreach (var w in bindWarnings) bootLog.CreateLogger("Netzwerk").LogWarning("{Warnung}", w);
     void Listen(int port, Action<Microsoft.AspNetCore.Server.Kestrel.Core.ListenOptions> cfg)
     {
-        if (!isService) { k.ListenLocalhost(port, cfg); return; }
-        if (binds is null) { k.ListenAnyIP(port, cfg); return; }
+        if (binds is null) { if (isService) k.ListenAnyIP(port, cfg); else k.ListenLocalhost(port, cfg); return; }
         foreach (var ip in binds) k.Listen(ip, port, cfg);
     }
     Listen(server.HttpsPort, o => o.UseHttps(certs.Current!));

@@ -341,8 +341,8 @@ async function loadService() {
       ${setupMode && s.isWindows ? row("Administratorrechte", s.elevated ? "ja" : "nein – Abfrage bei Installation") : ""}
       ${row("Lauscht auf", (listening || []).map(a => `<code>${esc(a)}</code>`).join("<br>") || "–")}
     </table>
-    ${setupMode ? `<div class="notice">Im Einrichtungsmodus ist das Portal absichtlich <b>nur über localhost</b> erreichbar.
-      Aus dem Netz (andere PCs, IP-Adresse des Servers) geht es erst, wenn es als Windows-Dienst läuft
+    ${setupMode && (listening || []).every(a => /localhost|127\.0\.0\.1|\[::1\]/.test(a)) ? `<div class="notice">Im Einrichtungsmodus ist das Portal ohne eingestellte IP-Adressen <b>nur über localhost</b> erreichbar.
+      Entweder unter „Server &amp; Zertifikat“ die IP-Adressen wählen und die Einrichtung neu starten – oder es als Windows-Dienst betreiben
       ${s.installed && s.state === "Running" ? "– der Dienst läuft bereits; bitte diese Einrichtung schließen und das Portal über den Dienst öffnen." : "– unten „Als Windows-Dienst installieren &amp; starten“."}</div>` : ""}
     ${diagnostics ? `<details class="log"><summary>Netzwerk-Diagnose (Firewall, Netzwerkprofil)</summary>
       <p class="help">Die Firewall-Regel gilt standardmäßig nur für die Profile <b>Domäne</b> und <b>Privat</b>. Steht die Netzwerkkarte auf
@@ -423,7 +423,8 @@ function bindField() {
       ${all ? "" : `<div class="check-list">${known.map(ip => `<label class="check"><input type="checkbox" data-bind value="${esc(ip)}" ${sel.includes(ip) ? "checked" : ""}> <code>${esc(ip)}</code></label>`).join("")}
         ${extra.map(ip => `<label class="check"><input type="checkbox" data-bind value="${esc(ip)}" checked> <code>${esc(ip)}</code> <span class="badge missing">nicht vorhanden</span></label>`).join("")}</div>`}
       <p class="help">Nur an die gewählten Adressen binden, z. B. nur das interne Netz. <code>127.0.0.1</code> (localhost) ist immer dabei –
-        für die Einrichtung und die Administrator-Anmeldung am Server. Gilt für HTTPS und HTTP und erst nach einem Neustart des Dienstes.
+        für die Einrichtung und die Administrator-Anmeldung am Server. Gilt für HTTPS und HTTP und erst nach einem Neustart (Dienst neu starten bzw. Einrichtung schließen und neu öffnen).
+        Bei „alle IP-Adressen“ ist die Einrichtung per Doppelklick nur über localhost erreichbar, erst der Dienst lauscht dann auf allen Adressen.
         Fehlt eine Adresse später (andere Netzwerkkarte), startet der Dienst trotzdem und meldet es im Protokoll.</p></div>`;
 }
 

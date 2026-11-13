@@ -53,12 +53,15 @@ public static class AdminApi
             s.Server.CertificatePassword = null;
             s.Auth.Entra.ClientSecret = null;
             s.Mail.Password = null;
+            var hasFirmenportalSecret = !string.IsNullOrEmpty(s.Auth.Firmenportal.Secret);
+            s.Auth.Firmenportal.Secret = null;
             return Results.Ok(new
             {
                 settings = s,
                 hasEntraSecret,
                 hasMailPassword,
                 hasGraphSecret,
+                hasFirmenportalSecret,
                 hasEntraLogin = !string.IsNullOrWhiteSpace(s.Auth.Entra.TenantId) && !string.IsNullOrWhiteSpace(s.Auth.Entra.ClientId),
                 entraRedirectUris = CertificateProvider.HostNames(s.Server).Select(h => $"https://{h}:{s.Server.HttpsPort}/signin-oidc"),
                 certificate = certs.Info,
@@ -88,6 +91,7 @@ public static class AdminApi
             s.Mail.GraphClientSecret = req.ClearGraphSecret ? null
                 : !string.IsNullOrEmpty(req.GraphSecret) ? store.Secrets.Protect(req.GraphSecret.Trim())
                 : old.Mail.GraphClientSecret;
+            s.Auth.Firmenportal.Secret = old.Auth.Firmenportal.Secret; // nur über /firmenportal/schluessel änderbar
             s.Server.CertificatePath = old.Server.CertificatePath;         // nur über Zertifikat-Endpunkte änderbar
             s.Server.CertificatePassword = old.Server.CertificatePassword;
             s.Invoice.Units = new Dictionary<string, string>(
@@ -159,6 +163,16 @@ public static class AdminApi
         // Vorschau mit den (auch noch nicht gespeicherten) Werten aus der Oberfläche
         g.MapPost("/stationery/preview", (Stationery st, SettingsStore store) =>
             Results.File(PdfComposer.Preview(st, PdfComposer.StationeryDirectory(store.DataDirectory)), "application/pdf"));
+
+        // ---------- Firmenportal: gemeinsamen Schlüssel erzeugen (wird nur dieses eine Mal angezeigt) ----------
+        g.MapPost("/firmenportal/schluessel", (SettingsStore store) =>
+        {
+            var key = PdfRechnung.Services.HandoverLogin.NewSecret();
+            var s = store.Load();
+            s.Auth.Firmenportal.Secret = store.Secrets.Protect(key);
+            store.Save(s);
+            return Results.Ok(new { key });
+        });
 
         // ---------- Mail-Vorlagen ----------
         g.MapPost("/mailtemplates/logo", async (HttpRequest request, SettingsStore store) =>

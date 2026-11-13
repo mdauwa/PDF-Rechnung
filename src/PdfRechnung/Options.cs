@@ -23,6 +23,23 @@ public sealed class AuthOptions
 {
     /// <summary>Anmeldung der Benutzer mit Microsoft Entra ID (Microsoft-365-Konto).</summary>
     public EntraOptions Entra { get; set; } = new();
+    /// <summary>Anmeldung aus dem Firmenportal übernehmen und Einbettung dort erlauben.</summary>
+    public FirmenportalOptions Firmenportal { get; set; } = new();
+}
+
+/// <summary>
+/// Einbindung in das interne Firmenportal: Das Firmenportal übergibt die Anmeldung mit einem kurzlebigen,
+/// signierten Token (HS256, gemeinsamer Schlüssel) an /auth/firmenportal und darf Belegpost in einem Rahmen anzeigen.
+/// </summary>
+public sealed class FirmenportalOptions
+{
+    public bool Enabled { get; set; }
+    /// <summary>Adresse des Firmenportals, z. B. https://firmenportal.firma.at:5443 – erlaubt die Einbettung (frame-ancestors).</summary>
+    public string Url { get; set; } = "";
+    /// <summary>Gemeinsamer Schlüssel (verschlüsselt gespeichert, Präfix "enc:").</summary>
+    public string? Secret { get; set; }
+    /// <summary>Unbekannte, aber im Token bestätigte Benutzer automatisch anlegen (Sicht: nur eigene Belege).</summary>
+    public bool CreateUsers { get; set; }
 }
 
 /// <summary>App-Registrierung in Microsoft Entra ID (Umleitungs-URI: https://SERVER:PORT/signin-oidc).</summary>

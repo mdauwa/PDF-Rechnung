@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Belegpost Melder: Programm im Infobereich des Benutzer-PCs. Öffnet neu gedruckte eigene Belege sofort im Browser. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>BelegpostMelder</RootNamespace>
+    <AssemblyName>Belegpost-Melder</AssemblyName>
+    <Version>0.1.0</Version>
+    <Product>Belegpost Melder</Product>
+    <Company>Belegpost</Company>
+    <ApplicationIcon>Melder.ico</ApplicationIcon>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+
+  <!-- dotnet publish -c Release → eine Belegpost-Melder.exe inkl. .NET (auf den PCs muss nichts installiert werden) -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Melder.ico" LogicalName="Melder.ico" />
+  </ItemGroup>
+
+</Project>

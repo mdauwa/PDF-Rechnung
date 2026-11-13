@@ -130,14 +130,17 @@ public sealed class DocumentProcessor
 
     public DocumentProcessor(DocumentStore store, IOptionsMonitor<MailOptions> mail, IOptionsMonitor<InvoiceOptions> invoice, ILogger<DocumentProcessor> log,
         IOptionsMonitor<InboxOptions>? inbox = null, IOptionsMonitor<StationeryOptions>? stationery = null, Settings.SettingsStore? settings = null,
-        IOptionsMonitor<MailTemplateOptions>? templates = null)
+        IOptionsMonitor<MailTemplateOptions>? templates = null, Settings.UserStore? users = null, Services.EventHub? events = null)
     {
+        _users = users; _events = events;
         _store = store; _mail = mail; _invoice = invoice; _log = log; _inbox = inbox; _stationery = stationery; _templates = templates;
         _stationeryDir = PdfComposer.StationeryDirectory(settings?.DataDirectory ?? Path.GetDirectoryName(store.Root)!);
     }
 
     private readonly IOptionsMonitor<StationeryOptions>? _stationery;
     private readonly IOptionsMonitor<MailTemplateOptions>? _templates;
+    private readonly Settings.UserStore? _users;
+    private readonly Services.EventHub? _events;
     public MailTemplateOptions Templates => _templates?.CurrentValue ?? new();
     private readonly string _stationeryDir;
 
@@ -188,7 +191,7 @@ public sealed class DocumentProcessor
         return p;
     }
 
-    public Vorgang Process(byte[] pdf, string source, string? fileName, string? user = null, string? machine = null)
+    public Vorgang Process(byte[] pdf, string source, string? fileName, string? user = null, string? machine = null, string? ownerUserId = null)
     {
         var now = DateTimeOffset.Now;
         var v = new Vorgang { Id = DocumentStore.NewId(now), CreatedAt = now, Source = source, OriginalFileName = fileName, PrintUser = user, PrintMachine = machine };
@@ -209,6 +212,12 @@ public sealed class DocumentProcessor
             v.Messages.Add(new CheckMessage(DocumentChecker.Error, "Das PDF konnte nicht gelesen werden: " + ex.Message));
         }
 
+        // Wem gehört der Beleg? @@pu@@ vor Druckauftrag; beim Upload der hochladende Benutzer
+        if (!string.IsNullOrWhiteSpace(p.PrintUser)) v.PrintUser = p.PrintUser.Trim();
+        var owner = ownerUserId is not null ? _users?.FindById(ownerUserId) : _users?.FindByPrintName(v.PrintUser);
+        v.OwnerUserId = owner?.Id ?? ownerUserId;
+        v.OwnerName = owner?.Name;
+
         Fill(v, p, overwriteMail: true);
         var sendPdf = v.Messages.Count == 0 ? Compose(v, pdf, p) : null;
         if (v.Messages.Count == 0) v.Messages = DocumentChecker.Check(v, p, CurrentSettings());
@@ -217,6 +226,14 @@ public sealed class DocumentProcessor
             $"{source}{(fileName is null ? "" : $": {fileName}")} · {v.Pages} Seite(n) · {v.Codes.Count} Steuerzeichen"));
         _store.Create(v, pdf, text, sendPdf);
         _log.LogInformation("Vorgang {Id} angelegt: {Type} {No} → {Status}", v.Id, v.DocumentType, v.VoucherId, v.Status);
+        if (v.OwnerUserId is not null && _events is not null)
+        {
+            var title = string.Join(" ", new[] { v.DocumentType, v.VoucherId }.Where(x => !string.IsNullOrWhiteSpace(x)));
+            if (title.Length == 0) title = v.OriginalFileName ?? "Neuer Beleg";
+            if (!string.IsNullOrWhiteSpace(v.BuyerName)) title += " – " + v.BuyerName;
+            var first = v.Messages.FirstOrDefault(m => m.Level == DocumentChecker.Error)?.Text ?? v.Messages.FirstOrDefault(m => m.Level == DocumentChecker.Warning)?.Text;
+            _events.Publish(v.OwnerUserId, "neu", v.Id, title, v.Status, first);
+        }
         return v;
     }
 

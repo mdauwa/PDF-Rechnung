@@ -56,6 +56,9 @@ public sealed class Vorgang
     public string? OriginalFileName { get; set; }
     public string? PrintUser { get; set; }
     public string? PrintMachine { get; set; }
+    /// <summary>Portal-Benutzer, dem der Beleg gehört (aus Druck-Benutzer, @@pu@@ oder Upload).</summary>
+    public string? OwnerUserId { get; set; }
+    public string? OwnerName { get; set; }
     public int Pages { get; set; }
 
     public string Status { get; set; } = VorgangStatus.Warning;
@@ -104,7 +107,7 @@ public sealed class Vorgang
     public object Summary() => new
     {
         Id, CreatedAt, Source, Status, DocumentType, VoucherId, VoucherDate, BuyerId, BuyerName, GrossAmount, Currency,
-        FormatName, To = Mail.To, Mail.Subject, MailEnabled = Mail.Enabled, ErrorCount, WarningCount, SentAt, SentBy, PrintUser,
+        FormatName, To = Mail.To, Mail.Subject, MailEnabled = Mail.Enabled, ErrorCount, WarningCount, SentAt, SentBy, PrintUser, OwnerUserId, OwnerName,
         FirstMessage = Messages.FirstOrDefault(m => m.Level == DocumentChecker.Error)?.Text ?? Messages.FirstOrDefault(m => m.Level == DocumentChecker.Warning)?.Text
     };
 }

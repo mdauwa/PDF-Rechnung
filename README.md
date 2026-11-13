@@ -32,6 +32,12 @@ Technik und Aufbau sind wie im **Firmenportal**:
 | HTML-Mails im CI: Vorlagen mit Logo, Farben, Schrift, Kopfzeile, Infokasten, Signatur, Fußzeile oder eigenem HTML; Auswahl per `@@pt@@`, Briefpapier, Absender oder Standard; Vorschau in Einstellungen und Vorgang | ✅ |
 | Platzhalter `{Name}` / `{Name\|Ersatztext}` in Betreff, Text, Signatur, Dateiname; eigene Werte per `@@pvName=Wert@@`, Absender per `@@pf@@` | ✅ |
 | Automatische Korrektur kaputter Umlaute/Sonderzeichen (UTF-8 als ANSI, Ersatzzeichen, Ligaturen), `@@mb@@`-Dateien in ANSI oder UTF-8 | ✅ |
+| Wer hat gedruckt: `@@pu…@@` (Windows-/ERP-Benutzer oder ERP-Bedienernummer `007`), Zuordnung zu Portal-Benutzern, „Meine Belege“ | ✅ |
+| Rollen/Sicht: nur eigene, eigene + ausgewählte Kollegen, alle; Admins sehen alles | ✅ |
+| Live-Hinweise: offener Portal-Tab springt zum neuen eigenen Beleg | ✅ |
+| **Belegpost Melder** (`Belegpost-Melder.exe`, Infobereich am PC): öffnet neu gedruckte eigene Belege automatisch im Browser, auch bei Druck aus RDP | ✅ |
+| Einbindung ins Firmenportal mit Übergabe der Anmeldung (signiertes Token), siehe `docs/Firmenportal-Anbindung.md` | ✅ (Firmenportal-Seite folgt) |
+| Druck-Benutzer automatisch aus dem Druckauftrag (mit Drucker-Einrichtung) | ⏳ |
 | `@@af@@`, `@@nd@@`, `@@rpc@@` | ⏳ |
 | PDF/A-3 (Pflicht für ZUGFeRD) | ⏳ mit ZUGFeRD |
 | E-Rechnung erzeugen (ZUGFeRD/Factur-X PDF/A-3, XRechnung, Peppol) | ⏳ – bis dahin meldet ein angefordertes Format **Fehler** (kein Autoversand) |
@@ -117,7 +123,7 @@ Syntax wie bei gotomaxx: `@@` + 2 Zeichen Befehl + Wert + `@@`, eine Zeile, Cour
 | E-Rechnung | `xt` (Format), `xi FELD=Wert`, `xr table=…\|…`, `<<\|…` (Fortsetzung der vorigen Tabellenzeile wie in der ERP-Vorlage), `pe` |
 | Mail | `ml`, `to`/`aa`, `cc`, `bc`, `ed`, `sa`, `mb`, `ma`, `mc`, `md`, `mf` (Dateiname aus der ERP-Vorlage) (`mo`/`ms`/`mp` werden ignoriert – der Server sendet) |
 | Bearbeiten | `bp`, `fn`, `di`, `af`, `ef`, `rpc`, `nd`, `ca`, `cf` (teilweise erst mit dem Druckdienst wirksam) |
-| Eigene (Belegpost) | `pvName=Wert` (Platzhalter), `ptVorlage` (Mail-Vorlage), `pfadresse@firma.at` (Absender) |
+| Eigene (Belegpost) | `pvName=Wert` (Platzhalter), `ptVorlage` (Mail-Vorlage), `pfadresse@firma.at` (Absender), `puBenutzer` (wer gedruckt hat: Windows-/ERP-Name oder Bedienernummer, z. B. `@@pu007@@`) |
 
 ### Mail-Texte, Platzhalter und Vorlagen
 
@@ -152,3 +158,11 @@ docs/                  Konzept und Feldzuordnung
 | PDFsharp | MIT | Versand-PDF: Steuerzeichen entfernen, Briefpapier unterlegen |
 | MailKit | MIT | SMTP (HTML mit eingebettetem Logo) |
 | Microsoft.Extensions.Hosting.WindowsServices, Microsoft.AspNetCore.Authentication.OpenIdConnect | MIT | Windows-Dienst, Microsoft-Anmeldung |
+
+## Belegpost Melder
+
+`src/BelegpostMelder`: kleines Windows-Programm für die Benutzer-PCs (WinForms, .NET 9, eigenständig, keine Adminrechte).
+
+- `dotnet publish src/BelegpostMelder -c Release` erzeugt `Belegpost-Melder.exe`. Die Datei neben `Belegpost.exe` legen, dann bietet das Portal sie unter „Melder & Hinweise“ zum Download an. Bei der Dienst-Installation wird sie mitkopiert.
+- **Koppeln:** Im Portal auf „Melder verbinden“ klicken. Das öffnet den Link `belegpost-melder:koppeln?c=…` im Melder, alternativ den Code einfügen. Pro PC gibt es einen eigenen Zugangsschlüssel, im Portal trennbar. Der Schlüssel liegt mit DPAPI geschützt unter `%APPDATA%\Belegpost\melder.json`.
+- Der Melder startet mit Windows (`HKCU\…\Run`), hält eine Verbindung (`/melder/api/ereignisse`, Server-Sent Events) und öffnet neue eigene Belege im Standardbrowser. Ein selbst signiertes Server-Zertifikat wird über den Fingerabdruck aus der Kopplung angenommen.

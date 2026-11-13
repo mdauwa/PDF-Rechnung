@@ -34,7 +34,7 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 - **Erst normale PDFs, dann ZUGFeRD (13.11.2026):** Zuerst läuft der komplette Weg ohne E-Rechnung: Drucker, Steuerzeichen entfernen, Briefpapier, Versand. ZUGFeRD kommt erst dazu, wenn das stabil funktioniert.
 - **ERP-Ausgabe der Steuerzeichen:** Dass die Steuerzeichen jetzt gedruckt werden, lag an einer internen ERP-Einstellung. Für das Projekt ist das nicht relevant.
 
-## Stand (fertig, getestet, 63 Tests grün)
+## Stand (fertig, getestet, 77 Tests grün)
 
 - **Portal:**
   - Vorgangsliste mit Filtern und Menüzählern
@@ -50,6 +50,23 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 - **Platzhalter:** `{Name}` und `{Name|Ersatztext}`, eingebaute plus eigene per `@@pvName=Wert@@`. Fehlende → Warnung.
 - **Textkorrektur (`TextFixer`):** UTF-8-als-ANSI („Ã¼“), Ersatzzeichen in bekannten Wörtern, NFC, Ligaturen, weiche Trennstriche, Steuerzeichen; `@@mb@@`-Dateien in ANSI/UTF-8. Korrekturen erscheinen als Hinweis.
 - **IP-Bindung:** Einstellungen → Server & Zertifikat → „Gebunden an“; leer = alle Adressen, 127.0.0.1 immer dabei, fehlende Adressen werden beim Start übersprungen (`NetworkBinding`).
+- **Benutzer erkennen und Sicht (13.11.2026):**
+  - `@@pu…@@` gibt an, wer gedruckt hat (Windows-/ERP-Name oder Bedienernummer `007`). Den Druckauftrag-Benutzer liefert später der Drucker.
+  - Zuordnung unter Benutzer: Bediener-Nr., Druck-Benutzer, E-Mail ohne Domäne.
+  - `Vorgang.OwnerUserId`, Menü „Meine Belege“.
+  - Sicht je Benutzer: `eigene`, `auswahl` (+ `AlsoSees`) oder `alle`. Admins sehen alles.
+  - Durchgesetzt per Endpoint-Filter in `VorgangApi`. Belege ohne Zuordnung sehen nur „alle“/Admins.
+- **Live und Melder:**
+  - `EventHub` (SSE mit Nachlieferung für 10 Minuten).
+  - `/api/ereignisse` für offene Tabs: Sprung zum Beleg oder Windows-Benachrichtigung.
+  - `/melder/api/*` mit Bearer-Schlüssel für den **Belegpost Melder** (`src/BelegpostMelder`, WinForms-Tray). Kopplung per Link/Code mit Zertifikats-Fingerabdruck, Autostart, Protokoll `belegpost-melder:`.
+  - Ende-zu-Ende geprüft: Eingangs-PDF mit `@@pu007@@` → Ereignis am Melder-Endpunkt.
+  - Die WinForms-Oberfläche ist unter Windows noch nicht getestet.
+- **Firmenportal:**
+  - Übergabe der Anmeldung per HS256-JWT an `/auth/firmenportal` (`HandoverLogin`, einmalige `jti`, höchstens 5 Minuten).
+  - Einbettung über `frame-ancestors`; Cookie `SameSite=None`, wenn aktiv.
+  - Spezifikation und Beispielcode: `docs/Firmenportal-Anbindung.md`.
+  - Das Firmenportal baut der Benutzer selbst um: **dort nichts ändern**.
 - **Symbol:** eigenes Symbol für EXE, Portal und README (`docs/branding`).
 - **Eingang:** Eingangsordner `C:\ProgramData\Belegpost\eingang` und Upload im Portal.
 - **Steuerzeichen-Auswertung:**

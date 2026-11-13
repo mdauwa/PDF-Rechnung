@@ -77,6 +77,7 @@ builder.Services.Configure<MailTemplateOptions>(builder.Configuration.GetSection
 builder.Services.AddSingleton(sp => new RuntimeControl(sp.GetRequiredService<IHostApplicationLifetime>(), isService));
 
 // ---- Vorgänge ----
+builder.Services.AddSingleton<EventHub>();
 builder.Services.AddSingleton<DocumentStore>();
 builder.Services.AddSingleton<DocumentProcessor>();
 builder.Services.AddSingleton<SendService>();
@@ -125,7 +126,8 @@ var authBuilder = builder.Services.AddAuthentication(o =>
     o.Cookie.Name = "belegpost.auth";
     o.Cookie.HttpOnly = true;
     o.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-    o.Cookie.SameSite = SameSiteMode.Lax;
+    // Eingebettet im Firmenportal (iframe, andere Herkunft) braucht der Browser SameSite=None
+    o.Cookie.SameSite = settings.Auth.Firmenportal.Enabled ? SameSiteMode.None : SameSiteMode.Lax;
     o.ExpireTimeSpan = TimeSpan.FromHours(10);
     o.SlidingExpiration = true;
     o.Events.OnRedirectToLogin = c => { c.Response.StatusCode = 401; return Task.CompletedTask; };
@@ -185,6 +187,16 @@ if (server.EnableHttp && server.RedirectHttpToHttps) app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Einbettung nur im eigenen Portal und – falls eingerichtet – im Firmenportal
+app.Use(async (ctx, next) =>
+{
+    var fp = ctx.RequestServices.GetRequiredService<IOptionsMonitor<AuthOptions>>().CurrentValue.Firmenportal;
+    var origin = fp.Enabled ? HandoverLogin.Origin(fp.Url) : null;
+    ctx.Response.Headers["Content-Security-Policy"] = "frame-ancestors 'self'" + (origin is null ? "" : " " + origin);
+    ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    await next();
+});
+
 // Schnittstellen nur mit Anmeldung; verändernde Aufrufe nur mit eigenem Header (CSRF-Schutz bei Cookie-Anmeldung)
 app.Use(async (ctx, next) =>
 {
@@ -228,6 +240,7 @@ app.MapGet("/api/portal", (IOptionsSnapshot<PortalOptions> portal, HttpContext c
         isAdmin = a.IsAdmin,
         isLocalAdmin = a.IsLocalAdmin,
         canSend = a.CanSend,
+        userId = a.UserId,
         setupMode = rt.SetupMode,
         mailEnabled = a.Authenticated && mail.Value.Enabled,
         autoSend = a.Authenticated && mail.Value.Enabled && mail.Value.AutoSend,
@@ -237,6 +250,7 @@ app.MapGet("/api/portal", (IOptionsSnapshot<PortalOptions> portal, HttpContext c
 });
 
 VorgangApi.Map(app);
+MelderApi.Map(app);
 AuthApi.Map(app);
 AdminApi.Map(app);
 

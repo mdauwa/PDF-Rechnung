@@ -13,10 +13,26 @@ public static class VorgangApi
     public static void Map(WebApplication app)
     {
         var g = app.MapGroup("/api/vorgaenge");
-
-        g.MapGet("", (string? status, string? q, string? from, string? to, DocumentStore store) =>
+        // Sichtbarkeit: Vorgänge anderer Benutzer gibt es für Benutzer mit eingeschränkter Sicht nicht (404)
+        g.AddEndpointFilter(async (ctx, next) =>
         {
-            var list = store.All().AsEnumerable();
+            if (ctx.HttpContext.Request.RouteValues.TryGetValue("id", out var idObj) && idObj is string id)
+            {
+                var sp = ctx.HttpContext.RequestServices;
+                var a = sp.GetRequiredService<PortalAccess>().For(ctx.HttpContext);
+                var v = sp.GetRequiredService<DocumentStore>().Get(id);
+                if (v is not null && !a.CanSee(v)) return Results.NotFound();
+            }
+            return await next(ctx);
+        });
+
+        g.MapGet("", (string? status, string? q, string? from, string? to, string? mine, DocumentStore store, PortalAccess access, HttpContext ctx) =>
+        {
+            var acc = access.For(ctx);
+            var me = acc.UserId;
+            var visibleAll = store.All().Where(acc.CanSee).ToList();
+            var list = visibleAll.AsEnumerable();
+            if (mine is "1" or "true") list = list.Where(v => me is not null && v.OwnerUserId == me);
             if (!string.IsNullOrWhiteSpace(status))
             {
                 var set = status.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet();
@@ -31,12 +47,13 @@ public static class VorgangApi
                 list = list.Where(v => Has(v.VoucherId) || Has(v.BuyerName) || Has(v.BuyerId) || Has(v.Mail.Subject)
                     || v.Mail.To.Any(Has) || Has(v.OriginalFileName) || Has(v.PrintUser) || Has(v.Id));
             }
-            var all = store.All();
+            var all = visibleAll;
             var today = DateOnly.FromDateTime(DateTime.Today);
             return Results.Ok(new
             {
                 items = list.Take(2000).Select(v => v.Summary()),
                 counts = VorgangStatus.All.ToDictionary(s => s, s => all.Count(v => v.Status == s)),
+                mine = me is null ? 0 : all.Count(v => v.OwnerUserId == me && v.Status is not (VorgangStatus.Sent or VorgangStatus.Discarded)),
                 sentToday = all.Count(v => v.SentAt is { } sa && DateOnly.FromDateTime(sa.LocalDateTime) == today)
             });
         });
@@ -174,13 +191,14 @@ public static class VorgangApi
             }
         });
 
-        g.MapPost("/senden", async (BulkSendRequest req, SendService send, PortalAccess access, HttpContext ctx, CancellationToken ct) =>
+        g.MapPost("/senden", async (BulkSendRequest req, SendService send, DocumentStore store, PortalAccess access, HttpContext ctx, CancellationToken ct) =>
         {
             var a = access.For(ctx);
             if (!a.CanSend) return Forbidden();
             var results = new List<object>();
             foreach (var id in req.Ids.Distinct())
             {
+                if (store.Get(id) is not { } vv || !a.CanSee(vv)) { results.Add(new { id, ok = false, message = "Nicht gefunden." }); continue; }
                 var (ok, msg) = await send.SendAsync(id, a.Name, force: false, ct);
                 results.Add(new { id, ok, message = msg });
             }
@@ -201,7 +219,7 @@ public static class VorgangApi
                 var bytes = ms.ToArray();
                 if (bytes.Length < 5 || bytes[0] != '%' || bytes[1] != 'P' || bytes[2] != 'D' || bytes[3] != 'F')
                     return Results.BadRequest(new { error = $"{f.FileName} ist keine PDF-Datei." });
-                var v = proc.Process(bytes, "Upload", Path.GetFileName(f.FileName), a.Name);
+                var v = proc.Process(bytes, "Upload", Path.GetFileName(f.FileName), a.Name, null, a.UserId);
                 created.Add(v.Summary());
             }
             return created.Count == 0 ? Results.BadRequest(new { error = "Keine Datei ausgewählt." }) : Results.Ok(new { created });

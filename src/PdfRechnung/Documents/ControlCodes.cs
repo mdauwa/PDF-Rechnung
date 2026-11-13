@@ -46,6 +46,8 @@ public sealed class ParsedCodes
     public string? MailTemplate { get; set; }
     /// <summary><c>@@pf adresse@firma.at@@</c>: Absenderadresse dieses Belegs.</summary>
     public string? Sender { get; set; }
+    /// <summary>@@pu benutzer@@ – wer gedruckt hat (Windows- oder ERP-Benutzer); überschreibt den Benutzer des Druckauftrags.</summary>
+    public string? PrintUser { get; set; }
 
     // ---- Bearbeiten / Allgemein ----
     public string? Stationery { get; set; }
@@ -143,6 +145,7 @@ public static partial class ControlCodeParser
             }
             case "pt": r.MailTemplate = t.Length > 0 ? t : null; break;
             case "pf": r.Sender = t.Length > 0 ? t : null; break;
+            case "pu": r.PrintUser = t.Length > 0 ? t : null; break;
 
             // ---------- Mail ----------
             case "ml": r.MailEnabled = t != "0"; break;

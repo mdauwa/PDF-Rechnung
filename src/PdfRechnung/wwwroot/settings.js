@@ -172,6 +172,13 @@ async function onAction(e) {
         if (await confirmDialog("Dienst entfernen", "Den Windows-Dienst wirklich entfernen? Einstellungen und Vorgänge bleiben erhalten.", "Entfernen", true)) await serviceAction("uninstall");
         break;
       case "cert-upload": await uploadCert(); break;
+      case "fp-key": {
+        if (ST.data.hasFirmenportalSecret && !await confirmDialog("Neuen Schlüssel erzeugen",
+          "Der bisherige Schlüssel gilt danach nicht mehr – das Firmenportal braucht dann den neuen.", "Neu erzeugen", true)) break;
+        const r = await api("POST", "api/admin/firmenportal/schluessel");
+        ST.data.hasFirmenportalSecret = true;
+        ST.fpKey = r.key; drawTab(); break;
+      }
       case "cert-self":
         if (await confirmDialog("Zertifikat", "Eigenes Zertifikat entfernen und wieder das selbst signierte verwenden?", "Zurücksetzen")) {
           await api("POST", "api/admin/certificate/selfsigned"); restartHint("Zertifikat zurückgesetzt."); await loadSettings();
@@ -239,7 +246,7 @@ async function onAction(e) {
       case "unit-add": ST.s.invoice.units[""] = ""; drawTab(); document.querySelector('.unit .key[value=""]')?.focus(); break;
       case "unit-del": delete ST.s.invoice.units[btn.dataset.key]; markDirty(); drawTab(); break;
       case "user-add":
-        ST.users.users.push({ id: "", name: "", email: "", logins: [], canSend: true, isAdmin: false, active: true });
+        ST.users.users.push({ id: "", name: "", email: "", logins: [], printNames: [], operatorNumbers: [], visibility: "eigene", alsoSees: [], canSend: true, isAdmin: false, active: true });
         ST.usersDirty = true; drawTab(); break;
       case "user-del": {
         const u = ST.users.users[+btn.dataset.i];
@@ -791,7 +798,11 @@ function tabUsers() {
   const fmtLogin = d => d ? new Date(d).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–";
   return section("Benutzer",
     `<p class="help">Anmeldung mit dem Microsoft-365-Konto (E-Mail-Adresse). <b>Versenden</b> = darf Versanddaten ändern, senden und verwerfen; ohne dieses Recht nur ansehen.
-      <b>Admin</b> = zusätzlich Einstellungen. <b>Aktiv</b> abgewählt = keine Anmeldung.</p>
+      <b>Admin</b> = zusätzlich Einstellungen. <b>Aktiv</b> abgewählt = keine Anmeldung.
+      <b>ERP-Bediener-Nr.</b> = dreistellige Bedienernummer aus dem ERP; im Druck <code>@@pu007@@</code> (führende Nullen egal).
+      <b>Druck-Benutzer</b> = Windows- oder ERP-Benutzer dieser Person (aus dem Druckauftrag oder <code>@@pu…@@</code>). Ohne Eintrag wird der Anmeldename ohne Domäne verglichen.
+      So landet ein gedruckter Beleg bei „Meine Belege“ und öffnet sich über den Melder auf dem PC dieser Person.
+      <b>Sieht Belege</b>: nur eigene, eigene plus die ausgewählter Kollegen (z. B. Vertretung, Sekretariat) oder alle. Admins sehen immer alle; Belege ohne zugeordneten Benutzer sehen nur „alle“ und Admins.</p>
     ${U.users.length ? `<div class="table-wrap"><table class="list mini users"><thead><tr><th>Name</th><th>E-Mail (Anmeldename)</th><th>Weitere Anmeldenamen</th>
       <th>Versenden</th><th>Admin</th><th>Aktiv</th><th>Letzte Anmeldung</th><th></th></tr></thead><tbody>
       ${U.users.map((u, i) => `<tr class="${u.active ? "" : "inactive"}">
@@ -802,22 +813,74 @@ function tabUsers() {
         <td><input type="checkbox" data-u="${i}|isAdmin" ${u.isAdmin ? "checked" : ""}></td>
         <td><input type="checkbox" data-u="${i}|active" ${u.active ? "checked" : ""}></td>
         <td class="meta-inline">${fmtLogin(u.lastLogin)}</td>
-        <td><button class="icon-btn" data-st="user-del" data-i="${i}" title="Entfernen">✕</button></td></tr>`).join("")}
+        <td><button class="icon-btn" data-st="user-del" data-i="${i}" title="Entfernen">✕</button></td></tr>
+        <tr class="user-sub ${u.active ? "" : "inactive"}"><td colspan="8"><div class="user-sub-grid">
+          <label>ERP-Bediener-Nr.<input data-u="${i}|operatorNumbers" value="${esc((u.operatorNumbers || []).join(", "))}" placeholder="z. B. 007" inputmode="numeric"></label>
+          <label>Druck-Benutzer (Windows/ERP)<input data-u="${i}|printNames" value="${esc((u.printNames || []).join(", "))}" placeholder="z. B. FIRMA\\mmuster"></label>
+          <label>Sieht Belege<select data-u="${i}|visibility" ${u.isAdmin ? "disabled" : ""}>
+            ${[["eigene", "nur eigene"], ["auswahl", "eigene + ausgewählte Benutzer"], ["alle", "alle"]].map(([k, t]) =>
+              `<option value="${k}" ${(u.isAdmin ? "alle" : (u.visibility || "eigene")) === k ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+          ${!u.isAdmin && u.visibility === "auswahl" ? `<div class="user-also"><span>zusätzlich die Belege von:</span>
+            ${U.users.filter(o => o !== u && o.id).map(o => `<label class="check"><input type="checkbox" data-also="${i}" value="${esc(o.id)}" ${(u.alsoSees || []).includes(o.id) ? "checked" : ""}> ${esc(o.name || o.email)}</label>`).join("") || '<span class="meta-inline">(neue Benutzer erst speichern)</span>'}</div>` : ""}
+        </div></td></tr>`).join("")}
       </tbody></table></div>` : `<p class="meta">Noch keine Benutzer. Bis dahin ist nur die Anmeldung als Administrator direkt am Server möglich.</p>`}
     <div class="actions"><button class="btn" data-st="users-save" ${ST.usersDirty ? "" : "disabled"}>Benutzer speichern</button></div>`,
     `<button class="btn ghost" data-st="user-add">+ Benutzer</button>`);
 }
 
+function markUsersDirty() {
+  ST.usersDirty = true;
+  const b = document.querySelector('[data-st="users-save"]');
+  if (b) b.disabled = false;
+}
+
 function onUsersInput(el, e) {
+  if (el.dataset.also !== undefined) {
+    const u = ST.users.users[+el.dataset.also];
+    u.alsoSees = (u.alsoSees || []).filter(x => x !== el.value);
+    if (el.checked) u.alsoSees.push(el.value);
+    markUsersDirty(); return true;
+  }
   if (!el.dataset.u) return false;
   const [i, k] = el.dataset.u.split("|"), u = ST.users.users[+i];
-  if (k === "logins") u.logins = el.value.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
-  else if (el.type === "checkbox") u[k] = el.checked;
+  if (k === "operatorNumbers") u.operatorNumbers = el.value.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
+  else if (k === "visibility") { u.visibility = el.value; markUsersDirty(); drawTab(); return true; }
+  else if (k === "printNames") u.printNames = el.value.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
+  else if (k === "logins") u.logins = el.value.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
+  else if (el.type === "checkbox") { u[k] = el.checked; if (k === "isAdmin" || k === "active") { markUsersDirty(); drawTab(); return true; } }
   else u[k] = el.value;
   ST.usersDirty = true;
   const b = document.querySelector('[data-st="users-save"]');
   if (b) b.disabled = false;
   return true;
+}
+
+/* ---------------- Tab: Anmeldung → Firmenportal ---------------- */
+
+function tabFirmenportal() {
+  const f = ST.s.auth.firmenportal ||= { enabled: false, url: "", createUsers: false };
+  const base = `https://${(ST.data.hostNames || ["SERVER"])[0]}:${ST.s.server.httpsPort}`;
+  return section("Einbindung ins Firmenportal",
+    `${inCheck("auth.firmenportal.enabled", "Anmeldung aus dem Firmenportal übernehmen und Einbettung erlauben")}
+     ${field("Adresse des Firmenportals", inText("auth.firmenportal.url", "https://firmenportal.firma.at:5443"),
+       "Nur diese Seite darf Belegpost in einem Rahmen (iframe) anzeigen.")}
+     ${inCheck("auth.firmenportal.createUsers", "Unbekannte Benutzer beim ersten Aufruf automatisch anlegen (sehen nur eigene Belege)")}
+     <div class="plain-field"><span class="lbl">Gemeinsamer Schlüssel</span>
+       ${ST.fpKey ? `<div class="melder-code">${esc(ST.fpKey)}</div>
+           <p class="help"><b>Jetzt kopieren</b> und im Firmenportal hinterlegen – er wird nur dieses eine Mal angezeigt.</p>`
+         : `<p class="meta">${ST.data.hasFirmenportalSecret ? "Schlüssel ist hinterlegt." : "Noch kein Schlüssel."}</p>`}
+       <div class="actions"><button class="btn ghost" data-st="fp-key">${ST.data.hasFirmenportalSecret ? "Neuen Schlüssel erzeugen" : "Schlüssel erzeugen"}</button></div></div>
+     <details><summary>So bindet das Firmenportal Belegpost ein</summary>
+       <ol class="steps">
+         <li>Das Firmenportal erzeugt für den angemeldeten Benutzer ein JWT (HS256, obiger Schlüssel) mit
+           <code>iss = "Firmenportal"</code>, <code>aud = "Belegpost"</code>, <code>email</code> (bzw. <code>upn</code>), <code>name</code>,
+           <code>jti</code> (einmalig), <code>iat</code> und <code>exp</code> (höchstens 5 Minuten).</li>
+         <li>Aufruf oder iframe-Quelle: <code>${esc(base)}/auth/firmenportal?token=…&amp;ziel=%2F%23%2Fvorgaenge%3Ff%3Dmeine</code></li>
+         <li>Belegpost meldet den Benutzer an (Zuordnung über E-Mail/Anmeldename unter „Benutzer“) und zeigt das Ziel an, z. B. einen Vorgang:
+           <code>ziel=/#/vorgang?id=…</code>.</li>
+       </ol>
+       <p class="help">Details und Beispielcode: <code>docs/Firmenportal-Anbindung.md</code>. Nach dem Ändern den Dienst neu starten (Cookie-Einstellung für die Einbettung).</p>
+     </details>`);
 }
 
 /* ---------------- Tab: Anmeldung ---------------- */
@@ -846,6 +909,7 @@ function tabAuth() {
          <li>Speichern und Dienst neu starten. Danach können sich alle unter „Benutzer“ angelegten Personen anmelden.</li>
        </ol>
      </div>`) +
+    tabFirmenportal() +
     section("Administrator direkt am Server",
       portal.isLocalAdmin
         ? `<p class="help">Mit diesem Kennwort meldest du dich direkt am Server (<code>https://localhost:${ST.s.server.httpsPort}</code>) an – auch wenn die Microsoft-Anmeldung einmal nicht funktioniert.</p>

@@ -15,7 +15,8 @@ const ICONS = {
   upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   back: '<path d="M15 6l-6 6 6 6"/>',
-  doc: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>'
+  doc: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
+  bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/>'
 };
 const icon = name => `<svg viewBox="0 0 24 24">${ICONS[name] || ICONS.doc}</svg>`;
 const store = {
@@ -42,6 +43,7 @@ async function api(method, url, body, isForm) {
 let portal = { title: "Belegpost" };
 
 const MENU = [
+  { key: "vorgaenge", title: "Meine Belege", icon: "doc", filter: "meine", needsUser: true },
   { key: "vorgaenge", title: "Zu prüfen", icon: "alert", filter: "offen" },
   { key: "vorgaenge", title: "Alle Vorgänge", icon: "inbox", filter: "alle" },
   { key: "vorgaenge", title: "Versendet", icon: "send", filter: "versendet" },
@@ -63,14 +65,17 @@ async function loadPortal() {
 function renderMenu() {
   if (!portal.authenticated) { $("#menu").innerHTML = ""; return; }
   let html = `<div class="menu-group">Vorgänge</div>`;
-  html += MENU.map(m => `<a href="#/${m.key}?f=${m.filter}" data-key="${m.key}:${m.filter}">${icon(m.icon)}<span>${esc(m.title)}</span><span class="menu-count" data-count="${m.filter}"></span></a>`).join("");
+  html += MENU.filter(m => !m.needsUser || portal.userId).map(m => `<a href="#/${m.key}?f=${m.filter}" data-key="${m.key}:${m.filter}">${icon(m.icon)}<span>${esc(m.title)}</span><span class="menu-count" data-count="${m.filter}"></span></a>`).join("");
+  if (portal.userId) html += `<div class="menu-group">Persönlich</div><a href="#/melder" data-key="melder">${icon("bell")}<span>Melder &amp; Hinweise</span><span class="menu-dot" id="liveDot" title="Live-Verbindung"></span></a>`;
   if (portal.isAdmin) html += `<div class="menu-group">System</div><a href="#/einstellungen" data-key="einstellungen">${icon("settings")}<span>Einstellungen</span></a>`;
   $("#menu").innerHTML = html;
 }
 
 /** Zähler im Menü (wird von der Vorgangsliste aktualisiert). */
-function updateMenuCounts(counts) {
+function updateMenuCounts(counts, extra) {
   const open = (counts.fehler || 0) + (counts.warnung || 0) + (counts.versandfehler || 0) + (counts.bereit || 0);
+  const mine = document.querySelector('[data-count="meine"]');
+  if (mine) mine.textContent = counts.mine || "";
   const el = document.querySelector('[data-count="offen"]');
   if (el) { el.textContent = open || ""; el.classList.toggle("alert", (counts.fehler || 0) + (counts.versandfehler || 0) > 0); }
 }
@@ -84,7 +89,8 @@ const VIEWS = {
   anmeldung: { title: "Anmeldung", render: v => renderLogin(v) },
   vorgaenge: { title: "Vorgänge", render: v => renderVorgaenge(v) },
   vorgang: { title: "Vorgang", render: v => renderVorgang(v) },
-  einstellungen: { title: "Einstellungen", render: v => renderSettings(v) }
+  einstellungen: { title: "Einstellungen", render: v => renderSettings(v) },
+  melder: { title: "Melder & Hinweise", render: v => renderMelder(v) }
 };
 
 function route() {
@@ -116,12 +122,47 @@ function route() {
 }
 
 async function init() {
+  // Im Firmenportal eingebettet: eigene Kopfzeile/Marke ausblenden
+  try { if (window.top !== window.self) document.body.classList.add("embedded"); } catch { document.body.classList.add("embedded"); }
   await loadPortal();
+  startLive();
   $("#menu").addEventListener("click", e => { if (e.target.closest("a")) toggleSidebar(false); });
   $("#menuToggle").onclick = () => toggleSidebar(true);
   $("#backdrop").onclick = () => toggleSidebar(false);
   window.addEventListener("hashchange", route);
   route();
+}
+
+/* ---------------- Live-Hinweise (neuer Beleg von mir gedruckt) ---------------- */
+
+let live = null;
+function startLive() {
+  if (live || !portal.authenticated || !portal.userId || !window.EventSource) return;
+  live = new EventSource("api/ereignisse");
+  live.onopen = () => $("#liveDot")?.classList.add("on");
+  live.onerror = () => $("#liveDot")?.classList.remove("on");
+  live.addEventListener("beleg", e => {
+    let ev; try { ev = JSON.parse(e.data); } catch { return; }
+    const target = "#/vorgang?id=" + encodeURIComponent(ev.id);
+    const auto = store.get("live.auto", true);
+    if (auto && !document.hidden) { location.hash = target; toast(ev.title + " – geöffnet"); return; }
+    if (store.get("live.notify", false) && window.Notification && Notification.permission === "granted" && document.hidden) {
+      const n = new Notification(ev.title, { body: ev.text || "Neuer Beleg – zum Öffnen klicken", tag: ev.id });
+      n.onclick = () => { window.focus(); location.hash = target; n.close(); };
+    }
+    if (auto && document.hidden) { location.hash = target; return; }
+    liveToast(ev, target);
+  });
+}
+
+function liveToast(ev, target) {
+  const t = document.createElement("div");
+  t.className = "toast ok live";
+  t.innerHTML = `<b>${esc(ev.title)}</b>${ev.text ? `<div>${esc(ev.text)}</div>` : ""}<button class="btn small">Öffnen</button>`;
+  t.querySelector("button").onclick = () => { location.hash = target; t.remove(); };
+  document.body.appendChild(t);
+  setTimeout(() => t.classList.add("out"), 12000);
+  setTimeout(() => t.remove(), 12800);
 }
 
 /* ---------------- Anmeldung ---------------- */
@@ -134,7 +175,8 @@ async function renderLogin(view) {
   try { ziel = sessionStorage.getItem("belegpost.ziel"); } catch { }
   const loginUrl = "auth/login?returnUrl=" + encodeURIComponent("/" + (ziel || ""));
   // Direktlink von außen (z. B. nach dem Druck): gleich zur Microsoft-Anmeldung – meist ohne Eingabe (SSO)
-  if (ziel && st.entraEnabled && !st.isLocal && !q.get("fehler") && !q.get("abgemeldet")) { location.href = loginUrl; return; }
+  const embedded = document.body.classList.contains("embedded");
+  if (ziel && st.entraEnabled && !st.isLocal && !embedded && !q.get("fehler") && !q.get("abgemeldet")) { location.href = loginUrl; return; }
   const err = q.get("fehler");
   const errText = err === "nicht-freigeschaltet"
     ? `Das Konto <b>${esc(q.get("konto") || "")}</b> ist im Portal nicht freigeschaltet. Bitte an einen Administrator wenden.`
@@ -153,7 +195,7 @@ async function renderLogin(view) {
   } else {
     body = `<h2>Anmeldung</h2>
       ${q.get("abgemeldet") ? `<p class="meta">Du wurdest abgemeldet.</p>` : ""}
-      ${st.entraEnabled ? `<a class="btn ms-btn" href="${esc(loginUrl)}"><span class="ms-logo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Mit Microsoft anmelden</a>`
+      ${st.entraEnabled ? `${embedded ? `<p class="meta">Die Anmeldung ist abgelaufen – bitte Belegpost im Firmenportal neu öffnen.</p>` : ""}<a class="btn ms-btn" href="${esc(loginUrl)}" ${embedded ? 'target="_top"' : ""}><span class="ms-logo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Mit Microsoft anmelden</a>`
         : `<p class="meta">Die Anmeldung mit Microsoft ist noch nicht eingerichtet${st.isLocal ? " (Einstellungen → Anmeldung)" : " – bitte an einen Administrator wenden"}.</p>`}
       ${st.isLocal ? `<div class="login-sep"><span>oder direkt am Server</span></div>
       <form id="loginForm" class="login-form">

@@ -89,6 +89,9 @@ public static class ServiceManager
         foreach (var f in Directory.EnumerateFiles(src).Where(f => f.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
                      || f.EndsWith(".config", StringComparison.OrdinalIgnoreCase)))
             CopyWithRetry(f, Path.Combine(dst, Path.GetFileName(f)));
+        // Melder für die Benutzer-PCs (wird im Portal zum Download angeboten)
+        var melder = Path.Combine(src, PdfRechnung.Services.MelderApi.ExeName);
+        if (File.Exists(melder)) CopyWithRetry(melder, Path.Combine(dst, PdfRechnung.Services.MelderApi.ExeName));
         foreach (var dir in new[] { "wwwroot", "sql" })
         {
             var from = Path.Combine(src, dir);

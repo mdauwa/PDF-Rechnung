@@ -16,6 +16,7 @@ const STATUS = {
 };
 const FILTERS = {
   offen: { title: "Zu prüfen", status: "fehler,warnung,bereit,versandfehler,inVersand" },
+  meine: { title: "Meine Belege", status: "", mine: true },
   alle: { title: "Alle Vorgänge", status: "" },
   versendet: { title: "Versendet", status: "versendet" },
   verworfen: { title: "Verworfen", status: "verworfen" }
@@ -64,6 +65,7 @@ async function renderVorgaenge(view) {
     const p = new URLSearchParams();
     const st = $("#vlStatus")?.value || f.status;
     if (st) p.set("status", st);
+    if (f.mine) p.set("mine", "1");
     const s = $("#vlSearch").value.trim(); if (s) p.set("q", s);
     if ($("#vlFrom").value) p.set("from", $("#vlFrom").value);
     if ($("#vlTo").value) p.set("to", $("#vlTo").value);
@@ -153,7 +155,7 @@ function drawTable() {
       <th>Eingang</th><th>Beleg</th><th>Kunde</th><th class="num">Betrag</th><th>Empfänger</th><th>E-Rechnung</th><th>Status</th></tr></thead>
     <tbody>${rows.map(v => `<tr data-id="${esc(v.id)}" class="st-${esc(v.status)}">
       ${canSel ? `<td class="cb">${selectable(v) ? `<input type="checkbox" data-id="${esc(v.id)}" ${VL.selected.has(v.id) ? "checked" : ""}>` : ""}</td>` : ""}
-      <td class="nowrap">${fmtDT(v.createdAt)}<small>${esc(v.printUser || v.source)}</small></td>
+      <td class="nowrap">${fmtDT(v.createdAt)}<small>${esc(v.ownerName || v.printUser || v.source)}</small></td>
       <td><b>${esc(v.documentType)} ${esc(v.voucherId || "")}</b><small>${esc(v.voucherDate || "")}</small></td>
       <td>${esc(v.buyerName || "")}<small>${esc(v.buyerId || "")}</small></td>
       <td class="num nowrap">${fmtMoney(v.grossAmount, v.currency)}</td>
@@ -223,7 +225,8 @@ function drawVorgang(view, data) {
       <div class="vd-pdf card">
         <div class="card-head"><h2>Vorschau</h2>
           ${data.hasSendPdf ? `<div class="pdf-switch"><button data-pdf="versand" class="active">Versand-PDF</button><button data-pdf="original">Original</button></div>` : ""}
-          <span class="meta-inline">${v.pages} Seite(n) · ${esc(v.source)}${v.originalFileName ? " · " + esc(v.originalFileName) : ""}</span></div>
+          <span class="meta-inline">${v.pages} Seite(n) · ${esc(v.source)}${v.originalFileName ? " · " + esc(v.originalFileName) : ""}
+            ${v.printUser || v.ownerName ? ` · gedruckt von ${esc(v.ownerName || v.printUser)}${v.ownerName && v.printUser && v.printUser !== v.ownerName ? ` (${esc(v.printUser)})` : ""}${v.printUser && !v.ownerUserId ? ' <span class="badge partial" title="Diesem Druck-Benutzer ist kein Portal-Benutzer zugeordnet (Einstellungen → Benutzer → Druck-Benutzer)">nicht zugeordnet</span>' : ""}` : ""}</span></div>
         <iframe id="vdFrame" src="api/vorgaenge/${encodeURIComponent(v.id)}/pdf#view=FitH" title="PDF-Vorschau"></iframe>
         <p class="help" id="vdPdfHelp">${data.hasSendPdf
           ? `Versand-PDF: so geht der Beleg hinaus – ${v.removedCodes ? `${v.removedCodes} Steuerzeichen entfernt` : "keine Steuerzeichen"}${v.stationery ? `, Briefpapier „${esc(v.stationery)}“` : ", ohne Briefpapier"}.`

@@ -63,6 +63,36 @@ public static class AuthApi
             return Results.Ok(new { ok = true });
         });
 
+        // Anmeldung aus dem Firmenportal übernehmen (signiertes Übergabe-Token)
+        app.MapGet("/auth/firmenportal", async (string? token, string? ziel, HttpContext ctx, UserStore users, SettingsStore store,
+            Microsoft.Extensions.Options.IOptionsMonitor<AuthOptions> auth, ILoggerFactory lf) =>
+        {
+            var fp = auth.CurrentValue.Firmenportal;
+            var target = !string.IsNullOrEmpty(ziel) && ziel.StartsWith('/') && !ziel.StartsWith("//") ? ziel : "/";
+            string Err(string e) => "/#/anmeldung?fehler=" + Uri.EscapeDataString(e);
+            var secret = store.Secrets.Unprotect(fp.Secret);
+            if (!fp.Enabled || string.IsNullOrEmpty(secret)) return Results.Redirect(Err("Die Anmeldung über das Firmenportal ist nicht eingerichtet."));
+            var r = HandoverLogin.Validate(token, secret);
+            var log = lf.CreateLogger("Anmeldung");
+            if (!r.Ok) { log.LogWarning("Firmenportal-Übergabe abgelehnt: {Fehler}", r.Error); return Results.Redirect(Err(r.Error!)); }
+            var user = users.FindByLogin(r.Names);
+            if (user is null && fp.CreateUsers && r.Names.FirstOrDefault(n => n.Contains('@')) is { } mail)
+            {
+                user = new PortalUser { Id = Guid.NewGuid().ToString("N")[..12], Name = r.DisplayName ?? mail, Email = mail, CanSend = true, Visibility = "eigene" };
+                var created = user;
+                users.Update(d => d.Users.Add(created));
+                log.LogInformation("Benutzer {Mail} beim ersten Aufruf aus dem Firmenportal angelegt", mail);
+            }
+            if (user is null || !user.Active)
+            {
+                log.LogWarning("Firmenportal-Übergabe ohne Freigabe: {Login}", r.Names[0]);
+                return Results.Redirect("/#/anmeldung?fehler=nicht-freigeschaltet&konto=" + Uri.EscapeDataString(r.Names[0]));
+            }
+            await ctx.SignInAsync(PortalAccess.Scheme, PortalAccess.Principal("firmenportal", user.Name, user.Id, r.Names[0]));
+            users.TouchLogin(user.Id);
+            return Results.Redirect(target);
+        });
+
         app.MapGet("/auth/login", (string? returnUrl, HttpContext ctx) =>
         {
             if (!EntraConfiguredAtStartup) return Results.Redirect("/#/anmeldung?fehler=" + Uri.EscapeDataString("Die Anmeldung mit Microsoft ist nicht eingerichtet."));
@@ -100,7 +130,17 @@ public static class AuthApi
                 u.Logins = u.Logins.Where(l => !string.IsNullOrWhiteSpace(l)).Select(l => l.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
                 if (u.Name.Length == 0) errors.Add("Jeder Benutzer braucht einen Namen.");
                 if (u.Email is null && u.Logins.Count == 0) errors.Add($"„{u.Name}“: bitte E-Mail-Adresse (Microsoft-Anmeldename) eintragen.");
+                u.PrintNames = (u.PrintNames ?? new()).Where(l => !string.IsNullOrWhiteSpace(l)).Select(l => l.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                u.OperatorNumbers = (u.OperatorNumbers ?? new()).Where(l => !string.IsNullOrWhiteSpace(l)).Select(l => l.Trim()).Distinct().ToList();
+                foreach (var n in u.OperatorNumbers.Where(n => UserStore.OperatorNumber(n) is null))
+                    errors.Add($"„{u.Name}“: Bedienernummer „{n}“ bitte nur mit Ziffern (z. B. 007).");
+                u.Visibility = u.Visibility is "auswahl" or "alle" ? u.Visibility : "eigene";
+                u.AlsoSees = (u.AlsoSees ?? new()).Where(id => id != u.Id && list.Any(o => o.Id == id)).Distinct().ToList();
             }
+            var dupNo = list.SelectMany(u => u.OperatorNumbers.Select(n => (No: UserStore.OperatorNumber(n), u.Name))).Where(x => x.No is not null)
+                .GroupBy(x => x.No).Where(x => x.Select(y => y.Name).Distinct().Count() > 1)
+                .Select(x => $"{x.Key:000} ({string.Join(", ", x.Select(y => y.Name).Distinct())})").ToList();
+            if (dupNo.Count > 0) errors.Add("Bedienernummer mehrfach vergeben: " + string.Join("; ", dupNo));
             var dupes = list.SelectMany(u => u.AllLogins()).GroupBy(l => l, StringComparer.OrdinalIgnoreCase).Where(x => x.Count() > 1).Select(x => x.Key).ToList();
             if (dupes.Count > 0) errors.Add("Anmeldename mehrfach vergeben: " + string.Join(", ", dupes));
             var me = access.For(ctx);

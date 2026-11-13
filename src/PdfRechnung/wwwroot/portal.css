@@ -108,3 +108,26 @@ textarea.mono { font-family: Consolas, "Cascadia Mono", monospace; font-size: 12
 .mail-preview { border: 1px solid var(--border, #e2e5ea); border-radius: 8px; overflow: hidden; margin-top: 10px; }
 .mail-preview-head { padding: 8px 12px; background: var(--bg-soft, #f6f7f9); font-size: 13px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .mail-preview iframe { width: 100%; height: 560px; border: 0; background: #fff; display: block; }
+
+/* Benutzer: zweite Zeile */
+table.users tr.user-sub td { border-top: 0; padding-top: 0; padding-bottom: 12px; }
+.user-sub-grid { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: flex-end; font-size: 12.5px; color: var(--muted, #6b7280); }
+.user-sub-grid label:not(.check) { display: flex; flex-direction: column; gap: 3px; }
+.user-sub-grid input:not([type=checkbox]) { width: 200px; }
+.user-also { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; width: 100%; }
+
+/* Live-Hinweise, Melder */
+.menu-dot { width: 8px; height: 8px; border-radius: 50%; background: #c4c9d2; margin-left: auto; flex: none; }
+.menu-dot.on { background: #1f9d55; }
+.toast.live { display: flex; flex-direction: column; gap: 6px; max-width: 360px; }
+.toast.live .btn { align-self: flex-start; }
+.melder-code { font-family: Consolas, monospace; font-size: 12px; word-break: break-all; background: var(--bg-soft, #f6f7f9); padding: 8px 10px; border-radius: 6px; }
+.steps { margin: 0; padding-left: 20px; } .steps li { margin: 6px 0; }
+.view > .card + .card { margin-top: 16px; }
+.card-body { padding: 14px 0; }
+.field.inline { display: inline-flex; flex-direction: column; margin-right: 8px; vertical-align: bottom; }
+.field.inline input { width: 220px; }
+
+/* Eingebettet im Firmenportal */
+body.embedded .sidebar .brand { display: none; }
+body.embedded .sidebar-foot a[href="auth/logout"] { display: none; }

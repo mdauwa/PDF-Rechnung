@@ -1,0 +1,10 @@
+bin/
+obj/
+.vs/
+*.user
+appsettings.*.local.json
+publish/
+
+# Lokaler Projektordner: fertige Ausgabe und Ablagen nicht versionieren
+Ausgabe/
+Claude outputs/

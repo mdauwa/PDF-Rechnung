@@ -1,0 +1,14 @@
+# Zeilenenden automatisch normalisieren (im Repo LF, unter Windows CRLF beim Auschecken)
+* text=auto
+
+# Windows-typische Dateien immer mit CRLF
+*.sln     text eol=crlf
+*.csproj  text eol=crlf
+*.bat     text eol=crlf
+*.cmd     text eol=crlf
+
+# Binärdateien nie verändern
+*.pfx     binary
+*.cer     binary
+*.png     binary
+*.ico     binary

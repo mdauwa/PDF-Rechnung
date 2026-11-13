@@ -1,14 +1,17 @@
 namespace BelegpostMelder;
 
-/// <summary>Symbol im Infobereich mit Menü; zeigt neue Belege an und öffnet sie im Browser.</summary>
+/// <summary>Symbol im Infobereich mit Menü; zeigt neue Belege als eigene Meldung an und öffnet sie im Browser.</summary>
 public sealed class TrayContext : ApplicationContext
 {
     private readonly MelderConfig _cfg = MelderConfig.Load();
     private readonly MelderClient _client;
     private readonly NotifyIcon _icon;
-    private readonly ToolStripMenuItem _status, _auto, _autostart, _openLast, _openPortal, _disconnect;
+    private readonly ToolStripMenuItem _status, _auto, _autostart, _openLast, _openPortal;
     private readonly WindowsFormsSynchronizationContext _ui;
-    private string? _balloonPath;
+    private MainWindow? _window;
+
+    public MelderState State => _client.State;
+    public string StatusText { get; private set; } = "";
 
     public TrayContext(bool startedHidden)
     {
@@ -16,53 +19,68 @@ public sealed class TrayContext : ApplicationContext
         SynchronizationContext.SetSynchronizationContext(_ui);
         _client = new MelderClient(_cfg);
 
+        var head = new ToolStripMenuItem("Belegpost Melder öffnen", null, (_, _) => ShowWindow()) { Font = new Font(Theme.Body, FontStyle.Bold) };
         _status = new ToolStripMenuItem("…") { Enabled = false };
-        _openPortal = new ToolStripMenuItem("Portal öffnen", null, (_, _) => Open("/"));
-        _openLast = new ToolStripMenuItem("Letzten Beleg öffnen", null, (_, _) => { if (_cfg.LastDocumentPath is { } p) Open(p); });
+        _openPortal = new ToolStripMenuItem("Portal öffnen", null, (_, _) => OpenPath("/"));
+        _openLast = new ToolStripMenuItem("Letzten Beleg öffnen", null, (_, _) => { if (_cfg.LastDocumentPath is { } p) OpenPath(p); });
         _auto = new ToolStripMenuItem("Neue Belege automatisch öffnen", null, (_, _) => { _cfg.AutoOpen = !_cfg.AutoOpen; _cfg.Save(); Refresh(); });
         _autostart = new ToolStripMenuItem("Mit Windows starten", null, (_, _) => { try { Program.Autostart = !Program.Autostart; } catch { } Refresh(); });
-        _disconnect = new ToolStripMenuItem("Verbindung trennen", null, (_, _) => Disconnect());
-        var menu = new ContextMenuStrip();
+        var menu = new ContextMenuStrip
+        {
+            Renderer = new MenuRenderer(), Font = Theme.Body, ShowImageMargin = true,
+            Padding = new Padding(0, 4, 0, 4)
+        };
         menu.Items.AddRange(new ToolStripItem[]
         {
-            _status, new ToolStripSeparator(), _openPortal, _openLast, new ToolStripSeparator(), _auto, _autostart,
-            new ToolStripSeparator(), new ToolStripMenuItem("Verbinden …", null, (_, _) => AskPairing()), _disconnect,
+            head, _status, new ToolStripSeparator(), _openPortal, _openLast, new ToolStripSeparator(), _auto, _autostart,
             new ToolStripSeparator(), new ToolStripMenuItem("Beenden", null, (_, _) => ExitThread())
         });
+        foreach (ToolStripItem i in menu.Items) if (i is ToolStripMenuItem) i.Padding = new Padding(4, 5, 4, 5);
 
-        _icon = new NotifyIcon
+        _icon = new NotifyIcon { Icon = AppIcon(16), Text = "Belegpost Melder", ContextMenuStrip = menu, Visible = true };
+        _icon.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) ShowWindow(); };
+
+        _client.StateChanged += (s, text) => Post(() =>
         {
-            Icon = LoadIcon(),
-            Text = "Belegpost Melder",
-            ContextMenuStrip = menu,
-            Visible = true
-        };
-        _icon.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) ShowStatus(); };
-        _icon.BalloonTipClicked += (_, _) => { if (_balloonPath is { } p) Open(p); };
-
-        _client.StateChanged += (s, text) => Post(() => { _status.Text = text; _icon.Text = Short("Belegpost Melder – " + text); Refresh(); });
+            StatusText = text;
+            _status.Text = text.Length > 60 ? text[..59] + "…" : text;
+            _icon.Text = s switch
+            {
+                MelderState.Connected => "Belegpost Melder – verbunden",
+                MelderState.NotPaired => "Belegpost Melder – nicht verbunden",
+                MelderState.Rejected => "Belegpost Melder – bitte neu verbinden",
+                _ => "Belegpost Melder – keine Verbindung"
+            };
+            Refresh();
+        });
         _client.Received += e => Post(() => OnBeleg(e));
 
         Refresh();
         if (_cfg.Paired) _client.Start();
-        else if (!startedHidden) Post(AskPairing);
-        else _status.Text = "Nicht verbunden – Rechtsklick → Verbinden …";
+        else
+        {
+            StatusText = "Noch nicht verbunden.";
+            if (!startedHidden) Post(() => Window.ShowPairing());
+        }
     }
 
     public void Post(Action a) => _ui.Post(_ => a(), null);
 
-    private static Icon LoadIcon()
+    private MainWindow Window => _window is { IsDisposed: false } ? _window : _window = new MainWindow(this, _cfg);
+
+    private void ShowWindow() { Window.RefreshView(); Window.BringUp(); }
+
+    /// <summary>Programmsymbol in der gewünschten Größe (aus der eingebetteten .ico).</summary>
+    public static Icon AppIcon(int size)
     {
         try
         {
             using var s = typeof(TrayContext).Assembly.GetManifestResourceStream("Melder.ico");
-            if (s is not null) return new Icon(s, SystemInformation.SmallIconSize);
+            if (s is not null) return new Icon(s, new Size(size, size));
         }
         catch { }
-        return SystemIcons.Application;
+        return (Icon)SystemIcons.Application.Clone();
     }
-
-    private static string Short(string s) => s.Length > 63 ? s[..62] + "…" : s; // NotifyIcon.Text max. 63 Zeichen
 
     private void Refresh()
     {
@@ -70,11 +88,11 @@ public sealed class TrayContext : ApplicationContext
         try { _autostart.Checked = Program.Autostart; } catch { }
         _openPortal.Enabled = _cfg.Paired;
         _openLast.Enabled = _cfg.Paired && _cfg.LastDocumentPath is not null;
-        _disconnect.Enabled = _cfg.Paired;
         if (!_cfg.Paired) _status.Text = "Nicht verbunden";
+        if (_window is { IsDisposed: false, Visible: true }) _window.RefreshView();
     }
 
-    private void Open(string path)
+    public void OpenPath(string path)
     {
         if (_cfg.Server is null) return;
         Program.OpenUrl(_cfg.Server.TrimEnd('/') + (path.StartsWith('/') ? path : "/" + path));
@@ -83,65 +101,78 @@ public sealed class TrayContext : ApplicationContext
     private void OnBeleg(BelegEvent e)
     {
         Refresh();
-        _balloonPath = e.Path;
-        var warn = e.Status is "fehler" or "warnung" or "versandfehler";
-        if (_cfg.AutoOpen) Open(e.Path);
-        _icon.ShowBalloonTip(8000, e.Title.Length > 0 ? e.Title : "Neuer Beleg",
-            (e.Text ?? (e.Status switch { "bereit" => "Bereit zum Versand", "fehler" => "Bitte prüfen – Fehler", "warnung" => "Bitte prüfen", _ => "Neuer Beleg" }))
-            + (_cfg.AutoOpen ? "" : "\nKlicken zum Öffnen"),
-            warn ? ToolTipIcon.Warning : ToolTipIcon.Info);
-    }
-
-    public void ShowStatus()
-    {
-        if (!_cfg.Paired) { AskPairing(); return; }
-        _icon.ShowBalloonTip(4000, "Belegpost Melder", _status.Text ?? "", ToolTipIcon.Info);
+        var kind = e.Status switch
+        {
+            "fehler" or "versandfehler" => ToastWindow.Kinds.Bad,
+            "warnung" => ToastWindow.Kinds.Warn,
+            "bereit" or "versendet" => ToastWindow.Kinds.Ok,
+            _ => ToastWindow.Kinds.Info
+        };
+        var text = e.Text ?? e.Status switch
+        {
+            "bereit" => "Bereit zum Versand.",
+            "fehler" => "Bitte prüfen – der Beleg hat einen Fehler.",
+            "warnung" => "Bitte prüfen.",
+            "ohneVersand" => "Ohne E-Mail-Versand.",
+            _ => "Neuer Beleg."
+        };
+        var title = e.Title.Length > 0 ? e.Title : "Neuer Beleg";
+        if (_cfg.AutoOpen)
+        {
+            OpenPath(e.Path);
+            ToastWindow.Show(title, text + "\nIm Browser geöffnet.", kind, null, seconds: 6);
+        }
+        else ToastWindow.Show(title, text, kind, () => OpenPath(e.Path));
     }
 
     /// <summary>Link aus dem Portal („Im Melder übernehmen“) oder anderer Aufruf.</summary>
     public void HandleLink(string link)
     {
         var p = PairingData.Parse(link);
-        if (p is null) { ShowStatus(); return; }
-        _ = Pair(p);
+        if (p is null) { ShowWindow(); return; }
+        _ = Pair(p, quiet: false);
     }
 
-    private void AskPairing()
-    {
-        using var f = new PairForm(_cfg.Server);
-        if (f.ShowDialog() == DialogResult.OK && PairingData.Parse(f.Code) is { } p) _ = Pair(p);
-        else if (f.DialogResult == DialogResult.OK) MessageBox.Show("Der Code ist ungültig. Bitte im Portal unter „Melder & Hinweise“ neu erzeugen.", "Belegpost Melder", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-    }
+    public void ShowStatus() => ShowWindow();
 
-    private async Task Pair(PairingData p)
+    public async Task<bool> Pair(PairingData p, bool quiet)
     {
-        _status.Text = "Prüfe Verbindung zu " + p.Server + " …";
+        StatusText = "Prüfe Verbindung zu " + p.Server + " …";
+        Refresh();
         try
         {
             var (user, title) = await MelderClient.Hello(p.Server, p.Token, p.Thumbprint);
             _client.Stop();
             _cfg.Server = p.Server; _cfg.Token = p.Token; _cfg.Thumbprint = p.Thumbprint;
-            _cfg.UserName = user; _cfg.PortalTitle = title; _cfg.LastSeq = null;
+            _cfg.UserName = user; _cfg.PortalTitle = title; _cfg.LastSeq = null; _cfg.LastDocumentPath = null;
             _cfg.Save();
             try { if (!Program.Autostart) Program.Autostart = true; } catch { }
-            Refresh();
             _client.Start();
-            _icon.ShowBalloonTip(6000, "Belegpost Melder verbunden", $"Angemeldet als {user}. Neu gedruckte Belege öffnen sich ab jetzt automatisch.", ToolTipIcon.Info);
+            Refresh();
+            ToastWindow.Show("Melder verbunden", $"Angemeldet als {user}. Neu gedruckte Belege öffnen sich ab jetzt hier.", ToastWindow.Kinds.Ok, null, seconds: 6);
+            return true;
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Verbinden hat nicht geklappt:\n\n" + ex.Message, "Belegpost Melder", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            StatusText = ex.Message;
             Refresh();
+            if (!quiet) { ShowWindow(); }
+            ToastWindow.Show("Verbinden hat nicht geklappt", ex.Message, ToastWindow.Kinds.Bad, null, seconds: 12);
+            return false;
         }
     }
 
-    private void Disconnect()
+    public bool Disconnect()
     {
-        if (MessageBox.Show("Diesen PC vom Portal trennen?", "Belegpost Melder", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        if (MessageBox.Show(_window, "Diesen PC vom Portal trennen?\nNeue Belege werden dann nicht mehr gemeldet.", "Belegpost Melder",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return false;
         _client.Stop();
         _cfg.Token = null; _cfg.LastSeq = null; _cfg.LastDocumentPath = null;
         _cfg.Save();
+        _client.Start(); // meldet „nicht verbunden“
+        StatusText = "Getrennt.";
         Refresh();
+        return true;
     }
 
     protected override void ExitThreadCore()
@@ -149,41 +180,7 @@ public sealed class TrayContext : ApplicationContext
         _client.Dispose();
         _icon.Visible = false;
         _icon.Dispose();
+        _window?.Dispose();
         base.ExitThreadCore();
-    }
-}
-
-/// <summary>Kleiner Dialog zum Einfügen des Kopplungscodes.</summary>
-internal sealed class PairForm : Form
-{
-    private readonly TextBox _code = new() { Multiline = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, Font = new Font("Consolas", 9f) };
-    public string Code => _code.Text;
-
-    public PairForm(string? server)
-    {
-        Text = "Belegpost Melder verbinden";
-        StartPosition = FormStartPosition.CenterScreen;
-        Size = new Size(520, 300);
-        MinimizeBox = MaximizeBox = false;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        TopMost = true;
-        var info = new Label
-        {
-            Dock = DockStyle.Top, Height = 70, Padding = new Padding(4),
-            Text = "Im Portal links „Melder & Hinweise“ öffnen, „Melder verbinden“ klicken und den angezeigten Code hier einfügen."
-                   + (server is null ? "" : $"\nBisher verbunden mit: {server}")
-        };
-        var ok = new Button { Text = "Verbinden", DialogResult = DialogResult.OK, Width = 110 };
-        var cancel = new Button { Text = "Abbrechen", DialogResult = DialogResult.Cancel, Width = 110 };
-        var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 42, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(4) };
-        buttons.Controls.AddRange(new Control[] { cancel, ok });
-        var body = new Panel { Dock = DockStyle.Fill, Padding = new Padding(8, 0, 8, 0) };
-        body.Controls.Add(_code);
-        Controls.Add(body); Controls.Add(buttons); Controls.Add(info);
-        AcceptButton = ok; CancelButton = cancel;
-        Shown += (_, _) =>
-        {
-            try { if (Clipboard.ContainsText() && PairingData.Parse(Clipboard.GetText()) is not null) _code.Text = Clipboard.GetText(); } catch { }
-        };
     }
 }

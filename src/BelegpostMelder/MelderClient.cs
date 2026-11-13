@@ -108,7 +108,7 @@ public sealed class MelderClient : IDisposable
                     continue;
                 }
                 res.EnsureSuccessStatusCode();
-                Set(MelderState.Connected, $"Verbunden als {_cfg.UserName} ({_cfg.PortalTitle})");
+                Set(MelderState.Connected, "Wartet auf neue Belege – druckst du im ERP, erscheint der Beleg hier.");
                 delay = TimeSpan.FromSeconds(3);
                 await ReadStream(await res.Content.ReadAsStreamAsync(ct), ct);
                 Set(MelderState.Offline, "Verbindung beendet – verbinde neu …");

@@ -20,8 +20,8 @@ public static class ServiceManager
     /// <summary>Interner Dienstname (sc.exe, Registry).</summary>
     public const string ServiceName = "Belegpost";
     /// <summary>Anzeigename in der Diensteverwaltung.</summary>
-    public const string DisplayName = "Belegpost";
-    private const string FirewallRule = "Belegpost";
+    public const string DisplayName = "Belegpost Portal";
+    private const string FirewallRule = "Belegpost Portal";
     /// <summary>Name vor der Umbenennung – wird bei der Installation entfernt.</summary>
     private const string LegacyServiceName = "PdfRechnung", LegacyFirewallRule = "PDF Rechnung";
 

@@ -20,7 +20,7 @@ Technik und Aufbau sind wie im **Firmenportal**:
 |---|---|
 | Portal: Vorgangsliste, Filter, PDF-Vorschau, Prüfung, Versanddaten bearbeiten, Senden, Massenversand, Verwerfen, Verlauf | ✅ |
 | Autoversand korrekter Vorgänge (Einstellung, mit Wartezeit) | ✅ |
-| E-Mail-Versand per SMTP (z. B. Microsoft 365), Testmail | ✅ |
+| E-Mail-Versand über Microsoft 365 (Graph-API, App-Registrierung mit Mail.Send, große Anlagen per Upload-Sitzung) oder SMTP, Testmail | ✅ |
 | Eingangsordner (jede PDF-Datei → Vorgang), Upload im Portal | ✅ |
 | Steuerzeichen lesen (gotomaxx-kompatibel, inkl. ERP-Vorlage SEBELK/SEBELP) | ✅ |
 | Prüfung: Pflichtfelder EN 16931/XRechnung, Summen und Steuer nachgerechnet, Einheiten, Empfänger | ✅ |

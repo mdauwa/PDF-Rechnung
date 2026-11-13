@@ -6,7 +6,7 @@
    ========================================================= */
 
 const ST = { data: null, s: null, tab: store.get("st.tab", "dienst"), dirty: false, service: null,
-  entraSecret: "", clearEntraSecret: false, mailPassword: "", clearMailPassword: false, users: null, usersDirty: false, mailTest: null };
+  entraSecret: "", clearEntraSecret: false, mailPassword: "", clearMailPassword: false, graphSecret: "", clearGraphSecret: false, users: null, usersDirty: false, mailTest: null };
 
 const TABS = [
   ["dienst", "Dienst"],
@@ -55,7 +55,7 @@ async function renderSettings(view) {
 async function loadSettings() {
   ST.data = await api("GET", "api/admin/settings");
   ST.s = structuredClone(ST.data.settings);
-  ST.dirty = false; ST.entraSecret = ""; ST.clearEntraSecret = false; ST.mailPassword = ""; ST.clearMailPassword = false;
+  ST.dirty = false; ST.entraSecret = ""; ST.clearEntraSecret = false; ST.mailPassword = ""; ST.clearMailPassword = false; ST.graphSecret = ""; ST.clearGraphSecret = false;
   const setup = $("#stSetup");
   setup.hidden = !ST.data.setupMode;
   setup.innerHTML = "<b>Einrichtungsmodus.</b> Das Programm wurde per Doppelklick gestartet und ist nur an diesem Rechner erreichbar. " +
@@ -103,6 +103,7 @@ function onInput(e) {
   if (ST.tab === "benutzer" && onUsersInput(el, e)) return;
   if (el.dataset.entrasecret !== undefined) { ST.entraSecret = el.value; markDirty(); return; }
   if (el.dataset.mailpw !== undefined) { ST.mailPassword = el.value; markDirty(); return; }
+  if (el.dataset.graphsecret !== undefined) { ST.graphSecret = el.value; markDirty(); return; }
   if (el.dataset.unit !== undefined) {
     if (e.type !== "change") return;
     const units = ST.s.invoice.units, old = el.dataset.unit, row = el.closest(".unit");
@@ -146,10 +147,14 @@ async function onAction(e) {
         break;
       case "entra-clear": ST.clearEntraSecret = !ST.clearEntraSecret; markDirty(); drawTab(); break;
       case "mail-clear": ST.clearMailPassword = !ST.clearMailPassword; markDirty(); drawTab(); break;
+      case "graph-clear": ST.clearGraphSecret = !ST.clearGraphSecret; markDirty(); drawTab(); break;
+      case "graph-from-login":
+        ST.s.mail.graphTenantId = ST.s.auth.entra?.tenantId || ""; ST.s.mail.graphClientId = ST.s.auth.entra?.clientId || "";
+        markDirty(); drawTab(); break;
       case "mail-test": {
         const to = $("#mailTestTo").value.trim();
         ST.mailTest = { loading: true, to }; drawTab();
-        try { ST.mailTest = { ...(await api("POST", "api/admin/mail-test", { mail: ST.s.mail, password: ST.mailPassword || null, to })), to }; }
+        try { ST.mailTest = { ...(await api("POST", "api/admin/mail-test", { mail: ST.s.mail, password: ST.mailPassword || null, graphSecret: ST.graphSecret || null, to })), to }; }
         catch (err) { ST.mailTest = { ok: false, message: err.message, to }; }
         drawTab();
         break;
@@ -190,7 +195,8 @@ async function onAction(e) {
 async function save() {
   const r = await api("PUT", "api/admin/settings", { settings: ST.s,
     entraSecret: ST.entraSecret || null, clearEntraSecret: ST.clearEntraSecret,
-    mailPassword: ST.mailPassword || null, clearMailPassword: ST.clearMailPassword });
+    mailPassword: ST.mailPassword || null, clearMailPassword: ST.clearMailPassword,
+    graphSecret: ST.graphSecret || null, clearGraphSecret: ST.clearGraphSecret });
   await loadSettings();
   if (r.restartRequired) restartHint("Gespeichert.");
   else msg("Gespeichert – die Änderungen sind sofort aktiv.", true);
@@ -358,11 +364,46 @@ function tabInbox() {
 /* ---------------- Tab: E-Mail & Versand ---------------- */
 
 function tabMail() {
+  const m = ST.s.mail;
+  const graph = m.transport === "Graph";
   const pwPh = ST.data.hasMailPassword && !ST.clearMailPassword ? "•••••••• (gespeichert – leer lassen = unverändert)" : "Kennwort des Postfachs";
+  const gsPh = ST.data.hasGraphSecret && !ST.clearGraphSecret ? "•••••••• (gespeichert – leer lassen = unverändert)" : "Wert des geheimen Clientschlüssels";
   const t = ST.mailTest;
   const ph = (ST.data.placeholders || []).map(p => `<code>${esc(p)}</code>`).join(" ");
-  return section("SMTP-Server",
-    `${inCheck("mail.enabled", "E-Mail-Versand aktivieren")}
+  const sender = `<div class="grid2">
+       ${field("Absenderadresse", inText("mail.fromAddress", "rechnung@firma.at"), graph ? "Postfach in Microsoft 365, in dessen Namen gesendet wird." : "")}
+       ${field("Absendername", inText("mail.fromName", "Firma GmbH – Buchhaltung"))}
+       ${field("Antwort an (optional)", inText("mail.replyTo", "buchhaltung@firma.at"))}
+       ${field("Kopie jeder Mail an (BCC, optional)", inText("mail.copyTo", "archiv@firma.at"))}
+     </div>`;
+  const test = `<div class="actions">
+       <input type="email" id="mailTestTo" placeholder="Testmail an …" value="${esc(t?.to || "")}" style="max-width:260px">
+       <button class="btn ghost" data-st="mail-test">Testmail senden</button>
+       ${t?.loading ? '<span class="meta-inline">sende …</span>' : t ? `<span class="badge ${t.ok ? "ok" : "missing"}">${esc(t.message)}</span>` : ""}
+     </div>
+     <p class="help">Die Testmail verwendet die Werte oben – auch wenn sie noch nicht gespeichert sind.</p>`;
+
+  const graphBox = `
+     <div class="grid2">
+       ${field("Verzeichnis-ID (Mandanten-ID)", inText("mail.graphTenantId", "z. B. 0a1b2c3d-… oder firma.at"))}
+       ${field("Anwendungs-ID (Client-ID)", inText("mail.graphClientId", "z. B. 9f8e7d6c-…"))}
+     </div>
+     ${field("Geheimer Clientschlüssel", `<input type="password" data-graphsecret autocomplete="new-password" placeholder="${gsPh}" ${ST.clearGraphSecret ? "disabled" : ""}>`,
+       "Wird verschlüsselt gespeichert. Clientschlüssel laufen ab (max. 24 Monate) – rechtzeitig erneuern.")}
+     ${ST.data.hasGraphSecret ? `<label class="check"><input type="checkbox" data-st="graph-clear" ${ST.clearGraphSecret ? "checked" : ""}> gespeicherten Schlüssel entfernen</label>` : ""}
+     ${ST.data.hasEntraLogin ? `<div class="actions"><button class="btn ghost" data-st="graph-from-login">IDs aus „Anmeldung“ übernehmen</button><span class="meta-inline">dieselbe App-Registrierung verwenden; der Schlüssel muss hier extra eingetragen werden</span></div>` : ""}
+     ${inCheck("mail.graphSaveToSentItems", "Versendete Mails im Postfach unter „Gesendete Elemente“ ablegen")}
+     <div class="help-box">
+       <b>Einrichtung in Microsoft Entra</b> (entra.microsoft.com → Identität → Anwendungen → App-Registrierungen):
+       <ol>
+         <li><b>App-Registrierung</b> anlegen (oder die der Anmeldung verwenden) – Kontotyp <i>Nur dieses Organisationsverzeichnis</i>.</li>
+         <li><b>API-Berechtigungen</b> → Berechtigung hinzufügen → Microsoft Graph → <b>Anwendungsberechtigungen</b> → <code>Mail.Send</code> → anschließend <b>Administratorzustimmung erteilen</b>.</li>
+         <li><b>Zertifikate &amp; Geheimnisse</b> → Neuer geheimer Clientschlüssel → den <i>Wert</i> oben eintragen; Mandanten- und Client-ID aus der Übersicht.</li>
+         <li><b>Empfohlen:</b> Die App nur für das Absenderpostfach freigeben (Exchange Online: <i>RBAC für Anwendungen</i> bzw. Application Access Policy) – sonst dürfte sie im Namen jedes Postfachs senden.</li>
+       </ol>
+       Mails über Graph brauchen kein SMTP und kein Postfach-Kennwort; große Anlagen (über 3 MB) werden automatisch in Teilen hochgeladen.
+     </div>`;
+  const smtpBox = `
      <div class="grid3">
        ${field("Server", inText("mail.host", "smtp.office365.com"))}
        ${field("Port", inNum("mail.port", 1))}
@@ -373,19 +414,16 @@ function tabMail() {
        ${field("Kennwort", `<input type="password" data-mailpw autocomplete="new-password" placeholder="${pwPh}" ${ST.clearMailPassword ? "disabled" : ""}>`)}
      </div>
      ${ST.data.hasMailPassword ? `<label class="check"><input type="checkbox" data-st="mail-clear" ${ST.clearMailPassword ? "checked" : ""}> gespeichertes Kennwort entfernen</label>` : ""}
-     <div class="grid2">
-       ${field("Absenderadresse", inText("mail.fromAddress", "rechnung@firma.at"))}
-       ${field("Absendername", inText("mail.fromName", "Firma GmbH – Buchhaltung"))}
-       ${field("Antwort an (optional)", inText("mail.replyTo", "buchhaltung@firma.at"))}
-       ${field("Kopie jeder Mail an (BCC, optional)", inText("mail.copyTo", "archiv@firma.at"))}
-     </div>
-     <p class="help">Microsoft 365: Server <code>smtp.office365.com</code>, Port 587, STARTTLS; für das Postfach muss „Authentifiziertes SMTP“ erlaubt sein.</p>
-     <div class="actions">
-       <input type="email" id="mailTestTo" placeholder="Testmail an …" value="${esc(t?.to || "")}" style="max-width:260px">
-       <button class="btn ghost" data-st="mail-test">Testmail senden</button>
-       ${t?.loading ? '<span class="meta-inline">sende …</span>' : t ? `<span class="badge ${t.ok ? "ok" : "missing"}">${esc(t.message)}</span>` : ""}
-     </div>
-     <p class="help">Die Testmail verwendet die Werte oben – auch wenn sie noch nicht gespeichert sind.</p>`) +
+     <p class="help">Für Microsoft 365 ist die Versandart „Microsoft 365 (Graph)“ empfohlen – SMTP mit Kennwort (SMTP AUTH) wird von Microsoft schrittweise abgeschaltet.</p>`;
+
+  return section("Versand",
+    `${inCheck("mail.enabled", "E-Mail-Versand aktivieren")}
+     <div class="grid2">${field("Versandart", `<select data-path="mail.transport" data-redraw="1">
+        <option value="Graph" ${graph ? "selected" : ""}>Microsoft 365 / Exchange Online (Graph-API)</option>
+        <option value="Smtp" ${!graph ? "selected" : ""}>SMTP-Server</option></select>`)}</div>
+     ${graph ? graphBox : smtpBox}
+     ${sender}
+     ${test}`) +
     section("Autoversand",
       `${inCheck("mail.autoSend", "Korrekte Vorgänge automatisch versenden")}
        <div class="grid2">
@@ -396,7 +434,7 @@ function tabMail() {
     section("Vorlagen",
       `${field("Betreff (wenn kein @@ed@@ gedruckt wurde)", inText("mail.defaultSubject"))}
        ${field("Mailtext (wenn kein @@sa@@ gedruckt wurde)", inArea("mail.defaultBody", 6))}
-       ${field("Dateiname des Anhangs (wenn kein @@fn@@ gedruckt wurde)", inText("mail.defaultFileName"))}
+       ${field("Dateiname des Anhangs (wenn kein @@fn@@/@@mf@@ gedruckt wurde)", inText("mail.defaultFileName"))}
        <p class="help">Platzhalter: ${ph}</p>`);
 }
 

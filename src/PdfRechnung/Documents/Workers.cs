@@ -49,7 +49,7 @@ public sealed class SendService
             _store.Update(id, x => { x.Status = VorgangStatus.Sending; x.SendAttempts++; return true; });
             try
             {
-                await MailSender.SendAsync(o, _settings.Secrets.Unprotect(o.Password), mail, ct);
+                await MailSender.SendAsync(o, new MailSecrets(_settings.Secrets.Unprotect(o.Password), _settings.Secrets.Unprotect(o.GraphClientSecret)), mail, ct);
             }
             catch (Exception ex)
             {

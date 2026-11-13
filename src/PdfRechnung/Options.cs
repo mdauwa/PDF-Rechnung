@@ -74,6 +74,18 @@ public sealed class InboxOptions
 public sealed class MailOptions
 {
     public bool Enabled { get; set; }
+    /// <summary>Versandart: "Smtp" oder "Graph" (Microsoft 365 / Exchange Online über Microsoft Graph).</summary>
+    public string Transport { get; set; } = "Smtp";
+
+    // ---- Microsoft Graph (App-Registrierung mit Anwendungsberechtigung Mail.Send) ----
+    public string GraphTenantId { get; set; } = "";
+    public string GraphClientId { get; set; } = "";
+    /// <summary>Geheimer Clientschlüssel (verschlüsselt gespeichert, Präfix "enc:").</summary>
+    public string? GraphClientSecret { get; set; }
+    /// <summary>Versendete Mails im Ordner „Gesendete Elemente“ des Absenderpostfachs ablegen.</summary>
+    public bool GraphSaveToSentItems { get; set; } = true;
+
+    // ---- SMTP ----
     public string Host { get; set; } = "";
     public int Port { get; set; } = 587;
     /// <summary>Auto, StartTls, SslOnConnect, None.</summary>

@@ -12,9 +12,12 @@ public sealed class SaveSettingsRequest
     /// <summary>Neues SMTP-Kennwort; leer = unverändert.</summary>
     public string? MailPassword { get; set; }
     public bool ClearMailPassword { get; set; }
+    /// <summary>Neuer Clientschlüssel für Microsoft Graph (Mailversand); leer = unverändert.</summary>
+    public string? GraphSecret { get; set; }
+    public bool ClearGraphSecret { get; set; }
 }
 
-public sealed record MailTestRequest(MailOptions? Mail, string? Password, string? To);
+public sealed record MailTestRequest(MailOptions? Mail, string? Password, string? To, string? GraphSecret = null);
 
 /// <summary>Einstellungs-API. Zugriff: lokaler Administrator (Kennwort, direkt am Server) oder Portal-Administrator.</summary>
 public static class AdminApi
@@ -44,6 +47,8 @@ public static class AdminApi
             var s = store.Load();
             var hasEntraSecret = !string.IsNullOrEmpty(s.Auth.Entra.ClientSecret);
             var hasMailPassword = !string.IsNullOrEmpty(s.Mail.Password);
+            var hasGraphSecret = !string.IsNullOrEmpty(s.Mail.GraphClientSecret);
+            s.Mail.GraphClientSecret = null;
             s.Server.CertificatePassword = null;
             s.Auth.Entra.ClientSecret = null;
             s.Mail.Password = null;
@@ -52,6 +57,8 @@ public static class AdminApi
                 settings = s,
                 hasEntraSecret,
                 hasMailPassword,
+                hasGraphSecret,
+                hasEntraLogin = !string.IsNullOrWhiteSpace(s.Auth.Entra.TenantId) && !string.IsNullOrWhiteSpace(s.Auth.Entra.ClientId),
                 entraRedirectUris = CertificateProvider.HostNames(s.Server).Select(h => $"https://{h}:{s.Server.HttpsPort}/signin-oidc"),
                 certificate = certs.Info,
                 hostNames = CertificateProvider.HostNames(s.Server),
@@ -76,6 +83,9 @@ public static class AdminApi
             s.Mail.Password = req.ClearMailPassword ? null
                 : !string.IsNullOrEmpty(req.MailPassword) ? store.Secrets.Protect(req.MailPassword)
                 : old.Mail.Password;
+            s.Mail.GraphClientSecret = req.ClearGraphSecret ? null
+                : !string.IsNullOrEmpty(req.GraphSecret) ? store.Secrets.Protect(req.GraphSecret.Trim())
+                : old.Mail.GraphClientSecret;
             s.Server.CertificatePath = old.Server.CertificatePath;         // nur über Zertifikat-Endpunkte änderbar
             s.Server.CertificatePassword = old.Server.CertificatePassword;
             s.Invoice.Units = new Dictionary<string, string>(
@@ -94,10 +104,11 @@ public static class AdminApi
             var saved = store.Load().Mail;
             var o = req.Mail ?? saved;
             var pw = !string.IsNullOrEmpty(req.Password) ? req.Password : store.Secrets.Unprotect(saved.Password);
+            var graph = !string.IsNullOrEmpty(req.GraphSecret) ? req.GraphSecret.Trim() : store.Secrets.Unprotect(saved.GraphClientSecret);
             if (string.IsNullOrWhiteSpace(req.To)) return Results.BadRequest(new { error = "Bitte eine Empfängeradresse für die Testmail eintragen." });
             try
             {
-                await MailSender.SendAsync(o, pw, new OutgoingMail
+                await MailSender.SendAsync(o, new MailSecrets(pw, graph), new OutgoingMail
                 {
                     To = { req.To.Trim() },
                     Subject = "Testmail PDF Rechnung",
@@ -223,11 +234,20 @@ public static class AdminApi
         if (!PortOk(s.Server.HttpsPort)) e.Add("HTTPS-Port ist ungültig.");
         if (s.Server.EnableHttp && !PortOk(s.Server.HttpPort)) e.Add("HTTP-Port ist ungültig.");
         if (s.Server.EnableHttp && s.Server.HttpPort == s.Server.HttpsPort) e.Add("HTTP- und HTTPS-Port müssen verschieden sein.");
+        if (!MailSender.Transports.Contains(s.Mail.Transport)) e.Add("Unbekannte Versandart.");
         if (s.Mail.Enabled)
         {
-            if (string.IsNullOrWhiteSpace(s.Mail.Host)) e.Add("Bitte den SMTP-Server eintragen.");
-            if (!PortOk(s.Mail.Port)) e.Add("SMTP-Port ist ungültig.");
             if (string.IsNullOrWhiteSpace(s.Mail.FromAddress)) e.Add("Bitte die Absenderadresse eintragen.");
+            if (s.Mail.Transport == "Graph")
+            {
+                if (string.IsNullOrWhiteSpace(s.Mail.GraphTenantId)) e.Add("Bitte die Mandanten-ID für Microsoft 365 eintragen.");
+                if (string.IsNullOrWhiteSpace(s.Mail.GraphClientId)) e.Add("Bitte die Client-ID für Microsoft 365 eintragen.");
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(s.Mail.Host)) e.Add("Bitte den SMTP-Server eintragen.");
+                if (!PortOk(s.Mail.Port)) e.Add("SMTP-Port ist ungültig.");
+            }
         }
         if (!MailSender.SecurityModes.Contains(s.Mail.Security)) e.Add("Unbekannte Verschlüsselung für SMTP.");
         if (s.Mail.AutoSendDelayMinutes < 0) e.Add("Die Wartezeit für den Autoversand darf nicht negativ sein.");

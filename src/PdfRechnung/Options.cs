@@ -64,6 +64,11 @@ public sealed class InboxOptions
     public string Folder { get; set; } = "";
     /// <summary>Name des Druckers (für die spätere Einrichtung über die Oberfläche).</summary>
     public string PrinterName { get; set; } = "PDF Rechnung";
+    /// <summary>
+    /// Pfade aus den Steuerzeichen (@@mb@@, @@ma@@ …) umsetzen, z. B. "K:\=\\server\WebWARE5\".
+    /// Das ERP druckt Pfade, wie sie am Arbeitsplatz gelten – der Dienst läuft als SYSTEM und sieht keine Netzlaufwerke.
+    /// </summary>
+    public List<string> PathMappings { get; set; } = new();
 }
 
 public sealed class MailOptions

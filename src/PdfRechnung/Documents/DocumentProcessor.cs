@@ -1,11 +1,14 @@
 using System.Globalization;
 using Microsoft.Extensions.Options;
 using UglyToad.PdfPig;
-using UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor;
 
 namespace PdfRechnung.Documents;
 
-/// <summary>Text eines PDFs zeilenweise je Seite (für die Steuerzeichen).</summary>
+/// <summary>
+/// Text eines PDFs zeilenweise je Seite (für die Steuerzeichen). Die Steuerzeichen können überall auf der Seite stehen,
+/// auch neben anderem Text, in winziger Schrift oder gedreht. Deshalb werden die Zeilen aus den einzelnen Buchstaben
+/// gebildet: gleiche Grundlinie, gleiche Schriftgröße und Richtung = eine Zeile, sortiert in Schreibrichtung.
+/// </summary>
 public static class PdfText
 {
     public static (int Pages, List<(int Page, string Line)> Lines) Extract(byte[] pdf)
@@ -14,16 +17,50 @@ public static class PdfText
         using var doc = PdfDocument.Open(pdf);
         foreach (var page in doc.GetPages())
         {
-            string text;
-            try { text = ContentOrderTextExtractor.GetText(page); }
-            catch { text = page.Text; }
-            foreach (var l in text.Split('\n'))
-                lines.Add((page.Number, l.TrimEnd('\r')));
-            // Fallback: Steuerzeichen, die der Layout-Extraktor zerlegt hat, im Rohtext der Seite suchen
-            if (!text.Contains("@@") && page.Text.Contains("@@"))
-                lines.Add((page.Number, page.Text));
+            var letters = page.Letters.Where(l => !string.IsNullOrEmpty(l.Value)).ToList();
+            foreach (var line in BuildLines(letters))
+                lines.Add((page.Number, line));
         }
         return (doc.NumberOfPages, lines);
+    }
+
+    private static IEnumerable<string> BuildLines(List<UglyToad.PdfPig.Content.Letter> letters)
+    {
+        // Richtung der Grundlinie (waagrecht, senkrecht, gedreht) auf 1° gerundet
+        static int Angle(UglyToad.PdfPig.Content.Letter l)
+        {
+            var dx = l.EndBaseLine.X - l.StartBaseLine.X; var dy = l.EndBaseLine.Y - l.StartBaseLine.Y;
+            return dx == 0 && dy == 0 ? 0 : (int)Math.Round(Math.Atan2(dy, dx) * 180 / Math.PI);
+        }
+        foreach (var dir in letters.GroupBy(Angle))
+        {
+            var rad = dir.Key * Math.PI / 180;
+            var (cos, sin) = (Math.Cos(rad), Math.Sin(rad));
+            // Position entlang der Schreibrichtung (u) und quer dazu (v)
+            double U(UglyToad.PdfPig.Content.Letter l) => l.StartBaseLine.X * cos + l.StartBaseLine.Y * sin;
+            double V(UglyToad.PdfPig.Content.Letter l) => -l.StartBaseLine.X * sin + l.StartBaseLine.Y * cos;
+            var groups = dir.GroupBy(l => (V: Math.Round(V(l) * 4) / 4, Size: Math.Round(l.PointSize * 10) / 10))
+                            .OrderByDescending(g => g.Key.V);
+            foreach (var g in groups)
+            {
+                var sorted = g.OrderBy(U).ToList();
+                var sb = new System.Text.StringBuilder();
+                UglyToad.PdfPig.Content.Letter? prev = null;
+                foreach (var l in sorted)
+                {
+                    if (prev is not null)
+                    {
+                        var prevEnd = prev.EndBaseLine.X * cos + prev.EndBaseLine.Y * sin;
+                        var gap = U(l) - prevEnd;
+                        // Lücke breiter als ein Drittel der Schriftgröße = Leerzeichen (falls nicht schon gedruckt)
+                        if (gap > l.PointSize * 0.3 && sb.Length > 0 && sb[^1] != ' ' && l.Value != " ") sb.Append(' ');
+                    }
+                    sb.Append(l.Value);
+                    prev = l;
+                }
+                yield return sb.ToString();
+            }
+        }
     }
 }
 
@@ -60,9 +97,37 @@ public sealed class DocumentProcessor
     private readonly IOptionsMonitor<InvoiceOptions> _invoice;
     private readonly ILogger<DocumentProcessor> _log;
 
-    public DocumentProcessor(DocumentStore store, IOptionsMonitor<MailOptions> mail, IOptionsMonitor<InvoiceOptions> invoice, ILogger<DocumentProcessor> log)
+    public DocumentProcessor(DocumentStore store, IOptionsMonitor<MailOptions> mail, IOptionsMonitor<InvoiceOptions> invoice, ILogger<DocumentProcessor> log,
+        IOptionsMonitor<InboxOptions>? inbox = null)
     {
-        _store = store; _mail = mail; _invoice = invoice; _log = log;
+        _store = store; _mail = mail; _invoice = invoice; _log = log; _inbox = inbox;
+    }
+
+    private readonly IOptionsMonitor<InboxOptions>? _inbox;
+
+    /// <summary>Pfade aus den Steuerzeichen über die Pfadzuordnung (Einstellungen → Drucker &amp; Eingang) umsetzen.</summary>
+    public static string MapPath(string path, IEnumerable<string> mappings)
+    {
+        foreach (var m in mappings)
+        {
+            var i = m.IndexOf('=');
+            if (i <= 0) continue;
+            var from = m[..i].Trim(); var to = m[(i + 1)..].Trim();
+            if (from.Length > 0 && path.StartsWith(from, StringComparison.OrdinalIgnoreCase)) return to + path[from.Length..];
+        }
+        return path;
+    }
+
+    private ParsedCodes Map(ParsedCodes p)
+    {
+        var maps = _inbox?.CurrentValue.PathMappings ?? new List<string>();
+        if (maps.Count == 0) return p;
+        if (p.BodyFile is not null) p.BodyFile = MapPath(p.BodyFile, maps);
+        for (var i = 0; i < p.Attachments.Count; i++) p.Attachments[i] = MapPath(p.Attachments[i], maps);
+        for (var i = 0; i < p.AttachmentFolders.Count; i++) p.AttachmentFolders[i] = MapPath(p.AttachmentFolders[i], maps);
+        for (var i = 0; i < p.AppendPdfs.Count; i++) p.AppendPdfs[i] = MapPath(p.AppendPdfs[i], maps);
+        for (var i = 0; i < p.EmbedFiles.Count; i++) p.EmbedFiles[i] = MapPath(p.EmbedFiles[i], maps);
+        return p;
     }
 
     public Vorgang Process(byte[] pdf, string source, string? fileName, string? user = null, string? machine = null)
@@ -76,7 +141,7 @@ public sealed class DocumentProcessor
             var (pages, lines) = PdfText.Extract(pdf);
             v.Pages = pages;
             text = string.Join("\n", lines.Select(l => $"[{l.Page}] {l.Line}"));
-            p = ControlCodeParser.Parse(lines);
+            p = Map(ControlCodeParser.Parse(lines));
         }
         catch (Exception ex)
         {
@@ -102,7 +167,7 @@ public sealed class DocumentProcessor
         var path = _store.FilePath(id, DocumentStore.PdfFile);
         if (path is null) return null;
         ParsedCodes p;
-        try { p = ControlCodeParser.Parse(PdfText.Extract(File.ReadAllBytes(path)).Lines); }
+        try { p = Map(ControlCodeParser.Parse(PdfText.Extract(File.ReadAllBytes(path)).Lines)); }
         catch { p = new ParsedCodes(); }
         return _store.Update(id, v =>
         {
@@ -120,7 +185,7 @@ public sealed class DocumentProcessor
     {
         var path = _store.FilePath(v.Id, DocumentStore.PdfFile);
         ParsedCodes p;
-        try { p = path is null ? new ParsedCodes() : ControlCodeParser.Parse(PdfText.Extract(File.ReadAllBytes(path)).Lines); }
+        try { p = path is null ? new ParsedCodes() : Map(ControlCodeParser.Parse(PdfText.Extract(File.ReadAllBytes(path)).Lines)); }
         catch { p = new ParsedCodes(); }
         v.Messages = DocumentChecker.Check(v, p, CurrentSettings());
         v.UpdateStatus();
@@ -164,7 +229,7 @@ public sealed class DocumentProcessor
         m.Attachments = p.Attachments.ToList();
         foreach (var folder in p.AttachmentFolders)
             if (Directory.Exists(folder)) m.Attachments.AddRange(Directory.EnumerateFiles(folder).Take(20));
-        m.FileName = MailTemplate.SafeFileName(p.FileName ?? MailTemplate.Apply(o.DefaultFileName, v));
+        m.FileName = MailTemplate.SafeFileName(p.FileName ?? p.MailFileName ?? MailTemplate.Apply(o.DefaultFileName, v));
         v.Mail = m;
     }
 }

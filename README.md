@@ -101,10 +101,10 @@ Syntax wie bei gotomaxx: `@@` + 2 Zeichen Befehl + Wert + `@@`, eine Zeile, Cour
 | Gruppe | ausgewertet |
 |---|---|
 | E-Rechnung | `xt` (Format), `xi FELD=Wert`, `xr table=…\|…`, `<<\|…` (Fortsetzung der vorigen Tabellenzeile wie in der ERP-Vorlage), `pe` |
-| Mail | `ml`, `to`/`aa`, `cc`, `bc`, `ed`, `sa`, `mb`, `ma`, `mc`, `md` (`mo`/`ms`/`mp` werden ignoriert – der Server sendet) |
+| Mail | `ml`, `to`/`aa`, `cc`, `bc`, `ed`, `sa`, `mb`, `ma`, `mc`, `md`, `mf` (Dateiname aus der ERP-Vorlage) (`mo`/`ms`/`mp` werden ignoriert – der Server sendet) |
 | Bearbeiten | `bp`, `fn`, `di`, `af`, `ef`, `rpc`, `nd`, `ca`, `cf` (teilweise erst mit dem Druckdienst wirksam) |
 
-Unbekannte Steuerzeichen erscheinen im Vorgang als Warnung.
+Die Steuerzeichen dürfen überall auf der Seite stehen (auch winzig, neben anderem Text oder gedreht) und auf jeder Seite. Pfade wie `K:\WebWARE5\…` (@@mb@@, @@ma@@) werden über die Pfadzuordnung (Drucker & Eingang) auf eine Freigabe umgesetzt, weil der Dienst keine Netzlaufwerke sieht. Unbekannte Steuerzeichen erscheinen im Vorgang als Warnung.
 
 Feldzuordnung zur ZUGFeRD-XML: [docs/Steuerzeichen zu ZUGFeRD-XML.md](docs/Steuerzeichen%20zu%20ZUGFeRD-XML.md).
 Konzept: [docs/Konzept Druckdienst Phase 1.md](docs/Konzept%20Druckdienst%20Phase%201.md).

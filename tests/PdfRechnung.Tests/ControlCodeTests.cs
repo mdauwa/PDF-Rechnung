@@ -113,3 +113,36 @@ public class ControlCodeTests
         Assert.Equal(VorgangStatus.Ready, v.Status);
     }
 }
+
+public class ErpPdfMailerCodeTests
+{
+    // So druckt das ERP die PDFMAILER-Steuerzeichen (Ausdruck „Microsoft Print to PDF“ vom 13.11.2026, Daten anonymisiert)
+    private const string Block = """
+        @@mfAngebot_N11260051_13.11.2026@@
+        @@aaoffice@kunde.example@@
+        @@edAngebot 11260051 13.11.2026@@
+        @@mbK:\WebWARE5\APP\PDFMailer\DAT00004\Angebot.txt@@
+        @@od0@@
+        @@maK:\WebWARE5\APP\PDFMailer\DAT00004\ERP Austria Group Dienstleistungspreise 2027.pdf@@
+        """;
+
+    [Fact]
+    public void Liest_PDFMAILER_Block_aus_dem_ERP()
+    {
+        var p = ControlCodeParser.Parse(Block);
+        Assert.Equal(6, p.Codes.Count);
+        Assert.Empty(p.Unknown);
+        Assert.Equal("Angebot_N11260051_13.11.2026", p.MailFileName);
+        Assert.Equal(new[] { "office@kunde.example" }, p.To);
+        Assert.Equal("Angebot 11260051 13.11.2026", p.Subject);
+        Assert.Equal(@"K:\WebWARE5\APP\PDFMailer\DAT00004\Angebot.txt", p.BodyFile);
+        Assert.Single(p.Attachments);
+    }
+
+    [Theory]
+    [InlineData(@"K:\WebWARE5\APP\a.txt", @"\\srv\WebWARE5\APP\a.txt")]
+    [InlineData(@"k:\WebWARE5\x.pdf", @"\\srv\WebWARE5\x.pdf")]
+    [InlineData(@"C:\Temp\x.pdf", @"C:\Temp\x.pdf")]
+    public void Pfadzuordnung(string input, string expected) =>
+        Assert.Equal(expected, DocumentProcessor.MapPath(input, new[] { @"K:\=\\srv\" }));
+}

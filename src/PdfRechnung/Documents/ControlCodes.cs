@@ -43,6 +43,8 @@ public sealed class ParsedCodes
     public string? Stationery { get; set; }
     public bool StationerySet { get; set; }
     public string? FileName { get; set; }
+    /// <summary><c>@@mf@@</c> aus der ERP-Vorlage: Dateiname des Mail-Anhangs (Vorrang hat <c>@@fn@@</c>).</summary>
+    public string? MailFileName { get; set; }
     public Dictionary<string, string> PdfInfo { get; } = new();
     public List<string> AppendPdfs { get; } = new();
     public List<string> EmbedFiles { get; } = new();
@@ -134,6 +136,7 @@ public static partial class ControlCodeParser
             case "ma": if (t.Length > 0) r.Attachments.Add(t); break;
             case "mc": if (t.Length > 0) r.AttachmentFolders.Add(t); break;
             case "md": r.NoAttachment = true; break;
+            case "mf": r.MailFileName = t.Length > 0 ? t : null; break;
             case "mo" or "ms" or "mp": r.Ignored.Add(c); break;
 
             // ---------- Bearbeiten ----------

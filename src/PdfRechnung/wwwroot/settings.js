@@ -337,6 +337,11 @@ function tabInbox() {
   return section("Eingang",
     `${inCheck("inbox.enabled", "Eingangsordner überwachen")}
      ${field("Eingangsordner", inText("inbox.folder", ST.data.inboxFolder), `Leer = <code>${esc(ST.data.inboxFolder)}</code>. Jede PDF-Datei, die hier abgelegt wird, wird zu einem Vorgang verarbeitet und danach aus dem Ordner entfernt. Nicht lesbare Dateien landen im Unterordner <code>fehler</code>.`)}`) +
+    section("Pfadzuordnung",
+      field("Pfade aus den Steuerzeichen umsetzen", inLines("inbox.pathMappings", "K:\\=\\\\server\\WebWARE5\\"),
+        "Das ERP druckt Pfade für Mailtext (@@mb@@) und Anlagen (@@ma@@) so, wie sie am Arbeitsplatz gelten, z. B. <code>K:\\WebWARE5\\…</code>. " +
+        "Der Dienst läuft als SYSTEM und sieht keine Netzlaufwerke. Eine Zuordnung pro Zeile: <code>K:\\=\\\\server\\freigabe\\</code>. " +
+        "Das Computerkonto des Servers braucht Leserechte auf die Freigabe.")) +
     section("Drucker",
       `${field("Name des Druckers", inText("inbox.printerName", "PDF Rechnung"))}
        <div class="help-box">

@@ -69,4 +69,24 @@ public sealed class ProcessorTests : IDisposable
         Assert.Equal(new[] { "neu@kunde.at" }, r.Mail.To);
         Assert.Equal(VorgangStatus.Ready, r.Status);
     }
+
+    [Fact]
+    public void Steuerzeichen_neben_anderem_Text_und_auf_Folgeseiten()
+    {
+        var b = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
+        var helv = b.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.Helvetica);
+        var cour = b.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.Courier);
+        var p1 = b.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+        p1.AddText("Rechnung Nr. 4711", 12, new UglyToad.PdfPig.Core.PdfPoint(60, 700), helv);
+        p1.AddText("@@toa@b.at@@", 4, new UglyToad.PdfPig.Core.PdfPoint(170, 700), cour);   // gleiche Grundlinie
+        p1.AddText("Text davor @@edBetreff im Text@@ danach", 9, new UglyToad.PdfPig.Core.PdfPoint(60, 500), helv);
+        var p2 = b.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+        p2.AddText("@@fnDatei_Seite2@@", 4, new UglyToad.PdfPig.Core.PdfPoint(400, 20), cour);
+        var (_, lines) = PdfText.Extract(b.Build());
+        var p = ControlCodeParser.Parse(lines);
+        Assert.Equal(new[] { "a@b.at" }, p.To);
+        Assert.Equal("Betreff im Text", p.Subject);
+        Assert.Equal("Datei_Seite2", p.FileName);
+        Assert.Equal(2, p.Codes.Single(c => c.Code == "fn").Page);
+    }
 }

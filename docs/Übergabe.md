@@ -120,7 +120,7 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 - **MAPI-Umleitung (15.11.2026):**
   - `src/BelegpostMapi`: Simple-MAPI-Mailclient in C (mingw-w64, `build.sh`) → `BelegpostMapi-x64.dll` und `BelegpostMapi-x86.dll` ohne Abhängigkeiten.
   - Installation unter Einstellungen → MAPI-Mails: 64 Bit nach System32, 32 Bit nach SysWOW64, ein gemeinsamer Pfad unter `HKLM\Software\Clients\Mail\Belegpost`. „Für alle als Standard“ merkt sich den vorherigen Wert; pro Benutzer per `reg add HKCU\Software\Clients\Mail /ve /d Belegpost /f`.
-  - Die DLL liest Anhänge sofort, sendet über die Named Pipe `\\.\pipe\belegpost-mapi` (nur lokal, Windows-Benutzer per Impersonation) samt RDP-Client-Computername. Ist der Dienst nicht erreichbar, legt sie in `%LOCALAPPDATA%\Belegpost\mapi-ausgang` ab und liefert nach.
+  - Die DLL liest Anhänge sofort, sendet über die Named Pipe `\\.\pipe\belegpost-mapi` (nur lokal; Windows-Benutzer aus dem Prozess-Token des Aufrufers, ohne Impersonation) samt RDP-Client-Computername. Ist der Dienst nicht erreichbar, legt sie in `%LOCALAPPDATA%\Belegpost\mapi-ausgang` ab und liefert nach.
   - Der Dienst (`MapiIntake`) legt einen Vorgang „MAPI“ an: MAPI-Empfänger/Betreff/Text haben Vorrang, PDF-Steuerzeichen gelten weiter, weitere Anhänge liegen im Vorgang.
   - Einstellung **global → Benutzer → PC**: Outlook (Standard) / Portal / direkt. Ziel-PC = Melder, dessen Computername dem RDP-Client entspricht, sonst der zuletzt aktive.
   - Aufträge an den Melder sind persistent (`melder_auftrag`, Übernahme atomar). Nicht abgeholt nach `DeliveryTimeoutHours` → 820.

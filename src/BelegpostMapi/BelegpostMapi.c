@@ -23,6 +23,7 @@
 #include <wtsapi32.h>
 #include <shlobj.h>
 #include <stdio.h>
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -365,7 +366,27 @@ static wchar_t *resp_message(const char *resp)
     p += 11;
     char tmp[1024];
     size_t i = 0;
-    while (*p && *p != '"' && i < sizeof(tmp) - 1) { if (*p == '\\' && p[1]) p++; tmp[i++] = *p++; }
+    while (*p && *p != '"' && i < sizeof(tmp) - 5)
+    {
+        if (*p != '\\' || !p[1]) { tmp[i++] = *p++; continue; }
+        p++;
+        char e = *p++;
+        if (e == 'n') tmp[i++] = '\n';
+        else if (e == 'r') tmp[i++] = '\r';
+        else if (e == 't') tmp[i++] = '\t';
+        else if (e == 'u' && isxdigit((unsigned char)p[0]) && isxdigit((unsigned char)p[1]) && isxdigit((unsigned char)p[2]) && isxdigit((unsigned char)p[3]))
+        {
+            /* \uXXXX als UTF-8 (BMP; Ersatzpaare werden als '?' ausgegeben) */
+            char hex[5] = { p[0], p[1], p[2], p[3], 0 };
+            unsigned cp = (unsigned)strtoul(hex, NULL, 16);
+            p += 4;
+            if (cp >= 0xD800 && cp <= 0xDFFF) tmp[i++] = '?';
+            else if (cp < 0x80) tmp[i++] = (char)cp;
+            else if (cp < 0x800) { tmp[i++] = (char)(0xC0 | (cp >> 6)); tmp[i++] = (char)(0x80 | (cp & 0x3F)); }
+            else { tmp[i++] = (char)(0xE0 | (cp >> 12)); tmp[i++] = (char)(0x80 | ((cp >> 6) & 0x3F)); tmp[i++] = (char)(0x80 | (cp & 0x3F)); }
+        }
+        else tmp[i++] = e; /* \" \\ \/ */
+    }
     tmp[i] = 0;
     int n = MultiByteToWideChar(CP_UTF8, 0, tmp, -1, NULL, 0);
     wchar_t *w = (wchar_t *)malloc(sizeof(wchar_t) * (n > 0 ? n : 1));

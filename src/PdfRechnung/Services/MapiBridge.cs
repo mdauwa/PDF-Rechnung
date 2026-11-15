@@ -1,4 +1,5 @@
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Principal;
@@ -179,7 +180,13 @@ public sealed class MapiIntake
 public sealed class MapiPipeServer : BackgroundService
 {
     public const string PipeName = "belegpost-mapi";
-    private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true };
+    // Antwort ohne \uXXXX-Escapes (Umlaute, Anführungszeichen), damit die DLL die Meldung direkt anzeigen kann.
+    private static readonly JsonSerializerOptions Json = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
     private readonly IServiceProvider _sp;
     private readonly ILogger<MapiPipeServer> _log;
 
@@ -216,6 +223,43 @@ public sealed class MapiPipeServer : BackgroundService
         }
     }
 
+    /// <summary>Windows-Konto des Prozesses am anderen Ende der Pipe (DOMÄNE\Benutzer).</summary>
+    internal static string ClientAccount(NamedPipeServerStream pipe)
+    {
+        if (!GetNamedPipeClientProcessId(pipe.SafePipeHandle, out var pid))
+            throw new InvalidOperationException("Aufrufender Prozess der MAPI-Pipe nicht ermittelbar (Fehler " + Marshal.GetLastPInvokeError() + ").");
+        var process = OpenProcess(ProcessQueryLimitedInformation, false, pid);
+        if (process == IntPtr.Zero)
+            throw new InvalidOperationException("Aufrufender Prozess der MAPI-Pipe nicht lesbar (Fehler " + Marshal.GetLastPInvokeError() + ").");
+        try
+        {
+            if (!OpenProcessToken(process, TokenQuery, out var token))
+                throw new InvalidOperationException("Benutzer des MAPI-Aufrufers nicht lesbar (Fehler " + Marshal.GetLastPInvokeError() + ").");
+            try
+            {
+                using var id = new WindowsIdentity(token);
+                return id.Name;
+            }
+            finally { CloseHandle(token); }
+        }
+        finally { CloseHandle(process); }
+    }
+
+    private const uint ProcessQueryLimitedInformation = 0x1000;
+    private const uint TokenQuery = 0x0008;
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetNamedPipeClientProcessId(Microsoft.Win32.SafeHandles.SafePipeHandle pipe, out uint processId);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr OpenProcess(uint access, bool inherit, uint processId);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CloseHandle(IntPtr handle);
+
     private async Task HandleAsync(NamedPipeServerStream pipe, CancellationToken ct)
     {
         await using var _ = pipe;
@@ -224,8 +268,9 @@ public sealed class MapiPipeServer : BackgroundService
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromMinutes(2));
-            string account = "";
-            pipe.RunAsClient(() => account = WindowsIdentity.GetCurrent().Name);
+            // Windows-Benutzer des Aufrufers aus dessen Prozess-Token lesen – ohne Impersonation, damit der Dienst
+            // beim Anlegen des Vorgangs sicher mit seinen eigenen Rechten (SYSTEM) arbeitet.
+            var account = ClientAccount(pipe);
             var len = new byte[4];
             await pipe.ReadExactlyAsync(len, timeout.Token);
             var n = BitConverter.ToInt32(len);

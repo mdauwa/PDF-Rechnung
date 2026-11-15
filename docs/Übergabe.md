@@ -16,7 +16,7 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 | Ort | Inhalt |
 |---|---|
 | GitHub `mdauwa/pdf-rechnung` (Branch `main`) | Quellcode, maßgeblicher Stand |
-| `Y:\Dev\eRechnung` | Git-Klon von `main` (seit 15.11.2026; mit `git pull` aktualisieren) plus Ordner `Dokumente`, `PdfDrucker`, Test-PDFs (per `.git\info\exclude` ignoriert) und `Ausgabe` (fertige Programme, flach: `Belegpost.exe`, `Belegpost-Melder.exe`, `BelegpostMapi-x64/x86.dll`, `wwwroot` – Pflicht neben der EXE) |
+| `Y:\Dev\eRechnung` | Arbeitsdateien auf Stand 7a03c1b, **`.git` fehlt noch** – der Benutzer richtet ihn per PowerShell ein: `git init -b main; git remote add origin https://github.com/mdauwa/PDF-Rechnung.git; git fetch origin; git reset origin/main; git branch --set-upstream-to=origin/main; Add-Content .git\info\exclude "/Dokumente/`n/PdfDrucker/`n/*.pdf"`, danach `git pull`. Alte Dateien `docs\branding\PdfRechnung-*` und `src\PdfRechnung\PdfRechnung.ico` sollen nach `_to_delete` (Benutzer hat zugestimmt) plus Ordner `Dokumente`, `PdfDrucker`, Test-PDFs (per `.git\info\exclude` ignoriert) und `Ausgabe` (fertige Programme, flach: `Belegpost.exe`, `Belegpost-Melder.exe`, `BelegpostMapi-x64/x86.dll`, `wwwroot` – Pflicht neben der EXE) |
 | `Y:\Dev\Firmenportal` | Vorlage für Dienst, Einrichtung, HTTPS, Anmeldung (Repo `mdauwa/Firmenportal`) |
 | claude.ai-Projekt „eRechnung“ | Konzept, Feldzuordnung, diese Übergabe |
 | `docs/` im Repo | Konzept, Feldzuordnung Steuerzeichen → ZUGFeRD, ERP-Vorlage `ERP-Vorlage-Drucksteuerzeichen.json` |

@@ -25,7 +25,7 @@ public static class MapiClient
     /// <param name="Users">Angemeldete bzw. geladene Windows-Benutzer dieses Servers und ihr eigener Standard (HKCU hat Vorrang vor HKLM).</param>
     /// <param name="PerUserLogon">Active-Setup-Eintrag aktiv: jeder Benutzer bekommt Belegpost bei seiner nächsten Anmeldung als eigenen Standard.</param>
     public sealed record MapiStatus(bool Available, bool Installed, bool DefaultForAll, string? CurrentDefault, bool X64, bool X86, string? Problem,
-        IReadOnlyList<MapiUserDefault>? Users = null, bool PerUserLogon = false);
+        IReadOnlyList<MapiUserDefault>? Users = null, bool PerUserLogon = false, string? AppDefaultPolicy = null);
 
     /// <param name="Value">Eigener Standard des Benutzers (HKCU); leer = er nutzt den Standard für alle.</param>
     public sealed record MapiUserDefault(string Sid, string Account, string? Value, bool Belegpost);
@@ -57,7 +57,7 @@ public static class MapiClient
             users.Add(new MapiUserDefault(sid, AccountName(sid), value, effective));
         }
         return new MapiStatus(available, installed && x64 && x86, forAll, current, x64, x86, null,
-            users.OrderBy(u => u.Account, StringComparer.OrdinalIgnoreCase).ToList(), ActiveSetupMode() == "setzen");
+            users.OrderBy(u => u.Account, StringComparer.OrdinalIgnoreCase).ToList(), ActiveSetupMode() == "setzen", AssociationsPolicy());
     }
 
     /// <summary>DLLs kopieren und „Belegpost“ als Mailclient registrieren (ändert noch nicht den Standard).</summary>
@@ -80,8 +80,95 @@ public static class MapiClient
             k.SetValue("SupportsMAPI", 1, RegistryValueKind.DWord);
             using var p = k.CreateSubKey("Protocols\\mailto", writable: true);
             p.SetValue(null, "URL:MailTo-Protokoll");
+            p.SetValue("URL Protocol", "");
+            using (var pc = p.CreateSubKey("shell\\open\\command", writable: true)) pc.SetValue(null, MailtoCommand, RegistryValueKind.ExpandString);
+
+            // Als Windows-App mit E-Mail-Fähigkeit – erscheint dann unter Einstellungen → Apps → Standard-Apps → E-Mail
+            using var cap = k.CreateSubKey("Capabilities", writable: true);
+            cap.SetValue("ApplicationName", ClientName);
+            cap.SetValue("ApplicationDescription", "Belegpost – E-Mails aus ERP und Programmen über Belegpost und Outlook am eigenen PC versenden");
+            cap.SetValue("ApplicationIcon", IconPath);
+            using (var url = cap.CreateSubKey("URLAssociations", writable: true)) url.SetValue("mailto", MailtoProgId);
+            using (var ico = k.CreateSubKey("DefaultIcon", writable: true)) ico.SetValue(null, IconPath);
+            using (var cmd = k.CreateSubKey("shell\\open\\command", writable: true)) cmd.SetValue(null, MailtoCommand, RegistryValueKind.ExpandString);
+
+            using var apps = b.CreateSubKey(@"SOFTWARE\RegisteredApplications", writable: true);
+            apps.SetValue(ClientName, ClientsKey + "\\" + ClientName + "\\Capabilities");
+
+            using var prog = b.CreateSubKey(@"SOFTWARE\Classes\" + MailtoProgId, writable: true);
+            prog.SetValue(null, "Belegpost – E-Mail");
+            prog.SetValue("URL Protocol", "");
+            prog.SetValue("FriendlyTypeName", "Belegpost – E-Mail");
+            using (var pi = prog.CreateSubKey("DefaultIcon", writable: true)) pi.SetValue(null, IconPath);
+            using (var po = prog.CreateSubKey("shell\\open\\command", writable: true)) po.SetValue(null, MailtoCommand, RegistryValueKind.ExpandString);
         }
-        log("Mailclient „Belegpost“ registriert (64 und 32 Bit).");
+        log("Mailclient „Belegpost“ registriert (64 und 32 Bit) – auch als Windows-App für E-Mail (mailto-Links).");
+    }
+
+    public const string MailtoProgId = "Belegpost.mailto";
+
+    /// <summary>mailto:-Links: die 64-Bit-DLL über rundll32 (Einstieg „Mailto“) – gleiche Übergabe an den Dienst wie MAPI.</summary>
+    public const string MailtoCommand = @"%SystemRoot%\System32\rundll32.exe ""%SystemRoot%\System32\BelegpostMapi.dll"",Mailto ""%1""";
+
+    private static string IconPath => Path.Combine(ServiceManager.InstallDirectory, "Belegpost.exe") + ",0";
+
+    // ---------- Windows-Standard-App „E-Mail“ für alle Benutzer (Richtlinie) ----------
+
+    private const string PolicyKey = @"SOFTWARE\Policies\Microsoft\Windows\System";
+    private const string PolicyValue = "DefaultAssociationsConfiguration";
+
+    /// <summary>Datei mit der Standard-App-Zuordnung (mailto → Belegpost) für die Windows-Richtlinie – im Programmordner,
+    /// weil Windows sie bei der Anmeldung mit den Rechten des Benutzers liest (der Datenordner ist nur für Administratoren).</summary>
+    public static string AssociationsFile => Path.Combine(ServiceManager.InstallDirectory, "Standard-Apps-Belegpost.xml");
+
+    public static string AssociationsXml =>
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<DefaultAssociations>\r\n" +
+        $"  <Association Identifier=\"mailto\" ProgId=\"{MailtoProgId}\" ApplicationName=\"{ClientName}\" />\r\n" +
+        "</DefaultAssociations>\r\n";
+
+    /// <summary>Aktuelle Richtlinie „Standardzuordnungskonfigurationsdatei“ (null = keine).</summary>
+    public static string? AssociationsPolicy()
+    {
+        try
+        {
+            using var k = Registry.LocalMachine.OpenSubKey(PolicyKey);
+            return k?.GetValue(PolicyValue) as string;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// Belegpost als Windows-Standard-App für E-Mail (mailto) für alle Benutzer festlegen – über die Richtlinie
+    /// „Standardzuordnungskonfigurationsdatei“; wirkt bei der nächsten Anmeldung. Eine fremde, schon gesetzte Richtlinie
+    /// wird nicht überschrieben (die Zuordnung muss dann in deren Datei ergänzt werden).
+    /// </summary>
+    public static void SetAppDefaultPolicy(Action<string> log)
+    {
+        if (!Status().Installed) Install(log);
+        var file = AssociationsFile;
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        var current = AssociationsPolicy();
+        if (!string.IsNullOrWhiteSpace(current) && !string.Equals(Path.GetFullPath(current), Path.GetFullPath(file), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Es ist bereits eine Standard-App-Richtlinie gesetzt ({current}). Bitte dort die Zeile ergänzen: {AssociationsXml.Split('\n')[2].Trim()}");
+        File.WriteAllText(file, AssociationsXml, new System.Text.UTF8Encoding(false));
+        using var k = Registry.LocalMachine.CreateSubKey(PolicyKey, writable: true);
+        k.SetValue(PolicyValue, file);
+        log($"Richtlinie gesetzt: Standard-App für E-Mail = Belegpost ({file}). Wirkt bei der nächsten Anmeldung jedes Benutzers.");
+    }
+
+    /// <summary>Unsere Richtlinie wieder entfernen (eine fremde bleibt unangetastet).</summary>
+    public static void RemoveAppDefaultPolicy(Action<string> log)
+    {
+        var current = AssociationsPolicy();
+        if (string.IsNullOrWhiteSpace(current)) return;
+        if (!string.Equals(Path.GetFullPath(current), Path.GetFullPath(AssociationsFile), StringComparison.OrdinalIgnoreCase))
+        {
+            log($"Fremde Standard-App-Richtlinie bleibt unverändert ({current}).");
+            return;
+        }
+        using var k = Registry.LocalMachine.OpenSubKey(PolicyKey, writable: true);
+        k?.DeleteValue(PolicyValue, throwOnMissingValue: false);
+        log("Richtlinie für die Standard-App „E-Mail“ entfernt – die Benutzer wählen ihr E-Mail-Programm wieder selbst.");
     }
 
     /// <summary>Belegpost für alle Benutzer des Servers als Standard-Mailprogramm setzen (vorheriger Wert wird gemerkt).</summary>
@@ -102,6 +189,8 @@ public static class MapiClient
         }
         log("Belegpost ist jetzt das Standard-Mailprogramm für MAPI auf diesem Server.");
         SetForUsers(log);
+        try { SetAppDefaultPolicy(log); }
+        catch (InvalidOperationException ex) { log("Windows-Standard-App „E-Mail“: " + ex.Message); }
     }
 
     /// <summary>
@@ -163,6 +252,7 @@ public static class MapiClient
         // Nicht angemeldete Benutzer: bei der nächsten Anmeldung Belegpost wieder entfernen (nur wenn noch eingetragen)
         SetActiveSetup("entfernen",
             @"%SystemRoot%\System32\cmd.exe /c %SystemRoot%\System32\reg.exe query ""HKCU\Software\Clients\Mail"" /ve | %SystemRoot%\System32\find.exe /i ""Belegpost"" >nul && %SystemRoot%\System32\reg.exe delete ""HKCU\Software\Clients\Mail"" /ve /f", log);
+        RemoveAppDefaultPolicy(log);
     }
 
     // ---------- Benutzer dieses Servers ----------

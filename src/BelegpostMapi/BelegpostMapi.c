@@ -533,6 +533,125 @@ EXPORT ULONG WINAPI MAPIAddress(LHANDLE s, ULONG_PTR u, LPSTR c, ULONG e, LPSTR 
 { (void)s; (void)u; (void)c; (void)e; (void)l; (void)n; (void)r; (void)f; (void)x; (void)nn; (void)nr; return MAPI_E_NOT_SUPPORTED; }
 EXPORT ULONG WINAPI MAPIDetails(LHANDLE s, ULONG_PTR u, LPVOID r, FLAGS f, ULONG x) { (void)s; (void)u; (void)r; (void)f; (void)x; return MAPI_E_NOT_SUPPORTED; }
 
+/* ---------------- mailto:-Links (Windows-Standard-App „E-Mail“) ----------------
+ * Aufruf über rundll32:  rundll32.exe "%SystemRoot%\System32\BelegpostMapi.dll",Mailto %1
+ * mailto:a@b.at,c@d.at?subject=…&body=…&cc=…&bcc=…  (RFC 6068, Prozent-Kodierung UTF-8)
+ */
+
+static int hexval(char c)
+{
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+/* n Bytes UTF-8 ab s prozent-dekodieren → neuer wchar_t-String */
+static wchar_t *url_decode(const char *s, size_t n)
+{
+    char *t = (char *)malloc(n + 1);
+    if (!t) return NULL;
+    size_t j = 0;
+    for (size_t i = 0; i < n; i++)
+    {
+        if (s[i] == '%' && i + 2 < n && hexval(s[i + 1]) >= 0 && hexval(s[i + 2]) >= 0)
+        { t[j++] = (char)(hexval(s[i + 1]) * 16 + hexval(s[i + 2])); i += 2; }
+        else t[j++] = s[i];
+    }
+    t[j] = 0;
+    int wn = MultiByteToWideChar(CP_UTF8, 0, t, -1, NULL, 0);
+    if (wn <= 0) wn = MultiByteToWideChar(CP_ACP, 0, t, -1, NULL, 0);
+    wchar_t *w = (wchar_t *)malloc(sizeof(wchar_t) * (wn > 0 ? wn : 1));
+    if (w)
+    {
+        if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, t, -1, w, wn)) MultiByteToWideChar(CP_ACP, 0, t, -1, w, wn);
+    }
+    free(t);
+    return w;
+}
+
+/* Adressliste "a@b.at,c@d.at" (bereits dekodiert) als Empfänger anhängen */
+static void add_recips(Msg *m, ULONG cls, const wchar_t *list)
+{
+    if (!list) return;
+    const wchar_t *p = list;
+    while (*p)
+    {
+        while (*p == L',' || *p == L';' || *p == L' ') p++;
+        const wchar_t *e = p;
+        while (*e && *e != L',' && *e != L';') e++;
+        size_t len = (size_t)(e - p);
+        while (len > 0 && p[len - 1] == L' ') len--;
+        if (len > 0)
+        {
+            Recip *r = (Recip *)realloc(m->r, sizeof(Recip) * (m->nr + 2));
+            if (!r) return;
+            m->r = r;
+            wchar_t *a = (wchar_t *)malloc(sizeof(wchar_t) * (len + 1));
+            if (!a) return;
+            memcpy(a, p, sizeof(wchar_t) * len); a[len] = 0;
+            m->r[m->nr].cls = cls; m->r[m->nr].name = NULL; m->r[m->nr].addr = a;
+            m->nr++;
+        }
+        p = e;
+    }
+}
+
+EXPORT void CALLBACK MailtoW(HWND hwnd, HINSTANCE hinst, LPWSTR cmdLine, int show)
+{
+    (void)hinst; (void)show;
+    Msg m = {0};
+    m.r = (Recip *)calloc(1, sizeof(Recip));
+    m.f = (Att *)calloc(1, sizeof(Att));
+    char *u = to_utf8(cmdLine ? cmdLine : L"");
+    if (!u || !m.r || !m.f) { free(u); msg_free(&m, 1); return; }
+
+    /* Anführungszeichen, Leerzeichen und "mailto:" entfernen */
+    char *s = u;
+    while (*s == ' ' || *s == '"') s++;
+    size_t n = strlen(s);
+    while (n > 0 && (s[n - 1] == ' ' || s[n - 1] == '"')) s[--n] = 0;
+    if (_strnicmp(s, "mailto:", 7) == 0) s += 7;
+
+    char *q = strchr(s, '?');
+    size_t addrLen = q ? (size_t)(q - s) : strlen(s);
+    wchar_t *to = url_decode(s, addrLen);
+    add_recips(&m, MAPI_TO, to);
+    free(to);
+
+    for (char *part = q ? q + 1 : NULL; part && *part;)
+    {
+        char *amp = strchr(part, '&');
+        size_t plen = amp ? (size_t)(amp - part) : strlen(part);
+        char *eq = memchr(part, '=', plen);
+        if (eq)
+        {
+            size_t klen = (size_t)(eq - part);
+            wchar_t *val = url_decode(eq + 1, plen - klen - 1);
+            if (val)
+            {
+                if (klen == 7 && _strnicmp(part, "subject", 7) == 0) { free(m.subject); m.subject = val; val = NULL; }
+                else if (klen == 4 && _strnicmp(part, "body", 4) == 0) { free(m.body); m.body = val; val = NULL; }
+                else if (klen == 2 && _strnicmp(part, "to", 2) == 0) add_recips(&m, MAPI_TO, val);
+                else if (klen == 2 && _strnicmp(part, "cc", 2) == 0) add_recips(&m, MAPI_CC, val);
+                else if (klen == 3 && _strnicmp(part, "bcc", 3) == 0) add_recips(&m, MAPI_BCC, val);
+                free(val);
+            }
+        }
+        part = amp ? amp + 1 : NULL;
+    }
+    free(u);
+    send_msg((ULONG_PTR)hwnd, &m);
+    msg_free(&m, 1);
+}
+
+EXPORT void CALLBACK Mailto(HWND hwnd, HINSTANCE hinst, LPSTR cmdLine, int show)
+{
+    wchar_t *w = from_ansi(cmdLine ? cmdLine : "");
+    MailtoW(hwnd, hinst, w ? w : L"", show);
+    free(w);
+}
+
 BOOL WINAPI DllMain(HINSTANCE h, DWORD reason, LPVOID reserved)
 {
     (void)reserved;

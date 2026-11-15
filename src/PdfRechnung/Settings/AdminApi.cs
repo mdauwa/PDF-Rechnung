@@ -137,6 +137,8 @@ public static class AdminApi
                     case "installieren": MapiClient.Install(log.Add); break;
                     case "standard": MapiClient.SetDefaultForAll(log.Add); break;
                     case "wiederherstellen": MapiClient.RestoreDefault(log.Add); break;
+                    case "standard-app": MapiClient.SetAppDefaultPolicy(log.Add); break;
+                    case "standard-app-entfernen": MapiClient.RemoveAppDefaultPolicy(log.Add); break;
                     case "benutzer":
                         if (!MapiClient.Status().Installed) MapiClient.Install(log.Add);
                         MapiClient.SetForUsers(log.Add); break;

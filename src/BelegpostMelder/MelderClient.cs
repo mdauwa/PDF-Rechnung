@@ -25,6 +25,8 @@ public sealed class MelderClient : IDisposable
     public event Action<BelegEvent>? Received;
     /// <summary>Freigabe „über Outlook senden“ hat sich geändert.</summary>
     public event Action? PermissionsChanged;
+    /// <summary>Verbindung steht – offene Aufträge abholen.</summary>
+    public event Action? Connected;
     public MelderState State { get; private set; } = MelderState.NotPaired;
 
     public void Start()
@@ -66,7 +68,7 @@ public sealed class MelderClient : IDisposable
     public static async Task<(string User, string Title, bool Outlook)> Hello(string server, string token, string? thumbprint)
     {
         using var http = CreateHttp(thumbprint, TimeSpan.FromSeconds(15));
-        using var req = new HttpRequestMessage(HttpMethod.Get, server.TrimEnd('/') + "/melder/api/hallo");
+        using var req = new HttpRequestMessage(HttpMethod.Get, server.TrimEnd('/') + "/melder/api/hallo?pc=" + Uri.EscapeDataString(Environment.MachineName));
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         HttpResponseMessage res;
         try { res = await http.SendAsync(req); }
@@ -112,7 +114,8 @@ public sealed class MelderClient : IDisposable
                 }
                 res.EnsureSuccessStatusCode();
                 Set(MelderState.Connected, "Wartet auf neue Belege – druckst du im ERP, erscheint der Beleg hier.");
-                _ = SendSettings();
+                _ = SendSettings().ContinueWith(_ => RefreshInfo());
+                Connected?.Invoke();
                 delay = TimeSpan.FromSeconds(3);
                 await ReadStream(await res.Content.ReadAsStreamAsync(ct), ct);
                 Set(MelderState.Offline, "Verbindung beendet – verbinde neu …");
@@ -146,6 +149,94 @@ public sealed class MelderClient : IDisposable
             if (allowed != _cfg.OutlookAllowed) { _cfg.OutlookAllowed = allowed; try { _cfg.Save(); } catch { } PermissionsChanged?.Invoke(); }
         }
         catch { /* beim nächsten Verbinden erneut */ }
+    }
+
+    /// <summary>Freigaben und MAPI-Einstellung dieses PCs vom Server holen (meldet dabei den Computernamen).</summary>
+    public async Task RefreshInfo()
+    {
+        try
+        {
+            using var doc = await Call(HttpMethod.Get, "/melder/api/hallo?pc=" + Uri.EscapeDataString(Environment.MachineName));
+            if (doc is null) return;
+            ApplyInfo(doc.RootElement);
+        }
+        catch { }
+    }
+
+    private void ApplyInfo(JsonElement r)
+    {
+        var changed = false;
+        if (r.TryGetProperty("outlook", out var o) || r.TryGetProperty("outlookAllowed", out o))
+        {
+            var allowed = o.ValueKind == JsonValueKind.True;
+            if (allowed != _cfg.OutlookAllowed) { _cfg.OutlookAllowed = allowed; changed = true; }
+        }
+        if (r.TryGetProperty("mapi", out var m) && m.ValueKind == JsonValueKind.Object)
+        {
+            string? S(string n) => m.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+            _cfg.MapiMode = S("mode") ?? ""; _cfg.MapiEffectiveText = S("effectiveText"); _cfg.MapiInherited = S("inherited"); _cfg.MapiNote = S("note");
+            changed = true;
+        }
+        if (!changed) return;
+        try { _cfg.Save(); } catch { }
+        PermissionsChanged?.Invoke();
+    }
+
+    /// <summary>MAPI-Einstellung dieses PCs ändern (der Benutzer darf das selbst, auch nach einer Vorgabe des Admins).</summary>
+    public async Task<bool> SetMapiMode(string mode)
+    {
+        using var doc = await Call(HttpMethod.Post, "/melder/api/einstellungen", new { mapiMode = mode });
+        if (doc is null) return false;
+        ApplyInfo(doc.RootElement);
+        return true;
+    }
+
+    public sealed record MelderTask(string Id, string Kind, string? VorgangId);
+
+    public async Task<List<MelderTask>> PendingTasks()
+    {
+        using var doc = await Call(HttpMethod.Get, "/melder/api/auftraege");
+        var list = new List<MelderTask>();
+        if (doc is null || !doc.RootElement.TryGetProperty("items", out var items)) return list;
+        foreach (var t in items.EnumerateArray())
+            list.Add(new MelderTask(t.GetProperty("id").GetString()!, t.GetProperty("kind").GetString() ?? "",
+                t.TryGetProperty("vorgangId", out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null));
+        return list;
+    }
+
+    /// <summary>Auftrag übernehmen – false, wenn ihn schon ein anderer PC übernommen hat.</summary>
+    public async Task<bool> ClaimTask(string id)
+    {
+        using var doc = await Call(HttpMethod.Post, "/melder/api/auftraege/" + Uri.EscapeDataString(id) + "/uebernehmen");
+        return doc is not null;
+    }
+
+    public async Task CompleteTask(string id) { using var _ = await Call(HttpMethod.Post, "/melder/api/auftraege/" + Uri.EscapeDataString(id) + "/erledigt"); }
+
+    public async Task<bool> ReportSent(string vorgangId, DateTimeOffset at)
+    {
+        using var doc = await Call(HttpMethod.Post, "/melder/api/vorgang/" + Uri.EscapeDataString(vorgangId) + "/gesendet", new { at });
+        return doc is not null;
+    }
+
+    public async Task ReportOutlookError(string vorgangId, string message)
+    {
+        try { using var _ = await Call(HttpMethod.Post, "/melder/api/vorgang/" + Uri.EscapeDataString(vorgangId) + "/outlookfehler", new { message }); } catch { }
+    }
+
+    /// <summary>Aufruf mit Zugangsschlüssel; null bei Fehlerstatus.</summary>
+    private async Task<JsonDocument?> Call(HttpMethod method, string path, object? body = null)
+    {
+        if (_cfg.Token is not { } token || _cfg.Server is null) return null;
+        using var http = CreateHttp(_cfg.Thumbprint, TimeSpan.FromSeconds(30));
+        using var req = new HttpRequestMessage(method, _cfg.Server.TrimEnd('/') + path);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        if (body is not null || method == HttpMethod.Post)
+            req.Content = new StringContent(JsonSerializer.Serialize(body ?? new { }), System.Text.Encoding.UTF8, "application/json");
+        using var res = await http.SendAsync(req);
+        if (!res.IsSuccessStatusCode) return null;
+        var text = await res.Content.ReadAsStringAsync();
+        return JsonDocument.Parse(string.IsNullOrWhiteSpace(text) ? "{}" : text);
     }
 
     private async Task ReadStream(Stream stream, CancellationToken ct)
@@ -183,8 +274,11 @@ public sealed class MelderClient : IDisposable
                 r.TryGetProperty("text", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() : null, S("path"), S("kind"),
                 !r.TryGetProperty("mail", out var ml) || ml.ValueKind != JsonValueKind.False);
             _cfg.LastSeq = e.Seq;
-            _cfg.LastDocumentPath = e.Path;
-            _cfg.LastDocumentId = e.Id;
+            if (e.Kind is "neu" or "test" or "outlook" or "" && e.Id.Length > 0)
+            {
+                _cfg.LastDocumentPath = e.Path;
+                _cfg.LastDocumentId = e.Id;
+            }
             try { _cfg.Save(); } catch { }
             Received?.Invoke(e);
         }

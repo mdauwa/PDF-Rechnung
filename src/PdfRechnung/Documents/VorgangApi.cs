@@ -10,6 +10,13 @@ public sealed record BulkSendRequest(List<string> Ids);
 /// <summary>Portal-API für die Vorgänge: Liste, Detail, PDF-Vorschau, Versanddaten, Aktionen, Upload.</summary>
 public static class VorgangApi
 {
+    /// <summary>Sichtbarer Bereich eines Benutzers als Datenbankfilter.</summary>
+    public static VorgangFilter Visibility(AccessInfo a) => new()
+    {
+        SeeAll = a.Authenticated && a.SeeAll,
+        Owners = a.Authenticated && a.Visible is not null ? a.Visible.ToList() : Array.Empty<string>()
+    };
+
     public static void Map(WebApplication app)
     {
         var g = app.MapGroup("/api/vorgaenge");
@@ -30,32 +37,29 @@ public static class VorgangApi
         {
             var acc = access.For(ctx);
             var me = acc.UserId;
-            var visibleAll = store.All().Where(acc.CanSee).ToList();
-            var list = visibleAll.AsEnumerable();
-            if (mine is "1" or "true") list = list.Where(v => me is not null && v.OwnerUserId == me);
-            if (!string.IsNullOrWhiteSpace(status))
+            var vis = Visibility(acc);
+            var filter = vis with
             {
-                var set = status.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet();
-                list = list.Where(v => set.Contains(v.Status));
-            }
-            if (DateOnly.TryParse(from, out var f)) list = list.Where(v => DateOnly.FromDateTime(v.CreatedAt.LocalDateTime) >= f);
-            if (DateOnly.TryParse(to, out var t)) list = list.Where(v => DateOnly.FromDateTime(v.CreatedAt.LocalDateTime) <= t);
-            if (!string.IsNullOrWhiteSpace(q))
+                Owner = mine is "1" or "true" ? me ?? "-" : null,
+                Statuses = string.IsNullOrWhiteSpace(status) ? null
+                    : status.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
+                From = DateOnly.TryParse(from, out var f) ? new DateTimeOffset(f.ToDateTime(TimeOnly.MinValue)) : null,
+                Before = DateOnly.TryParse(to, out var t) ? new DateTimeOffset(t.AddDays(1).ToDateTime(TimeOnly.MinValue)) : null,
+                Text = string.IsNullOrWhiteSpace(q) ? null : q,
+                Limit = 2000
+            };
+            var today = new DateTimeOffset(DateTime.Today);
+            var mineOpen = me is null ? 0 : store.Count(vis with
             {
-                var s = q.Trim();
-                bool Has(string? x) => x?.Contains(s, StringComparison.CurrentCultureIgnoreCase) == true;
-                list = list.Where(v => Has(v.VoucherId) || Has(v.BuyerName) || Has(v.BuyerId) || Has(v.Mail.Subject)
-                    || v.Mail.To.Any(Has) || Has(v.OriginalFileName) || Has(v.PrintUser) || Has(v.Id));
-            }
-            var all = visibleAll;
-            var today = DateOnly.FromDateTime(DateTime.Today);
+                Owner = me,
+                Statuses = new[] { VorgangStatus.Error, VorgangStatus.Warning, VorgangStatus.Ready, VorgangStatus.SendError, VorgangStatus.Sending }
+            });
             return Results.Ok(new
             {
-                items = list.Take(2000).Select(v => v.Summary()),
-                counts = VorgangStatus.All.ToDictionary(s => s, s => all.Count(v => v.Status == s)),
-                mine = me is null ? 0 : all.Count(v => v.OwnerUserId == me
-                    && v.Status is VorgangStatus.Error or VorgangStatus.Warning or VorgangStatus.Ready or VorgangStatus.SendError or VorgangStatus.Sending),
-                sentToday = all.Count(v => v.SentAt is { } sa && DateOnly.FromDateTime(sa.LocalDateTime) == today)
+                items = store.Query(filter).Select(v => v.Summary()),
+                counts = store.CountByStatus(vis),
+                mine = mineOpen,
+                sentToday = store.CountSentBetween(vis, today, today.AddDays(1))
             });
         });
 

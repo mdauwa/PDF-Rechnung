@@ -1,4 +1,4 @@
-# Übergabe – Projekt Belegpost (Repo „pdf-rechnung“, Stand 13.11.2026)
+# Übergabe – Projekt Belegpost (Repo „pdf-rechnung“, Stand 15.11.2026)
 
 Mit diesem Dokument kann ein neuer Chat nahtlos weiterarbeiten.
 
@@ -34,7 +34,7 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 - **Erst normale PDFs, dann ZUGFeRD (13.11.2026):** Zuerst läuft der komplette Weg ohne E-Rechnung: Drucker, Steuerzeichen entfernen, Briefpapier, Versand. ZUGFeRD kommt erst dazu, wenn das stabil funktioniert.
 - **ERP-Ausgabe der Steuerzeichen:** Dass die Steuerzeichen jetzt gedruckt werden, lag an einer internen ERP-Einstellung. Für das Projekt ist das nicht relevant.
 
-## Stand (fertig, getestet, 88 Tests grün)
+## Stand (fertig, getestet, 106 Tests grün)
 
 - **Portal:**
   - Vorgangsliste mit Filtern und Menüzählern
@@ -92,7 +92,43 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
   - Ausgewertet werden `xt`/`xi`/`xr`/`<<|`, die Mail-Steuerzeichen inkl. `aa` und `mf` sowie `bp`, `fn` usw.
 - **Pfadzuordnung** (Einstellungen → Drucker & Eingang), z. B. `K:\=\\server\freigabe\`.
 - **Prüfung:** Pflichtfelder EN 16931/XRechnung, Summen gegen `GROSS_AMOUNT`, Einheiten (ERP-Text → UN/ECE), Empfänger, Anlagen.
-- **Einstellungsoberfläche:** Dienst, Server & Zertifikat, Drucker & Eingang, E-Mail & Versand, Mail-Vorlagen, E-Rechnung (Einheiten), Ablage, Benutzer, Anmeldung.
+- **Einstellungsoberfläche:** Dienst, Server & Zertifikat, Drucker & Eingang, E-Mail & Versand, Mail-Vorlagen, E-Rechnung (Einheiten), Ablage, ERP-Rückmeldung, MAPI-Mails, Status-Link, Benutzer, Anmeldung.
+- **Datenbank SQLite (15.11.2026):** `C:\ProgramData\Belegpost\belegpost.db` (WAL) mit Vorgängen, Zeitstrahl, Benutzern, Melder-Geräten, Melder-Aufträgen, ERP-Warteschlange, Status-Links und Audit (`Data/BelegpostDb.cs`, Schema über `PRAGMA user_version`).
+  - PDFs, Anlagen, Einstellungen und der ERP-Servicepass bleiben Dateien.
+  - Alte `meta.json`/`users.json` werden beim ersten Start übernommen und in `*.migriert` umbenannt.
+  - Listen und Zähler laufen per SQL (Sichtbarkeit als Filter), nicht mehr im Speicher.
+  - Tägliche Sicherung nach `daten\sicherung` (Anzahl: `Storage:DatabaseBackups`, Standard 14), Prüfung beim Start, wöchentlich VACUUM.
+- **Statuscodes und Zeitstrahl (15.11.2026):** Jeder Statuswechsel wird als 3-stelliger Code in `vorgang_ereignis` festgehalten (`Documents/StatusCodes.cs`):
+  - 001 erfasst · 010 wartet auf Freigabe · 020 freigegeben · 030 an Outlook übergeben
+  - 100 versendet · 110 versendet über Outlook (bestätigt) · 120 erneut versendet · 200 ohne Versand
+  - 800 Fehler im Beleg · 810 Versandfehler · 820 Outlook-Übergabe fehlgeschlagen · 830 Outlook-Versand nicht bestätigt · 900 verworfen
+  - Hinweis „ERP“ = Status im ERP bestätigt.
+  - Im Vorgang zeigt die Karte „Belegstatus“ Zeitstrahl, Status-Link und ERP-Rückmeldung.
+- **Status-Link (15.11.2026):** `/s/<token>` (128-Bit-Zufall, je Belegindex bzw. Vorgang), ohne Anmeldung, nur aus freigegebenen IP-Bereichen (CIDR; Proxys nur wenn eingetragen).
+  - Zeigt nur Belegart, Belegnummer und den Zeitstrahl, keine Empfänger, Beträge oder Inhalte.
+  - `.json`-Variante; Rate-Limit, `noindex`/`no-referrer`/`no-store`, Ablauf, widerrufbar.
+- **ERP-Rückmeldung (15.11.2026):** `@@pi<BELNDX>@@` → bei jedem Statuswechsel ein Auftrag in `erp_auftrag` (Millisekunden, Versand wird nie aufgehalten).
+  - `ErpFeedbackService` schreibt nacheinander per `BELEG.PUT` (`KEINE_VERBUCHUNG=1`, `BERECHNE_SUMMEN=0`), optional mit `BELEG.GET` vorher.
+  - Wartezeiten 30 s/2/10/30 min/stündlich; nach `GiveUpDays` Fehler. Pro Belegindex zählt der neueste Status.
+  - Feldtabelle: Feld frei (`BEL_3_8` → Länge 8), Wert aus Liste (Statuscode, Statustext, Datum, Zeit, Versanddatum, Kanal, Empfänger, Bediener, Benutzer, Status-Link, Betreff, fester Text, Vorlage). Dazu Format, „nur bei Codes“, „nur wenn leer“.
+  - Statuscodes je ERP-Wert anpassbar und abschaltbar. Vorschau und Testschreiben in den Einstellungen.
+  - **WWSVC-Anbindung** aus ERP-Austria-MCP-Server übernommen (`Erp/Wwsvc.cs`):
+    - REGISTER nur wenn erlaubt, mit vorher gespeicherter Absicht (`RegistrationOutcomeUnknown`, Admin bestätigt).
+    - VALIDATE vor jeder Operation (202 = Freigabe ausstehend, 404/50200 = neu registrieren).
+    - CONNECT mit einer Wiederholung bei 401; Anfragenummer vor jedem Aufruf gespeichert; ein Gate.
+    - **Eigene SecuredApp und eigener Pass** (verschlüsselt in `daten\erp\pass-*.bin`). Nur `BELEG.GET`/`BELEG.PUT` erlaubt.
+- **MAPI-Umleitung (15.11.2026):**
+  - `src/BelegpostMapi`: Simple-MAPI-Mailclient in C (mingw-w64, `build.sh`) → `BelegpostMapi-x64.dll` und `BelegpostMapi-x86.dll` ohne Abhängigkeiten.
+  - Installation unter Einstellungen → MAPI-Mails: 64 Bit nach System32, 32 Bit nach SysWOW64, ein gemeinsamer Pfad unter `HKLM\Software\Clients\Mail\Belegpost`. „Für alle als Standard“ merkt sich den vorherigen Wert; pro Benutzer per `reg add HKCU\Software\Clients\Mail /ve /d Belegpost /f`.
+  - Die DLL liest Anhänge sofort, sendet über die Named Pipe `\\.\pipe\belegpost-mapi` (nur lokal, Windows-Benutzer per Impersonation) samt RDP-Client-Computername. Ist der Dienst nicht erreichbar, legt sie in `%LOCALAPPDATA%\Belegpost\mapi-ausgang` ab und liefert nach.
+  - Der Dienst (`MapiIntake`) legt einen Vorgang „MAPI“ an: MAPI-Empfänger/Betreff/Text haben Vorrang, PDF-Steuerzeichen gelten weiter, weitere Anhänge liegen im Vorgang.
+  - Einstellung **global → Benutzer → PC**: Outlook (Standard) / Portal / direkt. Ziel-PC = Melder, dessen Computername dem RDP-Client entspricht, sonst der zuletzt aktive.
+  - Aufträge an den Melder sind persistent (`melder_auftrag`, Übernahme atomar). Nicht abgeholt nach `DeliveryTimeoutHours` → 820.
+  - Der Benutzer ändert die Einstellung seines PCs im Melder oder Portal. Der Admin setzt die Vorgabe und kann sie auf alle PCs „überrollen“ (Ereignis `einstellung`); danach darf der Benutzer wieder ändern.
+- **Outlook-Versandbestätigung (15.11.2026):**
+  - Windows-Melder: Benutzereigenschaft `BelegpostId` am Entwurf; minütliche Suche (DASL) in „Gesendete Elemente“ aller Postfächer, nur wenn Outlook läuft → `/melder/api/vorgang/{id}/gesendet` → 110.
+  - Mac: Betreff und Zeit in „Gesendet“ (AppleScript).
+  - Ohne Bestätigung nach `OutlookConfirmHours` → 830.
 
 ## Erkenntnisse aus echten Ausdrucken
 
@@ -112,6 +148,7 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 
 ## Nächste Schritte (normale PDFs, ohne ZUGFeRD)
 
+0. **Am Server testen:** MAPI-DLL installieren und mit dem ERP (32 und 64 Bit) eine Mail senden; Outlook-Versandbestätigung prüfen; ERP-Rückmeldung mit eigener SecuredApp einrichten (Servicepass registrieren, im ERP freigeben, Testschreiben). Den Mac-Melder auf dem Mac neu bauen (`build.sh`).
 1. **Drucker einrichten:** Drucker „Belegpost“ mit Microsoft Print to PDF und eigenem Anschluss aus der Oberfläche anlegen und freigeben (bevorzugt Named Pipe, sonst mfilemon). Den Druckauftrag mit Benutzer und Rechner übernehmen.
 2. **Weitere Steuerzeichen:** `@@af@@` (PDF anhängen, `no_stationery`), `@@nd@@` (Druckauftrag teilen), `@@rpc@@` (Seite entfernen).
 3. **Ende-zu-Ende-Test** mit echten Briefpapieren je Firma.

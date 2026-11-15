@@ -20,6 +20,10 @@ internal static class OutlookBridge
 
     public sealed record Result(bool Ok, string Message, bool ViaOutlook);
 
+    /// <summary>Benannte Eigenschaft am Entwurf, an der der Versand in „Gesendete Elemente“ wiedererkannt wird.</summary>
+    public const string TrackingProperty = "BelegpostId";
+    private const string TrackingDasl = "http://schemas.microsoft.com/mapi/string/{00020329-0000-0000-C000-000000000046}/" + TrackingProperty;
+
     public static async Task<Result> OpenDraft(MelderConfig cfg, string documentId)
     {
         var token = cfg.Token ?? throw new InvalidOperationException("Melder ist nicht verbunden.");
@@ -42,7 +46,7 @@ internal static class OutlookBridge
         {
             try
             {
-                CreateViaCom(m, folder);
+                CreateViaCom(m, folder, documentId);
                 result = new Result(true, "In Outlook geöffnet.", true);
             }
             catch (Exception ex)
@@ -67,9 +71,64 @@ internal static class OutlookBridge
         return result;
     }
 
+    /// <summary>
+    /// Sucht in „Gesendete Elemente“ aller Postfächer nach Entwürfen mit Belegpost-Kennung. Nur wenn Outlook bereits läuft
+    /// (es wird nie extra gestartet). Liefert Vorgang → Sendezeitpunkt.
+    /// </summary>
+    public static Dictionary<string, DateTimeOffset> FindSent(IEnumerable<string> ids)
+    {
+        var found = new Dictionary<string, DateTimeOffset>();
+        var list = ids.ToList();
+        if (list.Count == 0 || Process.GetProcessesByName("OUTLOOK").Length == 0 || !ClassicOutlookAvailable()) return found;
+        dynamic? app = null, ns = null;
+        try
+        {
+            app = Activator.CreateInstance(Type.GetTypeFromProgID("Outlook.Application")!)!;
+            ns = app.GetNamespace("MAPI");
+            var folders = new List<dynamic>();
+            try { folders.Add(ns.GetDefaultFolder(5)); } catch { } // olFolderSentMail
+            try
+            {
+                foreach (dynamic store in ns.Stores)
+                {
+                    try { folders.Add(store.GetDefaultFolder(5)); } catch { }
+                }
+            }
+            catch { }
+            var seen = new HashSet<string>();
+            foreach (var f in folders)
+            {
+                string? path = null;
+                try { path = f.FolderPath; } catch { }
+                if (path is not null && !seen.Add(path)) continue;
+                dynamic items = f.Items;
+                foreach (var id in list.Where(x => !found.ContainsKey(x)))
+                {
+                    try
+                    {
+                        dynamic? hit = items.Find($"@SQL=\"{TrackingDasl}\" = '{id.Replace("'", "''")}'");
+                        if (hit is null) continue;
+                        DateTime sent = hit.SentOn;
+                        found[id] = sent.Year > 2000 ? new DateTimeOffset(sent) : DateTimeOffset.Now;
+                        Marshal.FinalReleaseComObject(hit);
+                    }
+                    catch { }
+                }
+                Marshal.FinalReleaseComObject(items);
+            }
+        }
+        catch { }
+        finally
+        {
+            if (ns is not null) Marshal.FinalReleaseComObject(ns);
+            if (app is not null) Marshal.FinalReleaseComObject(app);
+        }
+        return found;
+    }
+
     private static bool ClassicOutlookAvailable() => Type.GetTypeFromProgID("Outlook.Application") is not null;
 
-    private static void CreateViaCom(JsonElement m, string folder)
+    private static void CreateViaCom(JsonElement m, string folder, string documentId)
     {
         var type = Type.GetTypeFromProgID("Outlook.Application")!;
         dynamic? app = null, item = null;
@@ -97,6 +156,10 @@ internal static class OutlookBridge
                 }
                 Marshal.FinalReleaseComObject(att);
             }
+
+            // Wiedererkennung für die Versandbestätigung
+            try { dynamic up = item.UserProperties.Add(TrackingProperty, 1 /* olText */, false, Type.Missing); up.Value = documentId; Marshal.FinalReleaseComObject(up); }
+            catch { /* ohne Bestätigung weiter */ }
 
             var html = Str(m, "html");
             if (!string.IsNullOrEmpty(html)) item.HTMLBody = html;

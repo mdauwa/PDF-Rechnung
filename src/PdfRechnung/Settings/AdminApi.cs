@@ -16,6 +16,9 @@ public sealed class SaveSettingsRequest
     /// <summary>Neuer Clientschlüssel für Microsoft Graph (Mailversand); leer = unverändert.</summary>
     public string? GraphSecret { get; set; }
     public bool ClearGraphSecret { get; set; }
+    /// <summary>Kennwort des technischen ERP-Benutzers; leer = unverändert.</summary>
+    public string? ErpPassword { get; set; }
+    public bool ClearErpPassword { get; set; }
 }
 
 public sealed record MailTestRequest(MailOptions? Mail, string? Password, string? To, string? GraphSecret = null);
@@ -55,6 +58,10 @@ public static class AdminApi
             s.Mail.Password = null;
             var hasFirmenportalSecret = !string.IsNullOrEmpty(s.Auth.Firmenportal.Secret);
             s.Auth.Firmenportal.Secret = null;
+            var hasErpPassword = !string.IsNullOrEmpty(s.Erp.Password);
+            s.Erp.Password = null;
+            if (s.Erp.Codes.Count == 0)
+                s.Erp.Codes = PdfRechnung.Documents.StatusCode.All.Select(c => new ErpStatusCode { Code = c, ErpValue = c, Write = PdfRechnung.Erp.ErpFieldBuilder.DefaultWrite(c) }).ToList();
             return Results.Ok(new
             {
                 settings = s,
@@ -62,6 +69,10 @@ public static class AdminApi
                 hasMailPassword,
                 hasGraphSecret,
                 hasFirmenportalSecret,
+                hasErpPassword,
+                statusCodes = PdfRechnung.Documents.StatusCode.All.Select(c => new { code = c, text = PdfRechnung.Documents.StatusCode.Text(c) }),
+                erpValues = PdfRechnung.Erp.ErpValues.All.Select(d => new { key = d.Key, label = d.Label, example = d.Example, date = d.Date, time = d.Time }),
+                mapiModes = MapiMode.All.Select(m => new { key = m, text = MapiMode.Text(m) }),
                 hasEntraLogin = !string.IsNullOrWhiteSpace(s.Auth.Entra.TenantId) && !string.IsNullOrWhiteSpace(s.Auth.Entra.ClientId),
                 entraRedirectUris = CertificateProvider.HostNames(s.Server).Select(h => $"https://{h}:{s.Server.HttpsPort}/signin-oidc"),
                 certificate = certs.Info,
@@ -91,6 +102,12 @@ public static class AdminApi
             s.Mail.GraphClientSecret = req.ClearGraphSecret ? null
                 : !string.IsNullOrEmpty(req.GraphSecret) ? store.Secrets.Protect(req.GraphSecret.Trim())
                 : old.Mail.GraphClientSecret;
+            s.Erp.Password = req.ClearErpPassword ? null
+                : !string.IsNullOrEmpty(req.ErpPassword) ? store.Secrets.Protect(req.ErpPassword)
+                : old.Erp.Password;
+            s.Erp.Fields = s.Erp.Fields.Where(f => !string.IsNullOrWhiteSpace(f.Field)).Select(f => { f.Field = f.Field.Trim().ToUpperInvariant(); return f; }).ToList();
+            s.StatusLink.AllowedNetworks = s.StatusLink.AllowedNetworks.Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToList();
+            s.StatusLink.TrustedProxies = s.StatusLink.TrustedProxies.Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToList();
             s.Auth.Firmenportal.Secret = old.Auth.Firmenportal.Secret; // nur über /firmenportal/schluessel änderbar
             s.Server.CertificatePath = old.Server.CertificatePath;         // nur über Zertifikat-Endpunkte änderbar
             s.Server.CertificatePassword = old.Server.CertificatePassword;
@@ -101,7 +118,32 @@ public static class AdminApi
 
             store.Save(s);
             var restart = Json(old.Server) != Json(s.Server) || Json(old.Auth) != Json(s.Auth);
-            return Results.Ok(new { saved = true, restartRequired = restart });
+            return Results.Ok(new { saved = true, restartRequired = restart, warnings = PdfRechnung.Erp.ErpValues.Validate(s.Erp).Warnings });
+        });
+
+        // ---------- MAPI-Mailclient am Server ----------
+        g.MapGet("/mapi", () => OperatingSystem.IsWindows()
+            ? Results.Ok(new { status = MapiClient.Status(), perUserCommand = MapiClient.PerUserCommand, pipe = PdfRechnung.Services.MapiPipeServer.PipeName })
+            : Results.Ok(new { status = (object?)null, perUserCommand = MapiClient.PerUserCommand, pipe = "belegpost-mapi" }));
+
+        g.MapPost("/mapi/{aktion}", (string aktion, PdfRechnung.Services.PortalAccess access, HttpContext ctx, PdfRechnung.Data.BelegpostDb db) =>
+        {
+            if (!OperatingSystem.IsWindows()) return Results.BadRequest(new { error = "Nur unter Windows möglich." });
+            var log = new List<string>();
+            try
+            {
+                switch (aktion)
+                {
+                    case "installieren": MapiClient.Install(log.Add); break;
+                    case "standard": MapiClient.SetDefaultForAll(log.Add); break;
+                    case "wiederherstellen": MapiClient.RestoreDefault(log.Add); break;
+                    default: return Results.NotFound();
+                }
+                db.Audit(access.For(ctx).Name, "MAPI " + aktion, null, string.Join(" | ", log));
+                return Results.Ok(new { ok = true, log, status = MapiClient.Status() });
+            }
+            catch (UnauthorizedAccessException) { return Results.Ok(new { ok = false, log, message = "Keine Berechtigung – der Dienst muss als lokales System laufen bzw. die Exe als Administrator gestartet sein." }); }
+            catch (Exception ex) { return Results.Ok(new { ok = false, log, message = ex.Message }); }
         });
 
         // ---------- E-Mail testen ----------
@@ -357,6 +399,18 @@ public static class AdminApi
         if (!MailSender.SecurityModes.Contains(s.Mail.Security)) e.Add("Unbekannte Verschlüsselung für SMTP.");
         if (s.Mail.AutoSendDelayMinutes < 0) e.Add("Die Wartezeit für den Autoversand darf nicht negativ sein.");
         if (s.Storage.RetentionDays < 0) e.Add("Die Aufbewahrungsdauer darf nicht negativ sein.");
+        foreach (var n in s.StatusLink.AllowedNetworks.Concat(s.StatusLink.TrustedProxies).Where(x => !string.IsNullOrWhiteSpace(x)))
+            if (!PdfRechnung.Services.Network.TryParse(n, out _)) e.Add($"„{n}“ ist kein gültiger IP-Bereich (z. B. 192.168.10.0/24).");
+        if (!string.IsNullOrWhiteSpace(s.Portal.PublicUrl) && (!Uri.TryCreate(s.Portal.PublicUrl.Trim(), UriKind.Absolute, out var pu) || pu.Scheme != "https"))
+            e.Add("Die Portal-Adresse für Links muss mit https:// beginnen.");
+        if (!MapiMode.All.Contains(s.Mapi.DefaultMode)) e.Add("Unbekannter Standard für MAPI-Mails.");
+        if (s.Erp.Enabled)
+        {
+            var erp = PdfRechnung.Erp.WwsSettings.From(s.Erp, "x").Validate()
+                .Where(x => !x.Contains("Benutzer samt Kennwort", StringComparison.Ordinal)); // Kennwort wird getrennt übergeben
+            e.AddRange(erp);
+        }
+        e.AddRange(PdfRechnung.Erp.ErpValues.Validate(s.Erp).Errors);
         if (s.Invoice.SumTolerance < 0) e.Add("Die Toleranz der Summenprüfung darf nicht negativ sein.");
         foreach (var st in s.Stationery.Items)
         {

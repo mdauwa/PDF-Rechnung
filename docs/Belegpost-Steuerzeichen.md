@@ -7,6 +7,7 @@ Stand 13.11.2026. Alle Steuerzeichen werden wie bei gotomaxx als `@@xxWert@@` ge
 | Steuerzeichen | Beispiel | Wirkung |
 |---|---|---|
 | `@@pb…@@` | `@@pb007@@`, `@@pb7@@` | **ERP-Bedienernummer.** Der Beleg gehört dem Portal-Benutzer mit dieser Nummer (Einstellungen → Benutzer → ERP-Nr.). Er erscheint dort unter „Meine Belege“ und öffnet sich über dessen **Melder** am PC. Vornullen werden ergänzt (`7` → `007`), erlaubt sind 0–999. Ist die Nummer unbekannt oder ungültig, erscheint eine Warnung im Vorgang. |
+| `@@pi…@@` | `@@pi12345@@` | **ERP-Belegindex (BELNDX).** Nur Belege mit Belegindex bekommen eine **ERP-Rückmeldung**: Jeder Statuswechsel (3-stelliger Statuscode, z. B. 100 = versendet, 110 = über Outlook versendet) wird per WEBWARE-Webservice `BELEG.PUT` in die eingestellten `BEL_…`-Felder geschrieben (Einstellungen → ERP-Rückmeldung). Vornullen werden entfernt; ein ungültiger Wert ergibt eine Warnung. Auch im MAPI-Mailtext möglich (wird vor dem Versand entfernt). Gleichwertig: `@@xi ERP_VOUCHER_INDEX=12345@@`. |
 | `@@pu…@@` | `@@puFIRMA\mmuster@@`, `@@pum.muster@firma.at@@` | **Wer hat gedruckt** (Windows- oder ERP-Name). Wird mit „Windows-Benutzer“, Anmeldename und E-Mail verglichen, auch ohne Domäne. `@@pb@@` hat Vorrang. |
 | `@@pvName=Wert@@` | `@@pvAnrede=Sehr geehrter Herr Maier@@` | **Eigener Platzhalter** für Betreff, Mailtext, Signatur, Fußzeile und Dateiname. Im Text als `{Anrede}` verwenden. Beliebig viele Namen möglich. |
 | `@@pt…@@` | `@@ptFirma B@@` | **Mail-Vorlage** (HTML im CI) wählen. Ohne `@@pt@@` wird die Vorlage in dieser Reihenfolge gesucht: Briefpapier → Absender → Standardvorlage. |
@@ -56,6 +57,7 @@ Ohne Bedeutung für Belegpost und deshalb ignoriert: `@@mo@@`, `@@ms@@`, `@@mp@@
 
 ```
 @@pb007@@
+@@pi{Belegindex}@@
 @@mfRechnung_{Belegnummer}@@
 @@aakunde@firma.at@@
 @@edRechnung {Belegnummer} vom {Belegdatum}@@

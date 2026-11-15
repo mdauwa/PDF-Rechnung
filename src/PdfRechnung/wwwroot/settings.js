@@ -17,6 +17,9 @@ const TABS = [
   ["mailvorlagen", "Mail-Vorlagen"],
   ["erechnung", "E-Rechnung"],
   ["ablage", "Ablage"],
+  ["erp", "ERP-Rückmeldung"],
+  ["mapi", "MAPI-Mails"],
+  ["statuslink", "Status-Link"],
   ["benutzer", "Benutzer"],
   ["anmeldung", "Anmeldung"]
 ];
@@ -57,6 +60,7 @@ async function renderSettings(view) {
 async function loadSettings() {
   ST.data = await api("GET", "api/admin/settings");
   ST.s = structuredClone(ST.data.settings);
+  ST.erpPassword = ""; ST.clearErpPassword = false; ST.saveWarnings = null;
   ST.dirty = false; ST.entraSecret = ""; ST.clearEntraSecret = false; ST.mailPassword = ""; ST.clearMailPassword = false; ST.graphSecret = ""; ST.clearGraphSecret = false;
   const setup = $("#stSetup");
   setup.hidden = !ST.data.setupMode;
@@ -71,9 +75,13 @@ function drawTab() {
   document.querySelectorAll("#stTabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === ST.tab));
   const body = $("#stBody");
   if (!ST.s) return;
-  const fn = { dienst: tabService, server: tabServer, eingang: tabInbox, briefpapier: tabStationery, mail: tabMail, mailvorlagen: tabTemplates, erechnung: tabInvoice, ablage: tabStorage, benutzer: tabUsers, anmeldung: tabAuth }[ST.tab] || tabService;
+  const fn = { dienst: tabService, server: tabServer, eingang: tabInbox, briefpapier: tabStationery, mail: tabMail, mailvorlagen: tabTemplates, erechnung: tabInvoice, ablage: tabStorage, benutzer: tabUsers, anmeldung: tabAuth,
+    erp: tabErp, mapi: tabMapi, statuslink: tabStatusLink }[ST.tab] || tabService;
   body.innerHTML = fn();
   if (ST.tab === "benutzer" && !ST.users) loadUsers();
+  if (ST.tab === "benutzer" && !ST.devices) loadDevices();
+  if (ST.tab === "erp") loadErpStatus();
+  if (ST.tab === "mapi") loadMapiStatus();
   if (ST.tab === "dienst") loadService();
 }
 
@@ -106,6 +114,9 @@ function onInput(e) {
   if (el.dataset.entrasecret !== undefined) { ST.entraSecret = el.value; markDirty(); return; }
   if (el.dataset.mailpw !== undefined) { ST.mailPassword = el.value; markDirty(); return; }
   if (el.dataset.graphsecret !== undefined) { ST.graphSecret = el.value; markDirty(); return; }
+  if (el.dataset.erppw !== undefined) { ST.erpPassword = el.value; markDirty(); return; }
+  if (onErpInput(el, e)) return;
+  if (el.dataset.devmapi !== undefined && e.type === "change") { setDeviceMapi(el.dataset.devmapi, el.value); return; }
   if (el.dataset.bpdefault !== undefined) { ST.s.stationery.default = el.checked ? el.value : ""; markDirty(); return; }
   if (el.dataset.bpup !== undefined && e.type === "change") { uploadStationery(el); return; }
   if (el.dataset.bindall !== undefined) {
@@ -243,6 +254,42 @@ async function onAction(e) {
         const t = ST.s.mailTemplates.items[+btn.dataset.i];
         t.customHtml = t.customHtml || DEFAULT_HTML; markDirty(); drawTab(); break;
       }
+      case "erp-clear": ST.clearErpPassword = !ST.clearErpPassword; markDirty(); drawTab(); break;
+      case "erp-field-add": (ST.s.erp.fields ||= []).push({ field: "", value: "statuscode", format: "", length: 0, onlyCodes: [], onlyIfEmpty: false }); markDirty(); drawTab(); break;
+      case "erp-field-del": ST.s.erp.fields.splice(+btn.dataset.i, 1); markDirty(); drawTab(); break;
+      case "erp-check": await erpCall("api/admin/erp/pruefen", "Verbindung wird geprüft …"); break;
+      case "erp-confirm-reg":
+        if (await confirmDialog("Registrierung zurücksetzen", "Bitte vorher im ERP prüfen, ob für Belegpost bereits ein Servicepass angelegt wurde (ggf. dort entfernen). Danach registriert Belegpost beim nächsten Zugriff neu.", "Zurücksetzen", true))
+          await erpCall("api/admin/erp/registrierung-bestaetigen", "…");
+        break;
+      case "erp-retry-all": await api("POST", "api/admin/erp/wiederholen"); loadErpStatus(); break;
+      case "erp-job-retry": await api("POST", `api/admin/erp/auftraege/${btn.dataset.id}/wiederholen`); loadErpStatus(); break;
+      case "erp-job-discard": await api("POST", `api/admin/erp/auftraege/${btn.dataset.id}/verwerfen`); loadErpStatus(); break;
+      case "erp-preview": {
+        const r = await api("POST", "api/admin/erp/vorschau", { vorgangId: $("#erpPvId").value.trim() || null, code: $("#erpPvCode").value || null, erp: ST.s.erp });
+        ST.erpPreview = r; drawTab(); break;
+      }
+      case "erp-test": {
+        const idx = $("#erpTestIdx").value.trim();
+        if (!idx) throw new Error("Bitte einen Belegindex eingeben.");
+        if (ST.dirty) throw new Error("Bitte zuerst die Einstellungen speichern.");
+        if (!await confirmDialog("Testschreiben", `Jetzt wirklich in Beleg ${esc(idx)} im ERP schreiben?`, "Schreiben", true)) break;
+        const r = await api("POST", "api/admin/erp/testschreiben", { erpIndex: idx, vorgangId: $("#erpPvId").value.trim() || null, code: $("#erpPvCode").value || null, confirm: true });
+        msg(r.message, r.ok); break;
+      }
+      case "mapi-install": await mapiCall("installieren"); break;
+      case "mapi-default":
+        if (await confirmDialog("Standard-Mailprogramm", "Belegpost für alle Benutzer dieses Servers als Standard für MAPI-Mails setzen? Das bisherige wird gemerkt und kann wiederhergestellt werden.", "Als Standard setzen"))
+          await mapiCall("standard");
+        break;
+      case "mapi-restore": await mapiCall("wiederherstellen"); break;
+      case "user-mapi-push": {
+        const u = ST.users.users[+btn.dataset.i];
+        if (!u.id) throw new Error("Benutzer zuerst speichern.");
+        if (!await confirmDialog("Einstellung überrollen", `Die MAPI-Vorgabe von ${esc(u.name)} („${esc(mapiText(u.mapiMode))}“) jetzt auf alle seine PCs übertragen? Der Benutzer kann sie danach im Melder wieder ändern.`, "Überrollen")) break;
+        await api("POST", `api/melder/benutzer/${encodeURIComponent(u.id)}/mapi?alleGeraete=true`, { mode: u.mapiMode || "" });
+        await loadDevices(); msg("Einstellung auf alle PCs übertragen.", true); break;
+      }
       case "unit-add": ST.s.invoice.units[""] = ""; drawTab(); document.querySelector('.unit .key[value=""]')?.focus(); break;
       case "unit-del": delete ST.s.invoice.units[btn.dataset.key]; markDirty(); drawTab(); break;
       case "user-add":
@@ -257,6 +304,7 @@ async function onAction(e) {
       }
       case "users-save":
         await api("PUT", "api/admin/users", { users: ST.users.users });
+        for (const u of ST.users.users.filter(x => x.id && x._mapiChanged)) await api("POST", `api/melder/benutzer/${encodeURIComponent(u.id)}/mapi`, { mode: u.mapiMode || "" });
         await loadUsers();
         msg("Benutzer gespeichert – Änderungen gelten sofort.", true);
         break;
@@ -280,10 +328,11 @@ async function save() {
   const r = await api("PUT", "api/admin/settings", { settings: ST.s,
     entraSecret: ST.entraSecret || null, clearEntraSecret: ST.clearEntraSecret,
     mailPassword: ST.mailPassword || null, clearMailPassword: ST.clearMailPassword,
-    graphSecret: ST.graphSecret || null, clearGraphSecret: ST.clearGraphSecret });
+    graphSecret: ST.graphSecret || null, clearGraphSecret: ST.clearGraphSecret,
+    erpPassword: ST.erpPassword || null, clearErpPassword: ST.clearErpPassword });
   await loadSettings();
   if (r.restartRequired) restartHint("Gespeichert.");
-  else msg("Gespeichert – die Änderungen sind sofort aktiv.", true);
+  else msg("Gespeichert – die Änderungen sind sofort aktiv." + (r.warnings?.length ? "\nHinweise: " + r.warnings.join(" ") : ""), true);
   await loadPortal();
 }
 
@@ -818,8 +867,10 @@ function tabUsers() {
         <td><button class="icon-btn" data-st="user-del" data-i="${i}" title="Entfernen">✕</button></td></tr>
         <tr class="user-sub ${u.active ? "" : "inactive"}"><td colspan="10"><div class="user-sub-grid">
           <label>Windows-Benutzer (Druckauftrag)<input data-u="${i}|printNames" value="${esc((u.printNames || []).join(", "))}" placeholder="z. B. FIRMA\\mmuster"></label>
-          <span class="user-melder">${(U.melder?.[u.id] || []).length
-            ? `Melder: ${U.melder[u.id].map(m => esc(m.name)).join(", ")}` : "kein Melder verbunden"}</span>
+          <label>MAPI-Mails (Vorgabe)<select data-u="${i}|mapiMode">
+            <option value="" ${!u.mapiMode ? "selected" : ""}>Standard (${esc(mapiText(ST.s.mapi?.defaultMode || "outlook"))})</option>
+            ${(ST.data.mapiModes || []).map(m => `<option value="${m.key}" ${u.mapiMode === m.key ? "selected" : ""}>${esc(m.text)}</option>`).join("")}</select></label>
+          <div class="user-devices">${userDevices(u, i)}</div>
           <label>Sieht Belege<select data-u="${i}|visibility" ${u.isAdmin ? "disabled" : ""}>
             ${[["eigene", "nur eigene"], ["auswahl", "eigene + ausgewählte Benutzer"], ["alle", "alle"]].map(([k, t]) =>
               `<option value="${k}" ${(u.isAdmin ? "alle" : (u.visibility || "eigene")) === k ? "selected" : ""}>${t}</option>`).join("")}</select></label>
@@ -853,6 +904,7 @@ function onUsersInput(el, e) {
     el.title = bad ? "Bitte 3 Ziffern, z. B. 007" : "ERP-Bedienernummer (3 Ziffern). Mehrere mit Komma.";
   }
   else if (k === "visibility") { u.visibility = el.value; markUsersDirty(); drawTab(); return true; }
+  else if (k === "mapiMode") { u.mapiMode = el.value; u._mapiChanged = true; }
   else if (k === "printNames") u.printNames = el.value.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
   else if (k === "logins") u.logins = el.value.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
   else if (el.type === "checkbox") { u[k] = el.checked; if (k === "isAdmin" || k === "active") { markUsersDirty(); drawTab(); return true; } }
@@ -929,4 +981,210 @@ function tabAuth() {
            <div class="actions"><button class="btn ghost" data-st="local-pw">Kennwort ändern</button></div>`
         : `<p class="help">Das Administrator-Kennwort kann nur angemeldet als Administrator direkt am Server geändert werden.
            Vergessen? Auf dem Server <code>Belegpost.exe --reset-admin-password</code> ausführen.</p>`);
+}
+
+
+/* ---------------- Benutzer: Melder-Geräte und MAPI-Einstellung je PC ---------------- */
+
+const mapiText = m => (ST.data?.mapiModes || []).find(x => x.key === m)?.text || "Standard";
+
+async function loadDevices() {
+  try { ST.devices = (await api("GET", "api/melder/alle-geraete")).devices; } catch { ST.devices = []; }
+  if (ST.tab === "benutzer") drawTab();
+}
+
+function userDevices(u, i) {
+  const list = (ST.devices || []).filter(d => d.userId === u.id);
+  if (!u.id) return "";
+  if (!list.length) return `<span class="user-melder">kein Melder gekoppelt</span>`;
+  const fmt = d => d ? new Date(d).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–";
+  return `<table class="list mini"><thead><tr><th>Melder (PC)</th><th>Computer</th><th>Zuletzt</th><th>MAPI-Mails auf diesem PC</th></tr></thead><tbody>
+    ${list.map(d => `<tr><td>${esc(d.name)}</td><td>${esc(d.computerName || "–")}</td><td class="meta-inline">${fmt(d.lastSeen)}</td>
+      <td><select data-devmapi="${esc(d.id)}"><option value="" ${!d.mapiMode ? "selected" : ""}>wie Vorgabe</option>
+        ${(ST.data.mapiModes || []).map(m => `<option value="${m.key}" ${d.mapiMode === m.key ? "selected" : ""}>${esc(m.text)}</option>`).join("")}</select>
+        ${d.mapiSource ? `<span class="mapi-src">${d.mapiSource === "admin" ? "vom Administrator" : "vom Benutzer"} · ${esc(d.mapiChangedBy || "")} · ${fmt(d.mapiChangedAt)}</span>` : ""}</td></tr>`).join("")}
+    </tbody></table>
+    <button class="btn ghost small" data-st="user-mapi-push" data-i="${i}" title="Vorgabe sofort auf alle PCs dieses Benutzers übertragen (er kann sie danach im Melder wieder ändern)">Vorgabe auf alle PCs überrollen</button>`;
+}
+
+async function setDeviceMapi(id, mode) {
+  try {
+    await api("POST", `api/melder/geraete/${encodeURIComponent(id)}/mapi`, { mode });
+    await loadDevices();
+    msg("Einstellung für diesen PC gesetzt – der Melder übernimmt sie sofort.", true);
+  } catch (e) { msg(e.message); }
+}
+
+/* ---------------- Tab: ERP-Rückmeldung ---------------- */
+
+function onErpInput(el, e) {
+  if (el.dataset.erpf !== undefined) {
+    const [i, k] = el.dataset.erpf.split("|"), f = ST.s.erp.fields[+i];
+    if (k === "onlyIfEmpty") f.onlyIfEmpty = el.checked;
+    else if (k === "length") f.length = parseInt(el.value || "0", 10) || 0;
+    else if (k === "onlyCodes") f.onlyCodes = el.value.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
+    else f[k] = k === "field" ? el.value.toUpperCase() : el.value;
+    markDirty();
+    if ((k === "value" || k === "field") && e.type === "change") drawTab();
+    return true;
+  }
+  if (el.dataset.erpc !== undefined) {
+    const [i, k] = el.dataset.erpc.split("|"), c = ST.s.erp.codes[+i];
+    if (k === "write") c.write = el.checked; else c.erpValue = el.value.trim();
+    markDirty(); return true;
+  }
+  return false;
+}
+
+function erpLength(f) {
+  if (f.length > 0) return f.length;
+  const m = /_(\d{1,4})$/.exec(f.field || "");
+  return m ? +m[1] : null;
+}
+
+function tabErp() {
+  const E = ST.s.erp ||= { enabled: false, fields: [], codes: [] };
+  E.fields ||= []; E.codes ||= [];
+  const pwPh = ST.data.hasErpPassword && !ST.clearErpPassword ? "•••••••• (gespeichert – leer lassen = unverändert)" : "Kennwort";
+  const vals = ST.data.erpValues || [];
+  const needsFormat = v => ["datum", "uhrzeit", "zeitstempel", "versanddatum", "versandzeit", "fest", "vorlage"].includes(v);
+  const fmtPh = v => v === "fest" ? "Text" : v === "vorlage" ? "{Statustext} am {Datum}" : ["uhrzeit", "versandzeit"].includes(v) ? "HH:mm" : v === "zeitstempel" ? "TT.MM.JJJJ HH:mm" : "TT.MM.JJJJ";
+  const pv = ST.erpPreview;
+  return section("ERP-Anbindung (WEBWARE-Webservices)",
+    `${inCheck("erp.enabled", "Status versendeter Belege ins ERP zurückschreiben (BELEG.PUT)")}
+     <p class="help">Nur Belege mit Belegindex <code>@@pi12345@@</code> werden zurückgeschrieben. Jeder Statuswechsel landet sofort in einer Warteschlange;
+       ist das ERP nicht erreichbar, wird später erneut versucht – der Versand wird nie aufgehalten.</p>
+     <div class="grid2">
+       ${field("Adresse (HTTPS)", inText("erp.endpoint", "https://erp.firma.at/WWSVC/"), "Mit abschließendem /. Den Servernamen verwenden, der zum Zertifikat passt (nicht localhost).")}
+       ${field("SecuredApp-Zugriffs-ID", inText("erp.secureAppId", "z. B. 12"), "Eigene SecuredApp für Belegpost – nicht die eines anderen Dienstes.")}
+       ${field("Hersteller-Hash", inText("erp.vendor"))}
+       ${field("Anwendungs-Hash", inText("erp.application"))}
+       ${field("Revision", inNum("erp.revision", 0, 9999))}
+       ${field("Technischer ERP-Benutzer (optional)", inText("erp.username"))}
+       ${field("Kennwort", `<input type="password" data-erppw autocomplete="new-password" placeholder="${pwPh}" ${ST.clearErpPassword ? "disabled" : ""}>`)}
+       ${field("Aufgeben nach (Tagen)", inNum("erp.giveUpDays", 1, 60), "Danach gilt ein Auftrag als fehlgeschlagen und kann im Portal erneut gesendet werden.")}
+     </div>
+     ${ST.data.hasErpPassword ? `<label class="check"><input type="checkbox" data-st="erp-clear" ${ST.clearErpPassword ? "checked" : ""}> gespeichertes Kennwort entfernen</label>` : ""}
+     ${inCheck("erp.allowRegistration", "Belegpost darf selbst einen Servicepass registrieren (danach im ERP freigeben)")}
+     ${inCheck("erp.checkBeforeWrite", "Vor dem Schreiben mit BELEG.GET prüfen (Beleg vorhanden, „nur wenn leer“, schon aktuell)")}
+     <div id="erpStatus"><p class="meta">Lade Status …</p></div>`) +
+    section("Statuscodes",
+      `<p class="help">Der Status wird als 3-stellige Zahl geschrieben. Gruppen: 0xx in Arbeit · 1xx versendet · 2xx ohne Versand · 8xx Fehler · 9xx abgebrochen.
+        Den Wert im ERP kannst du anpassen und einzelne Stati abschalten.</p>
+       <table class="list mini"><thead><tr><th>Code</th><th>Status</th><th>Wert im ERP</th><th>Schreiben</th></tr></thead><tbody>
+       ${E.codes.map((c, i) => `<tr><td><code>${esc(c.code)}</code></td><td>${esc((ST.data.statusCodes || []).find(x => x.code === c.code)?.text || "")}</td>
+         <td><input class="erp-no" data-erpc="${i}|erpValue" value="${esc(c.erpValue || c.code)}" maxlength="3" inputmode="numeric"></td>
+         <td><input type="checkbox" data-erpc="${i}|write" ${c.write ? "checked" : ""}></td></tr>`).join("")}</tbody></table>`) +
+    section("Rückgabefelder",
+      `<p class="help">Eine Zeile je Feld im Belegkopf. Die Länge ergibt sich aus der Zahl hinter dem letzten „_“ (<code>BEL_3_8</code> = 8 Zeichen); längere Werte werden gekürzt.
+        Genau ein Feld bekommt den <b>Statuscode</b>. Datumsformate z. B. <code>TT.MM.JJJJ</code>, <code>JJJJMMTT</code>; Vorlagen mit Platzhaltern
+        <code>{Statuscode} {Statustext} {Datum} {Zeit} {Versanddatum} {Versandzeit} {Kanal} {Empfaenger} {Bediener} {Benutzer} {Belegnummer} {StatusLink}</code>.</p>
+       ${E.fields.length ? `<table class="list mini erp-fields"><thead><tr><th>ERP-Feld</th><th>Länge</th><th>Wert</th><th>Format / Text</th><th>nur bei Codes</th><th>nur wenn leer</th><th></th></tr></thead><tbody>
+       ${E.fields.map((f, i) => { const len = erpLength(f); const d = vals.find(v => v.key === f.value);
+         return `<tr><td><input data-erpf="${i}|field" value="${esc(f.field)}" placeholder="BEL_3_8"></td>
+         <td class="len">${len ?? `<input data-erpf="${i}|length" value="${f.length || ""}" placeholder="?" title="Länge – im Feldnamen nicht erkennbar" style="width:46px">`}</td>
+         <td><select data-erpf="${i}|value">${vals.map(v => `<option value="${v.key}" ${f.value === v.key ? "selected" : ""}>${esc(v.label)}</option>`).join("")}</select></td>
+         <td>${needsFormat(f.value) ? `<input data-erpf="${i}|format" value="${esc(f.format)}" placeholder="${esc(fmtPh(f.value))}">` : `<span class="meta-inline">z. B. ${esc(d?.example || "")}</span>`}</td>
+         <td><input data-erpf="${i}|onlyCodes" value="${esc((f.onlyCodes || []).join(", "))}" placeholder="alle"></td>
+         <td><input type="checkbox" data-erpf="${i}|onlyIfEmpty" ${f.onlyIfEmpty ? "checked" : ""}></td>
+         <td><button class="icon-btn" data-st="erp-field-del" data-i="${i}" title="Entfernen">✕</button></td></tr>`; }).join("")}</tbody></table>`
+         : `<p class="meta">Noch keine Felder – mit „+ Feld“ das Statusfeld und weitere Felder zuordnen.</p>`}`,
+      `<button class="btn ghost" data-st="erp-field-add">+ Feld</button>`) +
+    section("Vorschau und Testschreiben",
+      `<div class="grid3">
+        ${field("Vorgang (leer = neuester)", `<input id="erpPvId" placeholder="Vorgangsnummer" value="${esc(pv?.vorgang || "")}">`)}
+        ${field("Statuscode", `<select id="erpPvCode"><option value="">aktueller Status</option>${(ST.data.statusCodes || []).map(c => `<option value="${c.code}" ${pv?.code === c.code ? "selected" : ""}>${c.code} – ${esc(c.text)}</option>`).join("")}</select>`)}
+        ${field("Belegindex für Testschreiben", `<input id="erpTestIdx" placeholder="z. B. 12345" inputmode="numeric">`)}
+       </div>
+       <div class="actions"><button class="btn ghost" data-st="erp-preview">Vorschau</button><button class="btn ghost" data-st="erp-test">Testschreiben …</button></div>
+       ${pv ? `<p class="meta">${esc(pv.beleg)} · ${esc(pv.code)} ${esc(pv.codeText)}${pv.write ? "" : " · <b>dieser Status wird nicht geschrieben</b>"}</p>
+         <div class="erp-preview">BELEG.PUT\n${Object.entries(pv.parameters).map(([k, v]) => `${esc(k)} = ${esc(v)}`).join("\n")}</div>
+         ${[...(pv.errors || []), ...(pv.warnings || [])].map(x => `<p class="help bad">${esc(x)}</p>`).join("")}` : ""}`) +
+    section("Warteschlange", `<div id="erpQueue"><p class="meta">Lade …</p></div>`, `<button class="btn ghost" data-st="erp-retry-all">Offene jetzt versuchen</button>`);
+}
+
+async function erpCall(url) {
+  const r = await api("POST", url);
+  msg(r.message || "Erledigt.", r.ok !== false);
+  loadErpStatus();
+}
+
+async function loadErpStatus() {
+  try {
+    const [st, q] = await Promise.all([api("GET", "api/admin/erp/status"), api("GET", "api/admin/erp/auftraege")]);
+    const box = $("#erpStatus"); if (!box) return;
+    const c = st.counts || {};
+    box.innerHTML = `<div class="plain-field"><span class="lbl">Servicepass</span>
+      <p class="meta">${esc(st.configured ? st.passText : "Noch nicht vollständig eingerichtet.")}${st.lastValidated ? ` · zuletzt geprüft ${fmtDT(st.lastValidated)}` : ""}
+        ${st.lastError ? `<br><span class="bad">Letzter Fehler: ${esc(st.lastError)}</span>` : ""}${st.lastSuccess ? `<br>Zuletzt erfolgreich ${fmtDT(st.lastSuccess)}` : ""}
+        ${st.problem ? `<br><span class="bad">${esc(st.problem)}</span>` : ""}</p>
+      <p class="meta">Warteschlange: ${c.offen || 0} offen · ${c.fehler || 0} Fehler · ${c.erledigt || 0} erledigt</p>
+      <div class="actions"><button class="btn ghost" data-st="erp-check" ${st.configured ? "" : "disabled"}>Verbindung prüfen</button>
+        ${st.pass === "RegistrationOutcomeUnknown" ? `<button class="btn danger-ghost" data-st="erp-confirm-reg">Registrierung zurücksetzen …</button>` : ""}</div></div>`;
+    const qb = $("#erpQueue"); if (!qb) return;
+    const label = { offen: ["partial", "offen"], erledigt: ["ok", "erledigt"], fehler: ["missing", "Fehler"], ersetzt: ["free", "ersetzt"], verworfen: ["free", "verworfen"] };
+    qb.innerHTML = q.items.length ? `<div class="table-wrap"><table class="list mini"><thead><tr><th>Zeit</th><th>Belegindex</th><th>Code</th><th>Status</th><th>Meldung / Felder</th><th></th></tr></thead><tbody>
+      ${q.items.map(j => `<tr><td class="nowrap">${fmtDT(j.done || j.created)}</td><td><a href="#/vorgang?id=${encodeURIComponent(j.vorgangId)}">${esc(j.erpIndex)}</a></td>
+        <td><span class="badge code">${esc(j.code)}</span></td><td><span class="badge ${label[j.status]?.[0] || ""}">${label[j.status]?.[1] || esc(j.status)}</span>${j.status === "offen" && j.attempts ? `<small> Versuch ${j.attempts + 1} um ${fmtDT(j.nextAttempt)}</small>` : ""}</td>
+        <td>${esc(j.message || (j.fields ? Object.entries(j.fields).map(([k, v]) => k + "=" + v).join(", ") : ""))}</td>
+        <td class="nowrap">${["fehler", "offen", "verworfen"].includes(j.status) ? `<button class="btn ghost small" data-st="erp-job-retry" data-id="${j.id}">Erneut</button>` : ""}
+          ${["fehler", "offen"].includes(j.status) ? `<button class="btn ghost small" data-st="erp-job-discard" data-id="${j.id}">Verwerfen</button>` : ""}</td></tr>`).join("")}
+      </tbody></table></div>` : `<p class="meta">Noch keine Aufträge.</p>`;
+  } catch (e) { const box = $("#erpStatus"); if (box) box.innerHTML = `<p class="bad">${esc(e.message)}</p>`; }
+}
+
+/* ---------------- Tab: MAPI-Mails ---------------- */
+
+function tabMapi() {
+  ST.s.mapi ||= { defaultMode: "outlook", deliveryTimeoutHours: 8, outlookConfirmHours: 24 };
+  return section("Mailclient „Belegpost“ am ERP-/RDP-Server",
+    `<p class="help">Das ERP verschickt Mails über MAPI. Mit dem Mailclient „Belegpost“ (BelegpostMapi.dll, 32 und 64 Bit) landen diese Mails bei Belegpost:
+       je nach Einstellung öffnet der <b>Melder</b> sie als fertigen Outlook-Entwurf auf dem PC des Benutzers, sie warten im Portal auf Prüfung oder gehen direkt über den Dienst hinaus.
+       Der Benutzer wird am Windows-Konto erkannt (Benutzer → Windows-Benutzer), der PC am Computernamen der RDP-Sitzung.</p>
+     <div id="mapiStatus"><p class="meta">Lade Status …</p></div>`) +
+    section("Was passiert mit MAPI-Mails?",
+      `<div class="grid2">${field("Standard für alle Benutzer", inSelect("mapi.defaultMode", (ST.data.mapiModes || []).map(m => [m.key, m.text])),
+          "Pro Benutzer (Benutzer → MAPI-Mails) und pro PC (Melder) änderbar. Der Benutzer kann die Einstellung seines PCs im Melder selbst ändern; der Admin kann sie überrollen.")}
+        ${field("Nicht abgeholte Outlook-Entwürfe nach (Stunden)", inNum("mapi.deliveryTimeoutHours", 1, 720), "Holt kein Melder den Entwurf ab, bleibt die Mail im Portal (Status 820).")}
+        ${field("Versandbestätigung aus Outlook erwarten (Stunden)", inNum("mapi.outlookConfirmHours", 1, 720), "Ohne Bestätigung Status 830 – eine spätere Bestätigung setzt 110.")}</div>`);
+}
+
+async function mapiCall(action) {
+  const r = await api("POST", "api/admin/mapi/" + action);
+  msg((r.ok ? "" : (r.message || "Fehler") + "\n") + (r.log || []).join("\n"), r.ok);
+  loadMapiStatus();
+}
+
+async function loadMapiStatus() {
+  const box = $("#mapiStatus"); if (!box) return;
+  try {
+    const r = await api("GET", "api/admin/mapi");
+    const s = r.status;
+    box.innerHTML = s ? `<table class="kv">
+        <tr><th>DLLs neben Belegpost.exe</th><td>${s.available ? "vorhanden" : '<span class="bad">fehlen (BelegpostMapi-x64.dll / -x86.dll)</span>'}</td></tr>
+        <tr><th>Installiert</th><td>${s.installed ? "ja (64 und 32 Bit)" : "nein"}${s.problem ? ` <span class="bad">${esc(s.problem)}</span>` : ""}</td></tr>
+        <tr><th>Standard-Mailprogramm (alle Benutzer)</th><td>${s.defaultForAll ? "<b>Belegpost</b>" : esc(s.currentDefault || "–")}</td></tr></table>
+      <div class="actions"><button class="btn ghost" data-st="mapi-install" ${s.available ? "" : "disabled"}>${s.installed ? "Neu installieren" : "Installieren"}</button>
+        <button class="btn" data-st="mapi-default" ${s.available ? "" : "disabled"}>Für alle Benutzer als Standard setzen</button>
+        ${s.defaultForAll ? `<button class="btn ghost" data-st="mapi-restore">Vorheriges wiederherstellen</button>` : ""}</div>
+      <p class="help">Nur für einzelne Benutzer (z. B. zum Testen oder per Anmeldeskript): <code>${esc(r.perUserCommand)}</code></p>`
+      : `<p class="meta">Nur unter Windows verfügbar.</p>`;
+  } catch (e) { box.innerHTML = `<p class="bad">${esc(e.message)}</p>`; }
+}
+
+/* ---------------- Tab: Status-Link ---------------- */
+
+function tabStatusLink() {
+  ST.s.statusLink ||= { allowedNetworks: [], trustedProxies: [], expiryDays: 180, showVoucherNumber: true };
+  return section("Status-Link",
+    `<p class="help">Jeder Beleg bekommt einen Link <code>/s/…</code>, der ohne Anmeldung zeigt, was mit dem Beleg passiert ist – Belegart, Belegnummer,
+       Statuscodes mit Datum und Uhrzeit (z. B. versendet, über Outlook bestätigt, im ERP bestätigt). Empfänger, Kunden, Beträge oder Inhalte werden nie angezeigt.
+       Den Link kann die ERP-Rückmeldung in ein Belegfeld schreiben (Wert „Status-Link“).</p>
+     <div class="grid2">
+       ${field("Freigegebene IP-Bereiche", inLines("statusLink.allowedNetworks", "192.168.10.0/24\n10.0.0.0/8"), "Nur aus diesen Netzen abrufbar (CIDR oder einzelne Adressen). Leer = Status-Link aus.")}
+       ${field("Vertrauenswürdige Reverse-Proxys (optional)", inLines("statusLink.trustedProxies", "192.168.10.5"), "Nur von diesen Adressen wird X-Forwarded-For übernommen.")}
+       ${field("Gültig nach dem letzten Ereignis (Tage)", inNum("statusLink.expiryDays", 0, 3650), "0 = unbegrenzt.")}
+       ${field("Portal-Adresse für Links", inText("portal.publicUrl", `https://${(ST.data.hostNames || ["server"])[0]}:${ST.s.server.httpsPort}`), "Leer = erster Servername.")}
+     </div>
+     ${inCheck("statusLink.showVoucherNumber", "Belegart und Belegnummer anzeigen")}`);
 }

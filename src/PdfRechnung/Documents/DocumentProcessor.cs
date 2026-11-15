@@ -191,7 +191,8 @@ public sealed class DocumentProcessor
         return p;
     }
 
-    public Vorgang Process(byte[] pdf, string source, string? fileName, string? user = null, string? machine = null, string? ownerUserId = null)
+    public Vorgang Process(byte[] pdf, string source, string? fileName, string? user = null, string? machine = null, string? ownerUserId = null,
+        Action<Vorgang>? beforeSave = null, bool publish = true)
     {
         var now = DateTimeOffset.Now;
         var v = new Vorgang { Id = DocumentStore.NewId(now), CreatedAt = now, Source = source, OriginalFileName = fileName, PrintUser = user, PrintMachine = machine };
@@ -216,13 +217,20 @@ public sealed class DocumentProcessor
 
         Fill(v, p, overwriteMail: true);
         var sendPdf = v.Messages.Count == 0 ? Compose(v, pdf, p) : null;
-        if (v.Messages.Count == 0) v.Messages = DocumentChecker.Check(v, p, CurrentSettings());
+        var readOk = v.Messages.Count == 0;
+        if (readOk) v.Messages = DocumentChecker.Check(v, p, CurrentSettings());
         v.UpdateStatus();
         v.History.Add(new HistoryEntry(now, user ?? source, "eingang",
             $"{source}{(fileName is null ? "" : $": {fileName}")} · {v.Pages} Seite(n) · {v.Codes.Count} Steuerzeichen"));
+        if (beforeSave is not null)
+        {
+            beforeSave(v);
+            if (readOk) v.Messages = DocumentChecker.Check(v, p, CurrentSettings()).Concat(v.Messages.Where(m => m.Field == "mapi")).ToList();
+            v.UpdateStatus();
+        }
         _store.Create(v, pdf, text, sendPdf);
         _log.LogInformation("Vorgang {Id} angelegt: {Type} {No} → {Status}", v.Id, v.DocumentType, v.VoucherId, v.Status);
-        if (v.OwnerUserId is not null && _events is not null)
+        if (publish && v.OwnerUserId is not null && _events is not null)
         {
             var title = string.Join(" ", new[] { v.DocumentType, v.VoucherId }.Where(x => !string.IsNullOrWhiteSpace(x)));
             if (title.Length == 0) title = v.OriginalFileName ?? "Neuer Beleg";
@@ -241,6 +249,7 @@ public sealed class DocumentProcessor
     {
         if (!string.IsNullOrWhiteSpace(p.PrintUser)) v.PrintUser = p.PrintUser.Trim();
         v.OperatorNumber = p.OperatorNumber;
+        v.ErpIndex = p.ErpIndex ?? (p.Field("ERP_VOUCHER_INDEX") is { } xi ? ControlCodeParser.NormalizeErpIndex(xi) : null) ?? v.ErpIndex;
         var owner = (p.OperatorNumber is not null ? _users?.FindByOperator(p.OperatorNumber) : null)
             ?? (!string.IsNullOrWhiteSpace(p.PrintUser) ? _users?.FindByPrintName(p.PrintUser) : null)
             ?? (fallbackUserId is not null ? _users?.FindById(fallbackUserId) : null)

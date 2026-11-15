@@ -26,9 +26,48 @@ final class MelderModel: ObservableObject {
     @Published var busy = false
     @Published var message: String?
 
+    private var sentTimer: Timer?
+    private var tasksRunning = false
+
     init() {
         client.onEvent = { [weak self] e in self?.onBeleg(e) }
+        client.onConnected = { [weak self] in Task { await self?.runTasks() } }
         if cfg.paired { client.start() }
+        // Versandbestätigung aus Outlook: jede Minute prüfen, solange Entwürfe offen sind
+        sentTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in await self?.checkSent() }
+        }
+    }
+
+    func setMapi(_ mode: String) {
+        Task { if !(await client.setMapiMode(mode)) { message = "Einstellung konnte nicht gespeichert werden – keine Verbindung?" } }
+    }
+
+    /// Aufträge vom Server (z. B. E-Mails aus dem ERP über MAPI) abholen und ausführen.
+    func runTasks() async {
+        guard !tasksRunning, cfg.paired else { return }
+        tasksRunning = true
+        defer { tasksRunning = false }
+        for t in await client.pendingTasks() {
+            guard await client.claimTask(t.id) else { continue }
+            if t.kind == "outlook", let id = t.vorgangId {
+                if cfg.outlookAllowed { await openOutlookNow(id, title: "E-Mail aus dem ERP") }
+                else { open("/#/vorgang?id=\(id)") }
+            }
+            await client.completeTask(t.id)
+        }
+    }
+
+    private func checkSent() async {
+        var pending = cfg.pendingSent
+        guard !pending.isEmpty, cfg.paired else { return }
+        for (id, info) in pending {
+            let since = info["at"] as? Date ?? Date()
+            if Date().timeIntervalSince(since) > 7 * 24 * 3600 { pending[id] = nil; continue }
+            if OutlookBridge.wasSent(subject: info["subject"] as? String ?? "", since: since),
+               await client.reportSent(id, at: Date()) { pending[id] = nil }
+        }
+        cfg.pendingSent = pending
     }
 
     func open(_ path: String) {
@@ -42,14 +81,29 @@ final class MelderModel: ObservableObject {
     }
 
     func openOutlook(_ id: String, title: String?) {
-        Task {
-            let r = await OutlookBridge.openDraft(documentId: id)
-            if !r.ok { Notifier.show(title: title ?? "Outlook", body: r.message, id: id, path: "/#/vorgang?id=\(id)", mail: false) }
+        Task { await openOutlookNow(id, title: title) }
+    }
+
+    func openOutlookNow(_ id: String, title: String?) async {
+        let r = await OutlookBridge.openDraft(documentId: id)
+        if !r.ok {
+            Notifier.show(title: title ?? "Outlook", body: r.message, id: id, path: "/#/vorgang?id=\(id)", mail: false)
+            await client.reportOutlookError(id, r.message)
+        } else if r.viaOutlook {
+            var p = cfg.pendingSent
+            p[id] = ["subject": r.subject, "at": Date()]
+            cfg.pendingSent = p
         }
     }
 
     private func onBeleg(_ e: BelegEvent) {
         if e.kind == "outlook" { openOutlook(e.id, title: e.title); return } // aus dem Portal: „In Outlook öffnen“
+        if e.kind == "auftrag" { Task { await runTasks() }; return }       // z. B. MAPI-Mail aus dem ERP
+        if e.kind == "einstellung" {                                       // z. B. vom Administrator überrollt
+            Task { await client.refreshInfo() }
+            if let t = e.text, !t.isEmpty { Notifier.show(title: "Einstellung geändert", body: t, id: nil, path: nil, mail: false) }
+            return
+        }
         let title = e.title.isEmpty ? "Neuer Beleg" : e.title
         let text = e.text ?? [
             "bereit": "Bereit zum Versand.", "fehler": "Bitte prüfen – der Beleg hat einen Fehler.",

@@ -30,6 +30,8 @@ public sealed class PortalUser
     public string Visibility { get; set; } = "eigene";
     /// <summary>Benutzer-IDs, deren Belege zusätzlich sichtbar sind (z. B. Vertretung, Sekretariat).</summary>
     public List<string> AlsoSees { get; set; } = new();
+    /// <summary>Vorgabe des Admins für MAPI-Mails dieses Benutzers ("" = globaler Standard).</summary>
+    public string MapiMode { get; set; } = "";
 
     public IEnumerable<string> AllLogins() =>
         (Email is null ? Logins : Logins.Prepend(Email)).Where(l => !string.IsNullOrWhiteSpace(l)).Select(l => l.Trim());
@@ -56,6 +58,14 @@ public sealed class MelderDevice
     public DateTimeOffset? LastSeen { get; set; }
     /// <summary>Der Melder öffnet neue Belege als E-Mail-Entwurf in Outlook – dann kein Autoversand für diesen Benutzer.</summary>
     public bool OpenInOutlook { get; set; }
+    /// <summary>Computername, den der Melder meldet (Abgleich mit dem RDP-Client-Namen).</summary>
+    public string? ComputerName { get; set; }
+    /// <summary>MAPI-Mails auf diesem PC ("" = Vorgabe des Benutzers bzw. global).</summary>
+    public string MapiMode { get; set; } = "";
+    /// <summary>Wer den Wert zuletzt gesetzt hat: "benutzer" (im Melder), "admin" (überrollt) oder "" (Vorgabe).</summary>
+    public string MapiSource { get; set; } = "";
+    public string? MapiChangedBy { get; set; }
+    public DateTimeOffset? MapiChangedAt { get; set; }
 }
 
 public sealed class UserData
@@ -66,34 +76,57 @@ public sealed class UserData
 }
 
 /// <summary>
-/// Benutzer und Admin-Kennwort in users.json im Datenverzeichnis (getrennt von settings.json,
-/// damit die Einstellungs-Oberfläche keine Kennwort-Hashes zu sehen bekommt).
+/// Benutzer, Melder-Geräte und Admin-Kennwort in der Datenbank (Tabellen benutzer, geraet, wert).
+/// Die wenigen Datensätze werden zusätzlich im Speicher gehalten; eine ältere users.json wird einmalig übernommen.
 /// </summary>
 public sealed class UserStore
 {
     private static readonly JsonSerializerOptions Json = new()
     {
-        WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
     private readonly object _lock = new();
+    private readonly PdfRechnung.Data.BelegpostDb _db;
     private UserData _data;
 
     public UserStore(string dataDirectory)
     {
+        _db = PdfRechnung.Data.BelegpostDb.For(dataDirectory);
         Path = System.IO.Path.Combine(dataDirectory, "users.json");
-        _data = LoadFile() ?? new UserData();
-        if (!File.Exists(Path)) Save(_data);
+        _data = LoadDb();
+        if (_data.Users.Count == 0 && _data.Devices.Count == 0 && _data.LocalAdmin is null && File.Exists(Path))
+        {
+            try
+            {
+                _data = JsonSerializer.Deserialize<UserData>(File.ReadAllText(Path), Json) ?? new UserData();
+                Save(_data);
+                File.Move(Path, Path + ".migriert", overwrite: true);
+                _db.Audit("System", "Übernahme Benutzer", null, $"{_data.Users.Count} Benutzer, {_data.Devices.Count} Geräte");
+            }
+            catch (JsonException) { _data = new UserData(); }
+        }
     }
 
+    /// <summary>Frühere Ablage (users.json) – nur noch für die einmalige Übernahme.</summary>
     public string Path { get; }
 
-    private UserData? LoadFile()
+    private UserData LoadDb()
     {
-        try { return File.Exists(Path) ? JsonSerializer.Deserialize<UserData>(File.ReadAllText(Path), Json) : null; }
-        catch (JsonException) { return null; }
+        var d = new UserData();
+        using var c = _db.Open();
+        using (var cmd = PdfRechnung.Data.BelegpostDb.Cmd(c, "SELECT daten FROM benutzer"))
+        using (var r = cmd.ExecuteReader())
+            while (r.Read()) if (JsonSerializer.Deserialize<PortalUser>(r.GetString(0), Json) is { } u) d.Users.Add(u);
+        using (var cmd = PdfRechnung.Data.BelegpostDb.Cmd(c, "SELECT daten FROM geraet"))
+        using (var r = cmd.ExecuteReader())
+            while (r.Read()) if (JsonSerializer.Deserialize<MelderDevice>(r.GetString(0), Json) is { } g) d.Devices.Add(g);
+        if (PdfRechnung.Data.BelegpostDb.Scalar(c, "SELECT daten FROM wert WHERE schluessel='lokalerAdmin'") is string la)
+            d.LocalAdmin = JsonSerializer.Deserialize<LocalAdminPassword>(la, Json);
+        d.Users = d.Users.OrderBy(u => u.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        d.Devices = d.Devices.OrderBy(x => x.Created).ToList();
+        return d;
     }
 
     /// <summary>Kopie der Daten (ohne Kennwort-Hash) zum Lesen.</summary>
@@ -133,10 +166,20 @@ public sealed class UserStore
 
     private void Save(UserData data)
     {
-        var tmp = Path + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(data, Json));
-        File.Move(tmp, Path, overwrite: true);
+        using var c = _db.Open();
+        using var tx = c.BeginTransaction();
+        PdfRechnung.Data.BelegpostDb.Exec(c, "DELETE FROM benutzer; DELETE FROM geraet;");
+        foreach (var u in data.Users)
+            PdfRechnung.Data.BelegpostDb.Exec(c, "INSERT INTO benutzer(id, daten) VALUES(@i,@d)", ("@i", u.Id), ("@d", JsonSerializer.Serialize(u, Json)));
+        foreach (var g in data.Devices)
+            PdfRechnung.Data.BelegpostDb.Exec(c, "INSERT INTO geraet(id, benutzer_id, token_hash, daten) VALUES(@i,@u,@t,@d)",
+                ("@i", g.Id), ("@u", g.UserId), ("@t", g.TokenHash), ("@d", JsonSerializer.Serialize(g, Json)));
+        if (data.LocalAdmin is null) PdfRechnung.Data.BelegpostDb.Exec(c, "DELETE FROM wert WHERE schluessel='lokalerAdmin'");
+        else PdfRechnung.Data.BelegpostDb.Exec(c, "INSERT OR REPLACE INTO wert(schluessel, daten) VALUES('lokalerAdmin', @d)", ("@d", JsonSerializer.Serialize(data.LocalAdmin, Json)));
+        tx.Commit();
     }
+
+    public PdfRechnung.Data.BelegpostDb Db => _db;
 
     /// <summary>Ersetzt die Benutzerliste aus der Oberfläche. Anmeldezeitpunkte bleiben erhalten.</summary>
     public void Replace(List<PortalUser> users)
@@ -246,7 +289,8 @@ public sealed class UserStore
     public List<MelderDevice> Devices(string? userId)
     {
         lock (_lock) return _data.Devices.Where(d => userId is null || d.UserId == userId)
-            .Select(d => new MelderDevice { Id = d.Id, UserId = d.UserId, Name = d.Name, Created = d.Created, LastSeen = d.LastSeen, OpenInOutlook = d.OpenInOutlook }).ToList();
+            .Select(d => new MelderDevice { Id = d.Id, UserId = d.UserId, Name = d.Name, Created = d.Created, LastSeen = d.LastSeen, OpenInOutlook = d.OpenInOutlook,
+                ComputerName = d.ComputerName, MapiMode = d.MapiMode, MapiSource = d.MapiSource, MapiChangedBy = d.MapiChangedBy, MapiChangedAt = d.MapiChangedAt }).ToList();
     }
 
     public bool RemoveDevice(string id, string? userId)
@@ -269,16 +313,74 @@ public sealed class UserStore
         lock (_lock) return _data.Users.Any(u => u.Id == userId && u.Active && u.SendViaOutlook);
     }
 
-    public void TouchDevice(string id)
+    public void TouchDevice(string id, string? computerName = null)
     {
         lock (_lock)
         {
             var d = _data.Devices.FirstOrDefault(x => x.Id == id);
-            if (d is null || d.LastSeen is { } ls && DateTimeOffset.Now - ls < TimeSpan.FromMinutes(5)) return;
+            if (d is null) return;
+            var pc = string.IsNullOrWhiteSpace(computerName) ? null : computerName.Trim()[..Math.Min(63, computerName.Trim().Length)];
+            var pcChanged = pc is not null && !string.Equals(pc, d.ComputerName, StringComparison.OrdinalIgnoreCase);
+            if (!pcChanged && d.LastSeen is { } ls && DateTimeOffset.Now - ls < TimeSpan.FromMinutes(5)) return;
             d.LastSeen = DateTimeOffset.Now;
+            if (pc is not null) d.ComputerName = pc;
             Save(_data);
         }
     }
+
+    // ---------------- MAPI-Einstellung (Benutzer → PC) ----------------
+
+    /// <summary>Wirksame MAPI-Einstellung für ein Gerät: Gerät → Benutzer-Vorgabe → global.</summary>
+    public string EffectiveMapiMode(string userId, string? deviceId, string globalDefault)
+    {
+        lock (_lock)
+        {
+            var d = deviceId is null ? null : _data.Devices.FirstOrDefault(x => x.Id == deviceId);
+            if (d is { MapiMode.Length: > 0 }) return d.MapiMode;
+            var u = _data.Users.FirstOrDefault(x => x.Id == userId);
+            if (u is { MapiMode.Length: > 0 }) return u.MapiMode;
+            return globalDefault;
+        }
+    }
+
+    /// <summary>MAPI-Einstellung eines Geräts setzen – vom Benutzer im Melder oder vom Admin (überrollen).</summary>
+    public bool SetDeviceMapi(string deviceId, string mode, string source, string by)
+    {
+        var ok = false;
+        Update(x =>
+        {
+            var d = x.Devices.FirstOrDefault(v => v.Id == deviceId);
+            if (d is null) return;
+            d.MapiMode = mode; d.MapiSource = mode.Length == 0 ? "" : source; d.MapiChangedBy = by; d.MapiChangedAt = DateTimeOffset.Now;
+            ok = true;
+        });
+        return ok;
+    }
+
+    /// <summary>Gerät, an dem der Benutzer gerade sitzt: Computername = RDP-Client, sonst der zuletzt aktive Melder.</summary>
+    public MelderDevice? TargetDevice(string userId, string? clientName)
+    {
+        lock (_lock)
+        {
+            var mine = _data.Devices.Where(d => d.UserId == userId).ToList();
+            if (!string.IsNullOrWhiteSpace(clientName))
+            {
+                var c = clientName.Trim();
+                var hit = mine.FirstOrDefault(d => string.Equals(d.ComputerName, c, StringComparison.OrdinalIgnoreCase))
+                    ?? mine.FirstOrDefault(d => string.Equals(d.Name, c, StringComparison.OrdinalIgnoreCase));
+                if (hit is not null) return hit;
+            }
+            return mine.OrderByDescending(d => d.LastSeen ?? d.Created).FirstOrDefault();
+        }
+    }
+
+    public MelderDevice? Device(string id)
+    {
+        lock (_lock) return _data.Devices.FirstOrDefault(d => d.Id == id);
+    }
+
+    /// <summary>Benutzer zum Windows-Konto (DOMÄNE\name) – über Druck-Benutzernamen bzw. Anmeldenamen.</summary>
+    public PortalUser? FindByWindowsAccount(string account) => FindByPrintName(account);
 
     public void TouchLogin(string id) => Update(d =>
     {

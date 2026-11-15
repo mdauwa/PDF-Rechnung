@@ -136,7 +136,8 @@ public sealed class UserRoutingTests : IDisposable
         var (d, token) = users.AddDevice("martin", "Büro");
         Assert.Equal("martin", users.FindDevice(token)!.Value.User.Id);
         Assert.Null(users.FindDevice(token + "x"));
-        Assert.DoesNotContain(token, File.ReadAllText(users.Path));
+        var db = File.ReadAllBytes(users.Db.Path);
+        Assert.Equal(-1, System.Text.Encoding.UTF8.GetString(db).IndexOf(token, StringComparison.Ordinal));
         Assert.True(users.RemoveDevice(d.Id, "martin"));
         Assert.Null(users.FindDevice(token));
     }

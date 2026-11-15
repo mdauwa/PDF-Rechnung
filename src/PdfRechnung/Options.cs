@@ -12,11 +12,104 @@ public sealed class AppSettings
     public StorageOptions Storage { get; set; } = new();
     public StationeryOptions Stationery { get; set; } = new();
     public MailTemplateOptions MailTemplates { get; set; } = new();
+    public StatusLinkOptions StatusLink { get; set; } = new();
+    public ErpOptions Erp { get; set; } = new();
+    public MapiOptions Mapi { get; set; } = new();
+}
+
+/// <summary>
+/// Öffentlicher Status-Link /s/&lt;token&gt; (ohne Anmeldung, nur aus freigegebenen IP-Bereichen).
+/// Zeigt nur Belegart/-nummer und den Zeitstrahl – keine Empfänger, Beträge oder Inhalte.
+/// </summary>
+public sealed class StatusLinkOptions
+{
+    /// <summary>Freigegebene IP-Bereiche (CIDR, z. B. 192.168.10.0/24) oder einzelne Adressen. Leer = Status-Link aus.</summary>
+    public List<string> AllowedNetworks { get; set; } = new();
+    /// <summary>Reverse-Proxys, deren X-Forwarded-For übernommen wird (einzelne Adressen oder CIDR).</summary>
+    public List<string> TrustedProxies { get; set; } = new();
+    /// <summary>Link gilt so viele Tage nach dem letzten Ereignis. 0 = unbegrenzt.</summary>
+    public int ExpiryDays { get; set; } = 180;
+    /// <summary>Belegart und Belegnummer anzeigen.</summary>
+    public bool ShowVoucherNumber { get; set; } = true;
+    public bool Enabled => AllowedNetworks.Any(n => !string.IsNullOrWhiteSpace(n));
+}
+
+/// <summary>Was mit E-Mails passiert, die das ERP über MAPI (BelegpostMapi.dll) übergibt.</summary>
+public static class MapiMode
+{
+    public const string Inherit = "", Outlook = "outlook", Portal = "portal", Direct = "direkt";
+    public static readonly string[] All = { Outlook, Portal, Direct };
+    public static string Text(string? m) => m switch { Outlook => "in Outlook öffnen", Portal => "im Portal prüfen", Direct => "direkt über den Dienst senden", _ => "erben" };
+}
+
+public sealed class MapiOptions
+{
+    /// <summary>Standard für alle Benutzer ohne eigene Vorgabe.</summary>
+    public string DefaultMode { get; set; } = MapiMode.Outlook;
+    /// <summary>Outlook-Auftrag, den kein Melder abholt, nach so vielen Stunden aufgeben (Beleg bleibt im Portal). </summary>
+    public int DeliveryTimeoutHours { get; set; } = 8;
+    /// <summary>Ohne Versandbestätigung aus Outlook nach so vielen Stunden Status 830.</summary>
+    public int OutlookConfirmHours { get; set; } = 24;
+}
+
+/// <summary>ERP-Rückmeldung über WEBWARE-Webservices (WWSVC): Status per BELEG.PUT in den Belegkopf.</summary>
+public sealed class ErpOptions
+{
+    public bool Enabled { get; set; }
+    /// <summary>HTTPS-Basisadresse mit abschließendem /, z. B. https://erp.firma.at/WWSVC/ (FQDN passend zum Zertifikat).</summary>
+    public string Endpoint { get; set; } = "";
+    public string Vendor { get; set; } = "";
+    public string Application { get; set; } = "";
+    /// <summary>SecuredApp-Zugriffs-ID (eigene für Belegpost – nicht die eines anderen Dienstes).</summary>
+    public string SecureAppId { get; set; } = "";
+    public int Revision { get; set; }
+    /// <summary>Optionaler technischer ERP-Benutzer.</summary>
+    public string Username { get; set; } = "";
+    /// <summary>Kennwort (verschlüsselt gespeichert).</summary>
+    public string? Password { get; set; }
+    /// <summary>Darf Belegpost selbst einen Servicepass registrieren?</summary>
+    public bool AllowRegistration { get; set; }
+    /// <summary>Vor dem Schreiben mit BELEG.GET prüfen (Beleg vorhanden, „nur wenn leer“, schon aktuell).</summary>
+    public bool CheckBeforeWrite { get; set; } = true;
+    /// <summary>Nach so vielen Tagen ohne Erfolg gilt ein Auftrag als dauerhaft fehlgeschlagen.</summary>
+    public int GiveUpDays { get; set; } = 3;
+    /// <summary>Zuordnung ERP-Feld → Wert.</summary>
+    public List<ErpFieldMapping> Fields { get; set; } = new();
+    /// <summary>Statuscodes: welcher Wert ins ERP geschrieben wird und ob überhaupt.</summary>
+    public List<ErpStatusCode> Codes { get; set; } = new();
+
+    public bool IsConfigured => Enabled && Endpoint.Length > 0 && Vendor.Length > 0 && Application.Length > 0 && SecureAppId.Length > 0;
+}
+
+public sealed class ErpFieldMapping
+{
+    /// <summary>ERP-Feldname, z. B. BEL_3_8 (Länge = Zahl nach dem letzten _).</summary>
+    public string Field { get; set; } = "";
+    /// <summary>Welcher Wert (siehe ErpValues.All).</summary>
+    public string Value { get; set; } = "statuscode";
+    /// <summary>Formatangabe (Datumsformat) bzw. Text/Vorlage bei „fest“ und „vorlage“.</summary>
+    public string Format { get; set; } = "";
+    /// <summary>Länge von Hand (wenn der Feldname kein _&lt;Länge&gt; trägt). 0 = aus dem Feldnamen.</summary>
+    public int Length { get; set; }
+    /// <summary>Nur bei diesen Statuscodes schreiben; leer = bei allen.</summary>
+    public List<string> OnlyCodes { get; set; } = new();
+    /// <summary>Nur schreiben, wenn das Feld im ERP leer ist.</summary>
+    public bool OnlyIfEmpty { get; set; }
+}
+
+public sealed class ErpStatusCode
+{
+    public string Code { get; set; } = "";
+    /// <summary>Wert im ERP (3-stellig); leer = wie Code.</summary>
+    public string ErpValue { get; set; } = "";
+    public bool Write { get; set; } = true;
 }
 
 public sealed class PortalOptions
 {
     public string Title { get; set; } = "Belegpost";
+    /// <summary>Adresse des Portals für Links (Status-Link), z. B. https://belegpost.firma.at:5444. Leer = erster Hostname.</summary>
+    public string PublicUrl { get; set; } = "";
 }
 
 public sealed class AuthOptions
@@ -152,6 +245,8 @@ public sealed class StorageOptions
     public int RetentionDays { get; set; } = 400;
     /// <summary>Zusätzlich versendete PDFs/XML hierhin kopieren (z. B. Archiv/DMS). Leer = aus.</summary>
     public string ExportFolder { get; set; } = "";
+    /// <summary>Tägliche Datenbanksicherungen aufbewahren (Anzahl). 0 = keine Sicherung.</summary>
+    public int DatabaseBackups { get; set; } = 14;
 }
 
 /// <summary>Briefpapiere (z. B. je Firma). Auswahl per Steuerzeichen @@bpName@@, sonst das Standard-Briefpapier.</summary>

@@ -15,6 +15,15 @@ final class MelderConfig: ObservableObject {
     @Published var outlookAllowed: Bool { didSet { d.set(outlookAllowed, forKey: "outlookAllowed") } }
     @Published var lastDocumentPath: String? { didSet { d.set(lastDocumentPath, forKey: "lastDocumentPath") } }
     @Published var lastDocumentId: String? { didSet { d.set(lastDocumentId, forKey: "lastDocumentId") } }
+    /// MAPI-Mails aus dem ERP auf diesem Mac ("" = Vorgabe) – vom Server gemeldet
+    @Published var mapiMode: String = "" { didSet { d.set(mapiMode, forKey: "mapiMode") } }
+    @Published var mapiEffectiveText: String? { didSet { d.set(mapiEffectiveText, forKey: "mapiEffectiveText") } }
+    @Published var mapiNote: String? { didSet { d.set(mapiNote, forKey: "mapiNote") } }
+    /// In Outlook geöffnete Entwürfe, deren Versand noch bestätigt werden soll: Vorgang → [Betreff, Zeitpunkt]
+    var pendingSent: [String: [String: Any]] {
+        get { d.dictionary(forKey: "pendingSent") as? [String: [String: Any]] ?? [:] }
+        set { d.set(newValue, forKey: "pendingSent") }
+    }
     var lastSeq: Int64? {
         get { d.object(forKey: "lastSeq") as? Int64 }
         set { d.set(newValue, forKey: "lastSeq") }
@@ -29,6 +38,9 @@ final class MelderConfig: ObservableObject {
         outlookAllowed = d.bool(forKey: "outlookAllowed")
         lastDocumentPath = d.string(forKey: "lastDocumentPath")
         lastDocumentId = d.string(forKey: "lastDocumentId")
+        mapiMode = d.string(forKey: "mapiMode") ?? ""
+        mapiEffectiveText = d.string(forKey: "mapiEffectiveText")
+        mapiNote = d.string(forKey: "mapiNote")
     }
 
     var paired: Bool { server != nil && token != nil }

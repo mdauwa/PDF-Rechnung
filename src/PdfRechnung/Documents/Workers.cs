@@ -69,7 +69,7 @@ public sealed class SendService
             var now = DateTimeOffset.Now;
             _store.Update(id, x =>
             {
-                x.Status = VorgangStatus.Sent; x.SentAt = now; x.SentBy = by; x.SendError = null;
+                x.Status = VorgangStatus.Sent; x.SentAt = now; x.SentBy = by; x.SendError = null; x.SendChannel = "Mail";
                 x.History.Add(new HistoryEntry(now, by, "versendet", $"an {string.Join(", ", x.Mail.To)}{(x.Mail.Cc.Count > 0 ? $" (CC {string.Join(", ", x.Mail.Cc)})" : "")}"));
                 return true;
             });
@@ -116,7 +116,7 @@ public sealed class SendService
     public void MarkOutlook(string id, string by) => _store.Update(id, x =>
     {
         if (x.Status is VorgangStatus.Sent or VorgangStatus.Sending) return false;
-        x.Status = VorgangStatus.Outlook; x.SentBy = by;
+        x.Status = VorgangStatus.Outlook; x.SentBy = by; x.OutlookHandedAt = DateTimeOffset.Now;
         x.History.Add(new HistoryEntry(DateTimeOffset.Now, by, "outlook", "Als E-Mail-Entwurf in Outlook geöffnet – Versand durch den Benutzer"));
         return true;
     });
@@ -236,7 +236,8 @@ public sealed class AutoSendWorker : BackgroundService
         var o = _opt.CurrentValue;
         if (!o.Enabled || !o.AutoSend) return;
         var due = DateTimeOffset.Now.AddMinutes(-Math.Max(0, o.AutoSendDelayMinutes));
-        var candidates = _store.All().Where(v =>
+        var statuses = o.AutoSendWithWarnings ? new[] { VorgangStatus.Ready, VorgangStatus.Warning } : new[] { VorgangStatus.Ready };
+        var candidates = _store.Query(new VorgangFilter { SeeAll = true, Statuses = statuses, Before = due.AddSeconds(1), Limit = 500 }).Where(v =>
             (v.Status == VorgangStatus.Ready || (o.AutoSendWithWarnings && v.Status == VorgangStatus.Warning))
             && v.SendAttempts == 0 && v.CreatedAt <= due && v.Mail.To.Count > 0
             && !(_users?.UsesOutlook(v.OwnerUserId) ?? false)).ToList(); // Benutzer versendet selbst über Outlook
@@ -270,8 +271,8 @@ public sealed class RetentionWorker : BackgroundService
             if (days > 0)
             {
                 var limit = DateTimeOffset.Now.AddDays(-days);
-                var old = _store.All().Where(v => v.CreatedAt < limit && VorgangStatus.IsFinal(v.Status)).ToList();
-                foreach (var v in old) _store.Delete(v.Id);
+                var old = _store.FinalBefore(limit);
+                foreach (var id in old) _store.Delete(id);
                 if (old.Count > 0) _log.LogInformation("{Count} Vorgänge älter als {Days} Tage gelöscht", old.Count, days);
             }
             try { await Task.Delay(TimeSpan.FromHours(6), ct); } catch (OperationCanceledException) { }

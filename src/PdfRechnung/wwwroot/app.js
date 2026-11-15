@@ -143,6 +143,7 @@ function startLive() {
   live.onerror = () => $("#liveDot")?.classList.remove("on");
   live.addEventListener("beleg", e => {
     let ev; try { ev = JSON.parse(e.data); } catch { return; }
+    if (ev.kind && !["neu", "test"].includes(ev.kind)) return; // Aufträge/Einstellungen sind nur für den Melder
     const target = "#/vorgang?id=" + encodeURIComponent(ev.id);
     const auto = store.get("live.auto", true);
     if (auto && !document.hidden) { location.hash = target; toast(ev.title + " – geöffnet"); return; }

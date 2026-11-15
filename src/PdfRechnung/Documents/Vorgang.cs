@@ -63,6 +63,17 @@ public sealed class Vorgang
     public string? OwnerName { get; set; }
     /// <summary>ERP-Bedienernummer aus @@pb@@ (3-stellig).</summary>
     public string? OperatorNumber { get; set; }
+    /// <summary>ERP-Belegindex (BELNDX) aus @@pi@@ – nur dann wird der Status ins ERP zurückgeschrieben.</summary>
+    public string? ErpIndex { get; set; }
+    /// <summary>Aktueller Belegstatus als 3-stelliger Code (siehe <see cref="StatusCode"/>).</summary>
+    public string? StatusCode { get; set; }
+    /// <summary>Anzahl erfolgreicher Versände (für „erneut versendet“).</summary>
+    public int SendCount { get; set; }
+    /// <summary>Über welchen Weg zuletzt versendet: „Mail“ (Dienst) oder „Outlook“.</summary>
+    public string? SendChannel { get; set; }
+    /// <summary>Wann der Entwurf an Outlook übergeben bzw. der Versand aus Outlook bestätigt wurde.</summary>
+    public DateTimeOffset? OutlookHandedAt { get; set; }
+    public DateTimeOffset? OutlookConfirmedAt { get; set; }
     public int Pages { get; set; }
 
     public string Status { get; set; } = VorgangStatus.Warning;
@@ -111,7 +122,7 @@ public sealed class Vorgang
     public object Summary() => new
     {
         Id, CreatedAt, Source, Status, DocumentType, VoucherId, VoucherDate, BuyerId, BuyerName, GrossAmount, Currency,
-        FormatName, To = Mail.To, Mail.Subject, MailEnabled = Mail.Enabled, ErrorCount, WarningCount, SentAt, SentBy, PrintUser, OperatorNumber, OwnerUserId, OwnerName,
+        FormatName, To = Mail.To, Mail.Subject, MailEnabled = Mail.Enabled, ErrorCount, WarningCount, SentAt, SentBy, PrintUser, OperatorNumber, OwnerUserId, OwnerName, ErpIndex, StatusCode, SendChannel, OutlookConfirmedAt,
         FirstMessage = Messages.FirstOrDefault(m => m.Level == DocumentChecker.Error)?.Text ?? Messages.FirstOrDefault(m => m.Level == DocumentChecker.Warning)?.Text
     };
 }

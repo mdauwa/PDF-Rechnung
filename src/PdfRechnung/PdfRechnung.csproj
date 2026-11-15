@@ -25,6 +25,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.23" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="9.0.22" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="9.0.22" />
     <!-- PDF lesen (Apache-2.0) -->
@@ -32,6 +33,11 @@
     <!-- E-Mail-Versand (MIT) -->
     <PackageReference Include="MailKit" Version="4.18.2" />
     <PackageReference Include="PDFsharp" Version="6.2.4" />
+  </ItemGroup>
+
+  <!-- MAPI-Mailclient (src/BelegpostMapi/build.sh) neben Belegpost.exe ausliefern -->
+  <ItemGroup>
+    <None Include="..\BelegpostMapi\out\BelegpostMapi-*.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" Link="%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

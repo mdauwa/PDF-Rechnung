@@ -16,6 +16,9 @@ internal sealed class MainWindow : Form
     private readonly ModernButton _btnPortal = new() { Text = "Portal öffnen" }, _btnLast = new() { Text = "Letzten Beleg" };
     private readonly Label _actionTitle = Lbl(Theme.Body, Theme.Text), _actionHint = Lbl(Theme.Small, Theme.Muted);
     private readonly Segmented _action = new();
+    private readonly Label _mapiTitle = Lbl(Theme.Body, Theme.Text), _mapiHint = Lbl(Theme.Small, Theme.Muted);
+    private readonly Segmented _mapi = new();
+    private bool _mapiUpdating;
     private readonly ToggleSwitch _tStart = new() { Text = "Mit Windows starten", Hint = "Melder läuft unauffällig im Infobereich" };
     private readonly Label _connectTitle = Lbl(Theme.Strong, Theme.Text), _connectHint = Lbl(Theme.Small, Theme.Muted);
     private readonly TextBox _code = new() { Multiline = true, BorderStyle = BorderStyle.None, Font = Theme.Mono, ScrollBars = ScrollBars.None };
@@ -44,7 +47,8 @@ internal sealed class MainWindow : Form
 
         _statusCard.Controls.AddRange(new Control[] { _pill, _statusText, _userLine, _serverLine, _btnPortal, _btnLast });
         _action.SetItems(("portal", "Portal"), ("outlook", "Outlook"), ("hinweis", "Nur Hinweis"));
-        _optionsCard.Controls.AddRange(new Control[] { _actionTitle, _action, _actionHint, _tStart });
+        _mapi.SetItems(("", "Vorgabe"), ("outlook", "Outlook"), ("portal", "Portal"), ("direkt", "Direkt"));
+        _optionsCard.Controls.AddRange(new Control[] { _actionTitle, _action, _actionHint, _mapiTitle, _mapi, _mapiHint, _tStart });
         _codeFrame.Controls.Add(_code);
         _codeFrame.Paint += (_, e) =>
         {
@@ -64,6 +68,13 @@ internal sealed class MainWindow : Form
         _btnPortal.Click += (_, _) => _tray.OpenPath("/");
         _btnLast.Click += (_, _) => { if (_cfg.LastDocumentPath is { } p) _tray.OpenPath(p); };
         _action.ValueChanged += (_, _) => { if (_cfg.Action != _action.Value) _tray.SetAction(_action.Value); UpdateActionHint(); };
+        _mapi.ValueChanged += async (_, _) =>
+        {
+            if (_mapiUpdating || _mapi.Value == _cfg.MapiMode) return;
+            var ok = await _tray.Client.SetMapiMode(_mapi.Value);
+            if (!ok) ToastWindow.Show("Einstellung", "Konnte nicht gespeichert werden – keine Verbindung zum Portal?", ToastWindow.Kinds.Bad, null, seconds: 8);
+            RefreshView();
+        };
         _tStart.CheckedChanged += (_, _) => { try { if (Program.Autostart != _tStart.Checked) Program.Autostart = _tStart.Checked; } catch { } };
         _btnPaste.Click += (_, _) => { try { if (Clipboard.ContainsText()) _code.Text = Clipboard.GetText().Trim(); } catch { } };
         _btnPair.Click += async (_, _) =>
@@ -173,8 +184,25 @@ internal sealed class MainWindow : Form
         _actionTitle.SetBounds(inner, inner, iw, (int)(22 * s));
         _action.SetBounds(inner, inner + (int)(26 * s), iw, (int)(38 * s));
         _actionHint.SetBounds(inner, inner + (int)(70 * s), iw, (int)(34 * s));
-        _tStart.SetBounds(inner, inner + (int)(106 * s), iw, (int)(48 * s));
-        _optionsCard.SetBounds(pad, y, w, inner + (int)(160 * s));
+        // E-Mails, die im ERP am Terminalserver versendet werden (MAPI)
+        _mapiUpdating = true;
+        _mapi.Value = _cfg.MapiMode ?? "";
+        _mapiUpdating = false;
+        _mapi.Enabled = _cfg.Paired;
+        _mapiTitle.Text = "E-Mails aus dem ERP (Terminalserver)";
+        _mapiTitle.SetBounds(inner, inner + (int)(112 * s), iw, (int)(22 * s));
+        _mapi.SetBounds(inner, inner + (int)(138 * s), iw, (int)(38 * s));
+        _mapiHint.Text = (_cfg.MapiMode is { Length: > 0 } ? "" : $"Vorgabe: {_cfg.MapiEffectiveText ?? "in Outlook öffnen"}. ")
+            + (_cfg.MapiMode switch
+            {
+                "outlook" => "Öffnet die Mail als Entwurf in Outlook auf diesem PC.",
+                "portal" => "Die Mail wartet im Portal auf deine Prüfung.",
+                "direkt" => "Belegpost versendet die Mail direkt.",
+                _ => ""
+            }) + (_cfg.MapiNote is { Length: > 0 } n ? " " + n + "." : "");
+        _mapiHint.SetBounds(inner, inner + (int)(182 * s), iw, (int)(34 * s));
+        _tStart.SetBounds(inner, inner + (int)(218 * s), iw, (int)(48 * s));
+        _optionsCard.SetBounds(pad, y, w, inner + (int)(272 * s));
         y = _optionsCard.Bottom + (int)(12 * s);
 
         // ---- Verbinden ----

@@ -73,6 +73,9 @@ builder.Host.UseWindowsService(o => o.ServiceName = ServiceManager.ServiceName);
 builder.Services.Configure<HostOptions>(o => o.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore);
 
 builder.Services.AddSingleton(store);
+var database = PdfRechnung.Data.BelegpostDb.For(store.DataDirectory);
+builder.Services.AddSingleton(database);
+builder.Services.AddHostedService<PdfRechnung.Data.DatabaseMaintenanceWorker>();
 var userStore = new UserStore(store.DataDirectory);
 builder.Services.AddSingleton(userStore);
 builder.Services.AddSingleton<PortalAccess>();
@@ -83,6 +86,9 @@ builder.Services.Configure<InboxOptions>(builder.Configuration.GetSection("Inbox
 builder.Services.Configure<MailOptions>(builder.Configuration.GetSection("Mail"));
 builder.Services.Configure<InvoiceOptions>(builder.Configuration.GetSection("Invoice"));
 builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection("Storage"));
+builder.Services.Configure<StatusLinkOptions>(builder.Configuration.GetSection("StatusLink"));
+builder.Services.Configure<ErpOptions>(builder.Configuration.GetSection("Erp"));
+builder.Services.Configure<MapiOptions>(builder.Configuration.GetSection("Mapi"));
 builder.Services.Configure<StationeryOptions>(builder.Configuration.GetSection("Stationery"));
 builder.Services.Configure<MailTemplateOptions>(builder.Configuration.GetSection("MailTemplates"));
 builder.Services.AddSingleton(sp => new RuntimeControl(sp.GetRequiredService<IHostApplicationLifetime>(), isService));
@@ -96,6 +102,14 @@ builder.Services.AddHostedService<InboxWatcher>();
 builder.Services.AddSingleton<AutoSendWorker>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<AutoSendWorker>());
 builder.Services.AddHostedService<RetentionWorker>();
+builder.Services.AddSingleton<MelderTasks>();
+builder.Services.AddHostedService<OutlookWatchWorker>();
+builder.Services.AddSingleton<MapiIntake>();
+if (OperatingSystem.IsWindows()) builder.Services.AddHostedService<MapiPipeServer>();
+builder.Services.AddSingleton<StatusLinkService>();
+builder.Services.AddSingleton<StatusLinkLimiter>();
+builder.Services.AddSingleton<PdfRechnung.Erp.ErpFeedbackService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<PdfRechnung.Erp.ErpFeedbackService>());
 
 // ---- HTTPS: eigenes PFX oder automatisch erzeugtes, selbst signiertes Zertifikat ----
 var certs = new CertificateProvider(store, machineKeys: isService && OperatingSystem.IsWindows());
@@ -263,6 +277,8 @@ app.MapGet("/api/portal", (IOptionsSnapshot<PortalOptions> portal, HttpContext c
 
 VorgangApi.Map(app);
 MelderApi.Map(app);
+StatusLinkService.Map(app);
+PdfRechnung.Erp.ErpApi.Map(app);
 AuthApi.Map(app);
 AdminApi.Map(app);
 
@@ -272,6 +288,8 @@ if (isService && OperatingSystem.IsWindows())
 {
     try { ServiceManager.UpdateFirewall(server, m => app.Logger.LogInformation("{Msg}", m)); }
     catch (Exception ex) { app.Logger.LogWarning(ex, "Firewall-Regel konnte nicht gesetzt werden"); }
+    try { MapiClient.RefreshIfInstalled(m => app.Logger.LogInformation("MAPI: {Msg}", m)); }
+    catch (Exception ex) { app.Logger.LogWarning(ex, "MAPI-Mailclient konnte nicht aktualisiert werden"); }
     try { ServiceManager.EnsureDisplayName(m => app.Logger.LogInformation("{Msg}", m)); }
     catch (Exception ex) { app.Logger.LogWarning(ex, "Anzeigename des Dienstes konnte nicht gesetzt werden"); }
     RuntimeControl.WriteShortcut(server);

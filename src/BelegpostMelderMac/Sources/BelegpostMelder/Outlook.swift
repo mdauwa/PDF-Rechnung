@@ -9,7 +9,12 @@ import AppKit
 enum OutlookBridge {
     static let outlookBundle = "com.microsoft.Outlook"
 
-    struct Result { let ok: Bool; let message: String }
+    struct Result {
+        let ok: Bool; let message: String
+        /// Über Outlook (AppleScript) geöffnet → Versand lässt sich in „Gesendet“ wiederfinden
+        var viaOutlook = false
+        var subject = ""
+    }
 
     static func openDraft(documentId: String) async -> Result {
         let cfg = MelderConfig.shared
@@ -55,7 +60,7 @@ enum OutlookBridge {
                 // neues Outlook (kaum AppleScript) → .eml-Entwurf
                 result = await openEml(session: s, base: base, token: token, folder: folder, documentId: documentId,
                                        note: "Outlook-Steuerung nicht möglich (\(err)) – ")
-            } else { result = Result(ok: true, message: "In Outlook geöffnet.") }
+            } else { result = Result(ok: true, message: "In Outlook geöffnet.", viaOutlook: true, subject: subject) }
         } else if let err = runMailScript(subject: subject, text: text, to: to, cc: cc, bcc: bcc, files: files) {
             result = Result(ok: false, message: "Weder Outlook noch Apple Mail konnten geöffnet werden: \(err)")
         } else { result = Result(ok: true, message: "In Apple Mail geöffnet (Outlook ist nicht installiert).") }
@@ -63,6 +68,30 @@ enum OutlookBridge {
         if result.ok { _ = try? await s.data(for: MelderClient.request(base + "/outlook", token: token, method: "POST")) }
         cleanup()
         return result
+    }
+
+    // MARK: Versandbestätigung
+
+    /// true, wenn in „Gesendet“ eine Nachricht mit diesem Betreff liegt, die nach der Übergabe gesendet wurde.
+    /// Outlook wird dafür nie gestartet – nur geprüft, wenn es läuft.
+    static func wasSent(subject: String, since: Date) -> Bool {
+        guard !subject.isEmpty,
+              NSRunningApplication.runningApplications(withBundleIdentifier: outlookBundle).isEmpty == false else { return false }
+        let seconds = max(60, Int(Date().timeIntervalSince(since)) + 60)
+        let src = """
+        tell application "Microsoft Outlook"
+          set cutoff to (current date) - \(seconds)
+          set n to 0
+          try
+            set n to count of (messages of sent mail folder whose subject is \(q(subject)) and time sent > cutoff)
+          end try
+          return n
+        end tell
+        """
+        var error: NSDictionary?
+        guard let script = NSAppleScript(source: src) else { return false }
+        let r = script.executeAndReturnError(&error)
+        return error == nil && r.int32Value > 0
     }
 
     // MARK: AppleScript

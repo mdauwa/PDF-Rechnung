@@ -252,6 +252,11 @@ function drawVorgang(view, data) {
           <div class="notice" id="vdMsg" hidden></div>
         </div>
 
+        <div class="card" id="vdTimeline">
+          <div class="card-head"><h2>Belegstatus</h2>${v.statusCode ? `<span class="badge code">${esc(v.statusCode)}</span>` : ""}</div>
+          <p class="meta">Lade Zeitstrahl …</p>
+        </div>
+
         <div class="card">
           <div class="card-head"><h2>Versand</h2>${editable ? `<label class="check"><input type="checkbox" id="mEnabled" ${v.mail.enabled ? "checked" : ""}> per E-Mail versenden</label>` : (v.mail.enabled ? "" : '<span class="badge free">kein Versand</span>')}</div>
           <div class="mailform">
@@ -307,6 +312,8 @@ function drawVorgang(view, data) {
         </div>
       </div>
     </div>`;
+
+  loadTimeline(v);
 
   $("#mPreviewBtn")?.addEventListener("click", async e => {
     e.preventDefault();
@@ -389,5 +396,41 @@ function drawVorgang(view, data) {
       const el = $("#vdMsg"); if (el) { el.hidden = false; el.className = "notice"; el.textContent = ex.message; }
       else toast(ex.message, false);
     } finally { if (document.contains(b)) b.disabled = false; }
+  });
+}
+
+// Zeitstrahl (3-stellige Statuscodes), Status-Link und ERP-Rückmeldung
+async function loadTimeline(v) {
+  const box = $("#vdTimeline");
+  if (!box) return;
+  let t;
+  try { t = await api("GET", `api/vorgaenge/${encodeURIComponent(v.id)}/verlauf`); }
+  catch (e) { box.querySelector("p").textContent = e.message; return; }
+  if (!box.isConnected) return;
+  const erpState = { offen: ["partial", "wartet"], erledigt: ["ok", "geschrieben"], fehler: ["missing", "Fehler"], ersetzt: ["free", "ersetzt"], verworfen: ["free", "verworfen"] };
+  const erp = t.erp || [];
+  box.innerHTML = `
+    <div class="card-head"><h2>Belegstatus</h2>${t.statusCode ? `<span class="badge code" title="Statuscode">${esc(t.statusCode)}</span> <span class="meta-inline">${esc(t.statusText)}</span>` : ""}</div>
+    <ol class="timeline">${t.events.map(e => `<li class="${e.code === "ERP" ? "note" : ""}"><span class="tl-code">${esc(e.code === "ERP" ? "ERP" : e.code)}</span>
+      <div><b>${esc(e.text)}</b>${e.channel ? ` <span class="meta-inline">(${esc(e.channel)})</span>` : ""}<small>${fmtDT(e.at)}${e.by ? " · " + esc(e.by) : ""}${e.note ? " · " + esc(e.note) : ""}</small></div></li>`).join("")}</ol>
+    ${t.statusLink ? `<div class="statuslink"><span class="lbl">Status-Link</span><input readonly value="${esc(t.statusLink)}" id="vdLink">
+      <button class="btn ghost small" id="vdLinkCopy">Kopieren</button>${portal.isAdmin ? `<button class="btn ghost small" id="vdLinkNew" title="Neuen Link erzeugen – der alte funktioniert dann nicht mehr">Neu</button>` : ""}</div>
+      <p class="help">Ohne Anmeldung aus den freigegebenen Netzen abrufbar. Zeigt nur Belegart, Belegnummer und diesen Zeitstrahl.</p>` : ""}
+    ${t.erpEnabled ? `<h3>ERP-Rückmeldung ${t.erpIndex ? `<span class="meta-inline">Belegindex ${esc(t.erpIndex)}</span>` : ""}</h3>
+      ${!t.erpIndex ? `<p class="meta">Kein Belegindex (@@pi@@) im Beleg – es wird nichts ins ERP zurückgeschrieben.</p>`
+        : erp.length ? `<ul class="erp-jobs">${erp.map(j => `<li><span class="badge code">${esc(j.code)}</span>
+            <span class="badge ${erpState[j.status]?.[0] || ""}">${erpState[j.status]?.[1] || esc(j.status)}</span>
+            <span class="meta-inline">${fmtDT(j.done || j.created)}${j.status === "offen" && j.attempts ? ` · Versuch ${j.attempts + 1} um ${fmtDT(j.nextAttempt)}` : ""}</span>
+            <small>${esc(j.message || (j.fields ? Object.entries(j.fields).map(([k, x]) => k + "=" + x).join(", ") : ""))}</small></li>`).join("")}</ul>`
+        : `<p class="meta">Noch nichts zurückgeschrieben.</p>`}
+      ${portal.isAdmin && t.erpIndex ? `<div class="actions"><button class="btn ghost small" id="vdErpSend">Aktuellen Status jetzt ins ERP schreiben</button></div>` : ""}` : ""}`;
+  $("#vdLinkCopy")?.addEventListener("click", async () => { try { await navigator.clipboard.writeText(t.statusLink); toast("Link kopiert."); } catch { $("#vdLink").select(); } });
+  $("#vdLinkNew")?.addEventListener("click", async () => {
+    if (!await confirmDialog("Neuer Status-Link", "Einen neuen Link erzeugen? Der bisherige Link funktioniert danach nicht mehr.", "Neu erzeugen")) return;
+    try { await api("POST", `api/vorgaenge/${encodeURIComponent(v.id)}/statuslink/neu`); loadTimeline(v); } catch (e) { toast(e.message, false); }
+  });
+  $("#vdErpSend")?.addEventListener("click", async () => {
+    try { await api("POST", `api/vorgaenge/${encodeURIComponent(v.id)}/erp/senden`); toast("In die Warteschlange gestellt."); setTimeout(() => loadTimeline(v), 3000); }
+    catch (e) { toast(e.message, false); }
   });
 }

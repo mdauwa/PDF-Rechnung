@@ -96,6 +96,16 @@ struct MelderPanel: View {
                 .pickerStyle(.segmented).labelsHidden()
                 Text(hint).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Divider()
+                Text("E-Mails aus dem ERP (Terminalserver)").font(.subheadline.weight(.medium))
+                Picker("", selection: Binding(get: { cfg.mapiMode }, set: { model.setMapi($0) })) {
+                    Text("Vorgabe").tag("")
+                    Text("Outlook").tag("outlook")
+                    Text("Portal").tag("portal")
+                    Text("Direkt").tag("direkt")
+                }
+                .pickerStyle(.segmented).labelsHidden().disabled(!cfg.paired)
+                Text(mapiHint).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Divider()
                 Toggle(isOn: Binding(get: { loginItem }, set: { LoginItem.enable($0); loginItem = LoginItem.enabled })) {
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Bei der Anmeldung starten")
@@ -105,6 +115,18 @@ struct MelderPanel: View {
                 .toggleStyle(.switch)
             }
         }
+    }
+
+    private var mapiHint: String {
+        var t = cfg.mapiMode.isEmpty ? "Vorgabe: \(cfg.mapiEffectiveText ?? "in Outlook öffnen"). " : ""
+        switch cfg.mapiMode {
+        case "outlook": t += "Öffnet die Mail als Entwurf in Outlook auf diesem Mac."
+        case "portal": t += "Die Mail wartet im Portal auf deine Prüfung."
+        case "direkt": t += "Belegpost versendet die Mail direkt."
+        default: break
+        }
+        if let n = cfg.mapiNote, !n.isEmpty { t += " " + n + "." }
+        return t
     }
 
     private var hint: String {

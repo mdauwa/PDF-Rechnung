@@ -38,6 +38,10 @@ final class MelderClient: ObservableObject {
     @Published private(set) var state: MelderState = .notPaired
     @Published private(set) var statusText = "Nicht verbunden"
     var onEvent: ((BelegEvent) -> Void)?
+    /// Verbindung steht – offene Aufträge abholen
+    var onConnected: (() -> Void)?
+
+    static var computerName: String { Host.current().localizedName ?? ProcessInfo.processInfo.hostName }
     private var task: Task<Void, Never>?
     private let cfg = MelderConfig.shared
 
@@ -65,7 +69,8 @@ final class MelderClient: ObservableObject {
     static func hello(server: String, token: String, thumbprint: String?) async throws -> (String, String, Bool) {
         let s = session(thumbprint: thumbprint, timeout: 15)
         do {
-            let (data, res) = try await s.data(for: request(server + "/melder/api/hallo", token: token))
+            let pc = computerName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            let (data, res) = try await s.data(for: request(server + "/melder/api/hallo?pc=" + pc, token: token))
             let code = (res as? HTTPURLResponse)?.statusCode ?? 0
             if code == 401 { throw MelderError.message("Der Code ist nicht (mehr) gültig – im Portal bitte neu verbinden.") }
             guard code == 200, let o = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -107,7 +112,8 @@ final class MelderClient: ObservableObject {
                 guard code == 200 else { throw MelderError.message("Server antwortet mit \(code).") }
                 set(.connected, "Wartet auf neue Belege – druckst du im ERP, erscheint der Beleg hier.")
                 delay = 3
-                Task { await self.sendSettings() }
+                Task { await self.sendSettings(); await self.refreshInfo() }
+                onConnected?()
                 var eventName = ""
                 // Hinweis: „lines“ überspringt Leerzeilen – jedes Ereignis hat genau eine data-Zeile.
                 for try await line in bytes.lines {
@@ -136,8 +142,10 @@ final class MelderClient: ObservableObject {
                            text: o["text"] as? String, path: o["path"] as? String ?? "/", kind: o["kind"] as? String ?? "neu",
                            mail: o["mail"] as? Bool ?? true)
         cfg.lastSeq = e.seq
-        cfg.lastDocumentPath = e.path
-        cfg.lastDocumentId = e.id
+        if ["neu", "test", "outlook"].contains(e.kind) && !e.id.isEmpty {
+            cfg.lastDocumentPath = e.path
+            cfg.lastDocumentId = e.id
+        }
         onEvent?(e)
     }
 
@@ -151,5 +159,58 @@ final class MelderClient: ObservableObject {
               let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
         let allowed = o["outlookAllowed"] as? Bool ?? false
         if allowed != cfg.outlookAllowed { cfg.outlookAllowed = allowed }
+    }
+
+    // MARK: Aufträge, MAPI-Einstellung, Versandbestätigung
+
+    /// Aufruf mit Zugangsschlüssel; nil bei Fehlerstatus.
+    func call(_ path: String, method: String = "GET", json: Any? = nil) async -> [String: Any]? {
+        guard let token = cfg.token, let server = cfg.server else { return nil }
+        let s = Self.session(thumbprint: cfg.thumbprint, timeout: 30)
+        let body: Any? = json ?? (method == "POST" ? [String: Any]() : nil)
+        guard let (data, res) = try? await s.data(for: Self.request(server + path, token: token, method: method, json: body)),
+              (res as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+    }
+
+    func refreshInfo() async {
+        let pc = Self.computerName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        guard let o = await call("/melder/api/hallo?pc=" + pc) else { return }
+        apply(o)
+    }
+
+    private func apply(_ o: [String: Any]) {
+        if let a = (o["outlook"] ?? o["outlookAllowed"]) as? Bool, a != cfg.outlookAllowed { cfg.outlookAllowed = a }
+        if let m = o["mapi"] as? [String: Any] {
+            cfg.mapiMode = m["mode"] as? String ?? ""
+            cfg.mapiEffectiveText = m["effectiveText"] as? String
+            cfg.mapiNote = m["note"] as? String
+        }
+    }
+
+    func setMapiMode(_ mode: String) async -> Bool {
+        guard let o = await call("/melder/api/einstellungen", method: "POST", json: ["mapiMode": mode]) else { return false }
+        apply(o)
+        return true
+    }
+
+    func pendingTasks() async -> [(id: String, kind: String, vorgangId: String?)] {
+        guard let o = await call("/melder/api/auftraege"), let items = o["items"] as? [[String: Any]] else { return [] }
+        return items.compactMap { t in
+            guard let id = t["id"] as? String else { return nil }
+            return (id, t["kind"] as? String ?? "", t["vorgangId"] as? String)
+        }
+    }
+
+    func claimTask(_ id: String) async -> Bool { await call("/melder/api/auftraege/\(id)/uebernehmen", method: "POST") != nil }
+    func completeTask(_ id: String) async { _ = await call("/melder/api/auftraege/\(id)/erledigt", method: "POST") }
+
+    func reportSent(_ vorgangId: String, at: Date) async -> Bool {
+        let iso = ISO8601DateFormatter().string(from: at)
+        return await call("/melder/api/vorgang/\(vorgangId)/gesendet", method: "POST", json: ["at": iso]) != nil
+    }
+
+    func reportOutlookError(_ vorgangId: String, _ message: String) async {
+        _ = await call("/melder/api/vorgang/\(vorgangId)/outlookfehler", method: "POST", json: ["message": message])
     }
 }

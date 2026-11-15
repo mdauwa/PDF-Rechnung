@@ -137,3 +137,25 @@ table.users input.invalid { border-color: var(--bad, #d1453b); background: #fbea
 .user-melder { font-size: 12px; color: var(--muted, #667085); align-self: center; }
 
 .vd-side { min-width: 0; }
+
+/* Belegstatus: Zeitstrahl, Status-Link, ERP-Rückmeldung */
+.badge.code { font-family: Consolas, monospace; background: var(--accent-soft); color: var(--accent); }
+ol.timeline { list-style: none; margin: 8px 0 4px; padding: 0 0 0 14px; border-left: 2px solid var(--border); }
+ol.timeline li { position: relative; display: flex; gap: 10px; align-items: baseline; padding: 0 0 10px 6px; }
+ol.timeline li::before { content: ""; position: absolute; left: -21px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--border); }
+ol.timeline li:last-child::before { background: var(--accent); }
+ol.timeline li.note::before { background: #1f9d55; }
+ol.timeline .tl-code { font-family: Consolas, monospace; font-size: 12px; color: var(--muted); min-width: 28px; }
+ol.timeline small { display: block; color: var(--muted); font-size: 12px; }
+.statuslink { display: flex; gap: 6px; align-items: center; margin-top: 10px; }
+.statuslink .lbl { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.statuslink input { flex: 1; min-width: 0; font-family: Consolas, monospace; font-size: 12px; }
+.btn.small { padding: 4px 10px; font-size: 12px; }
+table.erp-fields input, table.erp-fields select { width: 100%; }
+table.erp-fields td.len { width: 60px; text-align: center; color: var(--muted); }
+.erp-preview { font-family: Consolas, monospace; font-size: 12px; background: var(--bg-soft, #f6f7f9); padding: 8px 10px; border-radius: 6px; white-space: pre-wrap; }
+.mapi-src { font-size: 11px; color: var(--muted); display: block; }
+ul.erp-jobs { list-style: none; margin: 6px 0; padding: 0; }
+ul.erp-jobs li { padding: 6px 0; border-top: 1px solid var(--border); }
+ul.erp-jobs li:first-child { border-top: 0; }
+ul.erp-jobs small { display: block; color: var(--muted); font-size: 12px; word-break: break-word; margin-top: 2px; }

@@ -25,6 +25,14 @@ public sealed class MelderConfig
     public string? LastDocumentId { get; set; }
     /// <summary>Darf dieser Benutzer über Outlook senden (Freigabe im Portal)?</summary>
     public bool OutlookAllowed { get; set; }
+    /// <summary>MAPI-Mails aus dem ERP auf diesem PC ("" = Vorgabe), vom Server gemeldet.</summary>
+    public string MapiMode { get; set; } = "";
+    public string? MapiEffectiveText { get; set; }
+    public string? MapiInherited { get; set; }
+    /// <summary>Hinweis, falls der Administrator die Einstellung gesetzt hat.</summary>
+    public string? MapiNote { get; set; }
+    /// <summary>In Outlook geöffnete Entwürfe, deren Versand noch bestätigt werden soll (Vorgang → Zeitpunkt).</summary>
+    public Dictionary<string, DateTime> PendingSent { get; set; } = new();
 
     public static string Folder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Belegpost");
     public static string FilePath => Path.Combine(Folder, "melder.json");

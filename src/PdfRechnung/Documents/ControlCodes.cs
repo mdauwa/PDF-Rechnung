@@ -52,6 +52,10 @@ public sealed class ParsedCodes
     public string? OperatorNumber { get; set; }
     /// <summary>@@pb…@@ mit ungültigem Wert (nicht numerisch).</summary>
     public string? InvalidOperatorNumber { get; set; }
+    /// <summary>@@pi12345@@ – ERP-Belegindex (BELNDX). Nur dann wird der Status ins ERP zurückgeschrieben.</summary>
+    public string? ErpIndex { get; set; }
+    /// <summary>@@pi…@@ mit ungültigem Wert (nicht numerisch).</summary>
+    public string? InvalidErpIndex { get; set; }
 
     // ---- Bearbeiten / Allgemein ----
     public string? Stationery { get; set; }
@@ -82,6 +86,15 @@ public sealed class ParsedCodes
 /// </summary>
 public static partial class ControlCodeParser
 {
+    /// <summary>Belegindex: nur Ziffern (1–18 Stellen), Vornullen werden entfernt; sonst null.</summary>
+    public static string? NormalizeErpIndex(string? s)
+    {
+        var t = s?.Trim();
+        if (string.IsNullOrEmpty(t) || t.Length > 18 || !t.All(char.IsAsciiDigit)) return null;
+        var n = t.TrimStart('0');
+        return n.Length == 0 ? null : n;
+    }
+
     [GeneratedRegex(@"@@(?<code>[A-Za-z<]{2})(?<value>.*?)@@", RegexOptions.CultureInvariant)]
     private static partial Regex CodeRegex();
 
@@ -153,6 +166,10 @@ public static partial class ControlCodeParser
             case "pb":
                 if (Settings.UserStore.NormalizeOperator(t) is { } no) r.OperatorNumber = no;
                 else r.InvalidOperatorNumber = t;
+                break;
+            case "pi":
+                if (NormalizeErpIndex(t) is { } bel) r.ErpIndex = bel;
+                else r.InvalidErpIndex = t;
                 break;
 
             // ---------- Mail ----------

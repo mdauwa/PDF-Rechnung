@@ -42,8 +42,11 @@ async function renderMelder(view) {
   </div></div>
 
   <div class="card"><div class="card-head"><h2>Verbundene Melder</h2></div><div class="card-body">
-    ${d.devices.length ? `<table class="list mini"><thead><tr><th>PC</th><th>verbunden seit</th><th>zuletzt aktiv</th><th></th></tr></thead><tbody>
-      ${d.devices.map(x => `<tr><td>${esc(x.name)}</td><td>${fmt(x.created)}</td><td>${fmt(x.lastSeen)}</td>
+    ${d.devices.length ? `<table class="list mini"><thead><tr><th>PC</th><th>verbunden seit</th><th>zuletzt aktiv</th><th title="Was mit E-Mails passiert, die du im ERP am Terminalserver versendest (MAPI)">E-Mails aus dem ERP</th><th></th></tr></thead><tbody>
+      ${d.devices.map(x => `<tr><td>${esc(x.name)}${x.computerName ? ` <small class="meta-inline">${esc(x.computerName)}</small>` : ""}</td><td>${fmt(x.created)}</td><td>${fmt(x.lastSeen)}</td>
+        <td><select data-mapi="${esc(x.id)}"><option value="" ${!x.mapiMode ? "selected" : ""}>Vorgabe (${esc(d.mapiDefaultText || "")})</option>
+          ${(d.mapiModes || []).map(m => `<option value="${m.key}" ${x.mapiMode === m.key ? "selected" : ""}>${esc(m.text)}</option>`).join("")}</select>
+          ${x.mapiSource === "admin" ? `<span class="mapi-src">vom Administrator gesetzt (${fmt(x.mapiChangedAt)})</span>` : ""}</td>
         <td><button class="btn ghost small" data-del="${esc(x.id)}">Trennen</button></td></tr>`).join("")}</tbody></table>`
       : `<p class="meta">Noch kein Melder verbunden.</p>`}
     ${d.canPair ? `<div class="actions"><button class="btn ghost" id="mlTest">Test: letzten Beleg an meine Melder schicken</button><span class="meta-inline" id="mlTestMsg"></span></div>` : ""}
@@ -61,6 +64,10 @@ async function renderMelder(view) {
     store.set("live.notify", e.target.checked);
     if (e.target.checked && window.Notification && Notification.permission === "default") await Notification.requestPermission();
   };
+  view.querySelectorAll("[data-mapi]").forEach(sel => sel.onchange = async () => {
+    try { await api("POST", `api/melder/geraete/${encodeURIComponent(sel.dataset.mapi)}/mapi`, { mode: sel.value }); toast("Gespeichert – gilt sofort für diesen PC."); renderMelder(view); }
+    catch (ex) { toast(ex.message, false); }
+  });
   view.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
     if (!await confirmDialog("Melder trennen", "Diesen PC trennen? Der Melder dort meldet sich danach nicht mehr.", "Trennen", true)) return;
     try { await api("DELETE", "api/melder/geraete/" + encodeURIComponent(b.dataset.del)); renderMelder(view); } catch (ex) { toast(ex.message, false); }

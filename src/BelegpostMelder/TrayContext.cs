@@ -9,6 +9,10 @@ public sealed class TrayContext : ApplicationContext
     private readonly ToolStripMenuItem _status, _autostart, _openLast, _openPortal, _lastOutlook, _actPortal, _actOutlook, _actHint;
     private readonly WindowsFormsSynchronizationContext _ui;
     private MainWindow? _window;
+    private readonly System.Windows.Forms.Timer _sentTimer;
+    private bool _tasksRunning, _checkingSent;
+
+    public MelderClient Client => _client;
 
     public MelderState State => _client.State;
     public string StatusText { get; private set; } = "";
@@ -62,6 +66,12 @@ public sealed class TrayContext : ApplicationContext
         });
         _client.Received += e => Post(() => OnBeleg(e));
         _client.PermissionsChanged += () => Post(Refresh);
+        _client.Connected += () => Post(() => _ = RunTasks());
+
+        // Versandbestätigung aus Outlook: jede Minute „Gesendete Elemente“ prüfen, solange Entwürfe offen sind
+        _sentTimer = new System.Windows.Forms.Timer { Interval = 60_000 };
+        _sentTimer.Tick += async (_, _) => await CheckSent();
+        _sentTimer.Start();
 
         Refresh();
         if (_cfg.Paired) _client.Start();
@@ -121,18 +131,72 @@ public sealed class TrayContext : ApplicationContext
     }
 
     /// <summary>Mail des Belegs als Entwurf in Outlook öffnen.</summary>
-    public async Task OpenOutlook(string documentId, string? title)
+    public async Task<bool> OpenOutlook(string documentId, string? title)
     {
         try
         {
             var r = await OutlookBridge.OpenDraft(_cfg, documentId);
-            if (!r.Ok) ToastWindow.Show(title ?? "Outlook", r.Message, ToastWindow.Kinds.Bad, () => OpenPath("/#/vorgang?id=" + Uri.EscapeDataString(documentId)), "Im Portal", 12);
-            else if (!r.ViaOutlook) ToastWindow.Show(title ?? "E-Mail-Entwurf", r.Message, ToastWindow.Kinds.Info, null, seconds: 6);
+            if (!r.Ok)
+            {
+                ToastWindow.Show(title ?? "Outlook", r.Message, ToastWindow.Kinds.Bad, () => OpenPath("/#/vorgang?id=" + Uri.EscapeDataString(documentId)), "Im Portal", 12);
+                _ = _client.ReportOutlookError(documentId, r.Message);
+                return false;
+            }
+            if (r.ViaOutlook)
+            {
+                _cfg.PendingSent[documentId] = DateTime.Now;
+                try { _cfg.Save(); } catch { }
+            }
+            else ToastWindow.Show(title ?? "E-Mail-Entwurf", r.Message, ToastWindow.Kinds.Info, null, seconds: 6);
+            return true;
         }
         catch (Exception ex)
         {
             ToastWindow.Show(title ?? "Outlook", "Der Entwurf konnte nicht geöffnet werden: " + ex.Message, ToastWindow.Kinds.Bad, null, seconds: 12);
+            _ = _client.ReportOutlookError(documentId, ex.Message);
+            return false;
         }
+    }
+
+    /// <summary>Aufträge vom Server (z. B. E-Mails aus dem ERP über MAPI) abholen und ausführen – auch nach Offline-Zeit.</summary>
+    public async Task RunTasks()
+    {
+        if (_tasksRunning || !_cfg.Paired) return;
+        _tasksRunning = true;
+        try
+        {
+            foreach (var t in await _client.PendingTasks())
+            {
+                if (!await _client.ClaimTask(t.Id)) continue; // ein anderer PC war schneller
+                if (t.Kind == "outlook" && t.VorgangId is { } id)
+                {
+                    var ok = _cfg.OutlookAllowed && await OpenOutlook(id, "E-Mail aus dem ERP");
+                    if (ok) ToastWindow.Show("E-Mail aus dem ERP", "In Outlook geöffnet – bitte prüfen und senden.", ToastWindow.Kinds.Ok,
+                        () => OpenPath("/#/vorgang?id=" + Uri.EscapeDataString(id)), "Im Portal", 6);
+                    else if (!_cfg.OutlookAllowed) OpenPath("/#/vorgang?id=" + Uri.EscapeDataString(id));
+                }
+                await _client.CompleteTask(t.Id);
+            }
+        }
+        catch { /* beim nächsten Ereignis erneut */ }
+        finally { _tasksRunning = false; }
+    }
+
+    /// <summary>Versand der geöffneten Entwürfe in Outlook erkennen und dem Portal melden (Status 110).</summary>
+    private async Task CheckSent()
+    {
+        if (_checkingSent || _cfg.PendingSent.Count == 0 || !_cfg.Paired) return;
+        _checkingSent = true;
+        try
+        {
+            foreach (var old in _cfg.PendingSent.Where(p => p.Value < DateTime.Now.AddDays(-7)).Select(p => p.Key).ToList()) _cfg.PendingSent.Remove(old);
+            var found = OutlookBridge.FindSent(_cfg.PendingSent.Keys);
+            foreach (var (id, at) in found)
+                if (await _client.ReportSent(id, at)) _cfg.PendingSent.Remove(id);
+            try { _cfg.Save(); } catch { }
+        }
+        catch { }
+        finally { _checkingSent = false; }
     }
 
     private void OnBeleg(BelegEvent e)
@@ -140,6 +204,15 @@ public sealed class TrayContext : ApplicationContext
         Refresh();
         // Aus dem Portal angestoßen: „In Outlook öffnen“
         if (e.Kind == "outlook") { _ = OpenOutlook(e.Id, e.Title); return; }
+        // Auftrag vom Server (z. B. MAPI-Mail aus dem ERP)
+        if (e.Kind == "auftrag") { _ = RunTasks(); return; }
+        // Einstellung geändert (z. B. vom Administrator überrollt)
+        if (e.Kind == "einstellung")
+        {
+            _ = _client.RefreshInfo();
+            if (!string.IsNullOrEmpty(e.Text)) ToastWindow.Show("Einstellung geändert", e.Text, ToastWindow.Kinds.Info, null, seconds: 8);
+            return;
+        }
         var kind = e.Status switch
         {
             "fehler" or "versandfehler" => ToastWindow.Kinds.Bad,
@@ -226,6 +299,7 @@ public sealed class TrayContext : ApplicationContext
     protected override void ExitThreadCore()
     {
         _client.Dispose();
+        _sentTimer.Dispose();
         _icon.Visible = false;
         _icon.Dispose();
         _window?.Dispose();

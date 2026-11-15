@@ -34,7 +34,7 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 - **Erst normale PDFs, dann ZUGFeRD (13.11.2026):** Zuerst läuft der komplette Weg ohne E-Rechnung: Drucker, Steuerzeichen entfernen, Briefpapier, Versand. ZUGFeRD kommt erst dazu, wenn das stabil funktioniert.
 - **ERP-Ausgabe der Steuerzeichen:** Dass die Steuerzeichen jetzt gedruckt werden, lag an einer internen ERP-Einstellung. Für das Projekt ist das nicht relevant.
 
-## Stand (fertig, getestet, 113 Tests grün – Commit 28c1175)
+## Stand (fertig, getestet, 113 Tests grün – Commit b383788)
 
 - **Portal:**
   - Vorgangsliste mit Filtern und Menüzählern
@@ -151,12 +151,15 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 
 ## Nächste Schritte (normale PDFs, ohne ZUGFeRD)
 
-0. **Servertest (läuft, Stand 15.11.2026 13:35):**
-   - Erledigt: Dienst auf neuen Stand aktualisiert (SQLite-Übernahme ok), MAPI-Client installiert und „für alle als Standard“ gesetzt. MAPI kommt im Dienst an.
-   - Behoben: „Zugriff verweigert auf `vorgaenge`“ (Impersonation, 594cbbc); WordPad-„Senden“ landete wegen fehlendem Empfänger/kaputter Platzhalterseite als Fehler im Portal (28c1175: normale Mail vs. Beleg).
-   - Offen: 28c1175 am Server einspielen und WordPad-„Senden“ erneut testen (Outlook muss aufgehen); ERP-Beleg per MAPI mit 32- und 64-Bit-ERP; Outlook-Versandbestätigung (110); ERP-Rückmeldung mit eigener SecuredApp (Servicepass registrieren, im ERP freigeben, Testschreiben).
-   - Hinweis: `HKCU\Software\Clients\Mail` des Benutzers hat Vorrang vor dem HKLM-Standard (Outlook setzt ihn oft) → pro Benutzer `reg add "HKCU\Software\Clients\Mail" /ve /d "Belegpost" /f` (Anmeldeskript/GPO). Neue MAPI-DLLs werden erst ersetzt, wenn kein Prozess sie geladen hat (sonst beim Neustart).
-0a. **Mac:** `git pull`, Mac-Melder mit `src/BelegpostMelderMac/build.sh` neu bauen (neu: Hostname als Computername, Text-Mails als HTML für Outlook) und gegen das Portal testen: normale Mail aus der RDP-Sitzung (WordPad → Senden) muss Outlook am Mac öffnen. Die neue `Belegpost-Melder-macOS.zip` nach `Y:\Dev\eRechnung\Ausgabe` neben `Belegpost.exe` legen (fehlt dort noch).
+0. **Servertest (läuft, Stand 15.11.2026 14:20):**
+   - Erledigt: Dienst aktualisiert (SQLite-Übernahme ok), MAPI-Client installiert, „für alle als Standard“ gesetzt, MAPI kommt im Dienst an. Mac-Melder mit neuem Code gebaut (ZIP 14:03, enthält Hostname + Text-Mails).
+   - Behoben: „Zugriff verweigert auf `vorgaenge`“ (594cbbc); WordPad-„Senden“ als Fehler im Portal (28c1175: normale Mail vs. Beleg).
+   - **Neu, am Server noch nicht getestet:** Standard je Windows-Benutzer (2732db2) und Belegpost als Windows-Standard-App „E-Mail“ mit mailto-Handler (b383788).
+   - **Ausgabe:** Die aktuelle Ausgabe (b383788, inkl. `Belegpost-Melder-macOS.zip`) wurde dem Benutzer als `Belegpost-Ausgabe.zip` im Chat geschickt. `Y:\Dev\eRechnung\Ausgabe` ist noch auf 28c1175 (ohne Mac-ZIP) – beim nächsten Zugriff auf die VM neu bauen und dorthin kopieren (`dotnet publish src/PdfRechnung -c Release -r win-x64`, DLLs per `build.sh`, Mac-ZIP liegt am Mac unter `~/Claude/BelegpostMelderMac/build/`).
+   - **Nächste Schritte am Server:** Ausgabe nach `C:\Install\Belegpost`, `Belegpost.exe` doppelklicken → Einstellungen → MAPI-Mails → „Neu installieren“ (ERP/WordPad vorher schließen) → „Für alle Benutzer als Standard setzen“ → ab-/anmelden → prüfen: Standard-Apps → E-Mail = Belegpost, Tabelle „Angemeldeter Windows-Benutzer“ zeigt Belegpost. Testen: WordPad → Senden und `mailto:test@example.com?subject=Test` (Win+R) → Outlook am PC des Benutzers. Danach ERP-Beleg per MAPI (32/64 Bit), Outlook-Versandbestätigung (110), ERP-Rückmeldung mit eigener SecuredApp.
+   - Hinweis: Die neuen MAPI-DLLs werden nur ersetzt, wenn kein Prozess sie geladen hat (sonst beim Neustart).
+0a. **Chats:** Ab 15.11.2026 gibt es zwei Chats im Projekt – einer für **Windows/Server** (Claude-App in der VM `martin-vm40`, Ordner `Y:\Dev\eRechnung`), einer für den **Mac** (`mdauw-app-air25-local`, Ordner `~/Claude/BelegpostMelderMac`). Ein Chat ist immer nur mit einem Rechner verbunden.
+   - **Mac-Build:** `~/Claude/BelegpostMelderMac` ist eine Kopie von `src/BelegpostMelderMac` (kein Git). Geänderte Dateien dorthin kopieren und im Terminal `cd ~/Claude/BelegpostMelderMac && ./build.sh` ausführen (oder „Melder bauen.command“ doppelklicken → Protokoll in `build.log`). Claudes Shell am Mac ist Linux und kann nicht für macOS bauen; Terminal ist für die Bildschirmsteuerung nur „click“. Offen am Mac: Funktionstest des Melders (normale Mail aus der RDP-Sitzung muss Outlook am Mac öffnen; Computername = lokaler Hostname).
 1. **Drucker einrichten:** Drucker „Belegpost“ mit Microsoft Print to PDF und eigenem Anschluss aus der Oberfläche anlegen und freigeben (bevorzugt Named Pipe, sonst mfilemon). Den Druckauftrag mit Benutzer und Rechner übernehmen.
 2. **Weitere Steuerzeichen:** `@@af@@` (PDF anhängen, `no_stationery`), `@@nd@@` (Druckauftrag teilen), `@@rpc@@` (Seite entfernen).
 3. **Ende-zu-Ende-Test** mit echten Briefpapieren je Firma.

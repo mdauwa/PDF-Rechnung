@@ -299,7 +299,7 @@ static int pipe_send(const char *data, size_t len, char **resp)
     HANDLE h = INVALID_HANDLE_VALUE;
     for (int i = 0; i < 3 && h == INVALID_HANDLE_VALUE; i++)
     {
-        h = CreateFileW(PIPE_NAME, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, SECURITY_SQOS_PRESENT | SECURITY_IMPERSONATION, NULL);
+        h = CreateFileW(PIPE_NAME, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION, NULL);
         if (h == INVALID_HANDLE_VALUE)
         {
             if (GetLastError() != ERROR_PIPE_BUSY) return 0;
@@ -358,12 +358,14 @@ static void show(HWND owner, const wchar_t *text, UINT icon)
     MessageBoxW(owner, text, L"Belegpost", MB_OK | icon | MB_SETFOREGROUND);
 }
 
-/* Meldung aus der Antwort ("message":"…") für Fehleranzeigen */
-static wchar_t *resp_message(const char *resp)
+/* Textfeld aus der Antwort ("message":"…", "hint":"…") für Anzeigen */
+static wchar_t *resp_field(const char *resp, const char *key)
 {
-    const char *p = resp ? strstr(resp, "\"message\":\"") : NULL;
+    char pat[32];
+    _snprintf(pat, sizeof(pat), "\"%s\":\"", key);
+    const char *p = resp ? strstr(resp, pat) : NULL;
     if (!p) return NULL;
-    p += 11;
+    p += strlen(pat);
     char tmp[1024];
     size_t i = 0;
     while (*p && *p != '"' && i < sizeof(tmp) - 5)
@@ -424,10 +426,17 @@ static ULONG send_msg(ULONG_PTR ui, const Msg *m)
     }
     else if (r < 0)
     {
-        wchar_t *msg = resp_message(resp);
+        wchar_t *msg = resp_field(resp, "message");
         show((HWND)ui, msg ? msg : L"Belegpost konnte die E-Mail nicht annehmen.", MB_ICONERROR);
         free(msg);
         rc = MAPI_E_FAILURE;
+    }
+    else
+    {
+        /* angenommen – Hinweis anzeigen, wenn die Mail nicht dort landet, wo der Benutzer sie erwartet (z. B. im Portal statt in Outlook) */
+        wchar_t *hint = resp_field(resp, "hint");
+        if (hint && *hint) show((HWND)ui, hint, MB_ICONINFORMATION);
+        free(hint);
     }
     free(resp);
     free(b.p);

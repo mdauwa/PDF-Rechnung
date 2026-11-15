@@ -28,6 +28,8 @@ public sealed class MailData
     public List<string> Attachments { get; set; } = new();
     /// <summary>@@md@@: Mail ohne den Beleg als Anhang.</summary>
     public bool NoDocument { get; set; }
+    /// <summary>Normale E-Mail (MAPI ohne Beleg): ohne Prüfung, ohne Briefpapier und Mail-Vorlage – Text und Anlagen wie übergeben.</summary>
+    public bool Plain { get; set; }
     /// <summary>Dateiname des PDF-Anhangs (ohne .pdf).</summary>
     public string FileName { get; set; } = "";
     /// <summary>Im Portal geändert – „Neu prüfen“ überschreibt die Versanddaten dann nicht.</summary>

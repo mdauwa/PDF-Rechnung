@@ -1,4 +1,5 @@
 import Foundation
+import SystemConfiguration
 import CryptoKit
 
 struct BelegEvent {
@@ -41,7 +42,12 @@ final class MelderClient: ObservableObject {
     /// Verbindung steht – offene Aufträge abholen
     var onConnected: (() -> Void)?
 
-    static var computerName: String { Host.current().localizedName ?? ProcessInfo.processInfo.hostName }
+    /// Lokaler Hostname (z. B. „Markuss-MacBook-Pro“) – den schickt auch der RDP-Client als Client-Namen,
+    /// daran erkennt der Dienst, auf welchem Mac eine MAPI-Mail aus der RDP-Sitzung geöffnet werden soll.
+    static var computerName: String {
+        if let n = SCDynamicStoreCopyLocalHostName(nil) as String?, !n.isEmpty { return n }
+        return Host.current().localizedName ?? ProcessInfo.processInfo.hostName
+    }
     private var task: Task<Void, Never>?
     private let cfg = MelderConfig.shared
 

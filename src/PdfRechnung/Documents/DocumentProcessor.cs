@@ -225,7 +225,8 @@ public sealed class DocumentProcessor
         if (beforeSave is not null)
         {
             beforeSave(v);
-            if (readOk) v.Messages = DocumentChecker.Check(v, p, CurrentSettings()).Concat(v.Messages.Where(m => m.Field == "mapi")).ToList();
+            if (v.Mail.Plain) v.Messages = v.Messages.Where(m => m.Field == "mapi").ToList();
+            else if (readOk) v.Messages = DocumentChecker.Check(v, p, CurrentSettings()).Concat(v.Messages.Where(m => m.Field == "mapi")).ToList();
             v.UpdateStatus();
         }
         _store.Create(v, pdf, text, sendPdf);
@@ -263,6 +264,7 @@ public sealed class DocumentProcessor
     {
         var path = _store.FilePath(id, DocumentStore.PdfFile);
         if (path is null) return null;
+        if (_store.Get(id) is { Mail.Plain: true } plain) return plain; // normale E-Mail: nichts zu prüfen
         ParsedCodes p;
         var original = File.ReadAllBytes(path);
         try { p = Map(ControlCodeParser.Parse(PdfText.Extract(original).Lines)); }
@@ -284,6 +286,7 @@ public sealed class DocumentProcessor
     /// <summary>Nur die Prüfung (ohne PDF neu zu lesen), z. B. nach Änderung der Versanddaten.</summary>
     public void Revalidate(Vorgang v)
     {
+        if (v.Mail.Plain) { v.Messages = v.Messages.Where(m => m.Field == "mapi").ToList(); v.UpdateStatus(); return; }
         var path = _store.FilePath(v.Id, DocumentStore.PdfFile);
         ParsedCodes p;
         try { p = path is null ? new ParsedCodes() : Map(ControlCodeParser.Parse(PdfText.Extract(File.ReadAllBytes(path)).Lines)); }

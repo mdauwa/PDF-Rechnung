@@ -41,7 +41,8 @@ public sealed class MapiMessage
     public bool Dialog { get; set; }
 }
 
-public sealed record MapiResult(bool Ok, string Message, string? VorgangId = null, string? Mode = null);
+/// <param name="Hint">Wird von der DLL als Hinweis angezeigt, wenn die Mail nicht dort landet, wo der Benutzer sie erwartet.</param>
+public sealed record MapiResult(bool Ok, string Message, string? VorgangId = null, string? Mode = null, string? Hint = null);
 
 /// <summary>
 /// Nimmt MAPI-Mails aus dem ERP an (BelegpostMapi.dll → Named Pipe) und legt daraus einen Vorgang an. Danach je nach
@@ -65,10 +66,37 @@ public sealed class MapiIntake
         _proc = proc; _store = store; _users = users; _tasks = tasks; _hub = hub; _send = send; _opt = opt; _log = log;
     }
 
+    /// <summary>
+    /// Beleg oder normale E-Mail? Ein Beleg ist ein PDF-Druck mit Belegpost-Steuerzeichen (im PDF oder im Mailtext).
+    /// Alles andere – z. B. „Senden an E-Mail“ aus WordPad, Word oder dem Explorer – ist eine normale E-Mail.
+    /// </summary>
+    public static bool IsVoucher(MapiMessage m, IReadOnlyList<(string Name, byte[] Data)> files)
+    {
+        if (m.Body is not null && CodePattern.IsMatch(m.Body)) return true;
+        foreach (var (name, data) in files)
+        {
+            if (!IsPdf(name, data)) continue;
+            try
+            {
+                if (ControlCodeParser.Parse(PdfText.Extract(data).Lines).Codes.Count > 0) return true;
+            }
+            catch { /* nicht lesbares PDF → zählt nicht als Beleg */ }
+        }
+        return false;
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex CodePattern = new(@"@@[a-z<]{1,3}[^@\r\n]{0,500}@@",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static bool IsPdf(string name, byte[] data) =>
+        name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) && data.Length > 4 && Encoding.ASCII.GetString(data, 0, 4) == "%PDF";
+
     public async Task<MapiResult> HandleAsync(MapiMessage m, string windowsAccount, CancellationToken ct)
     {
         var files = m.Attachments.Select(a => (Name: SafeName(a.Name), Data: Convert.FromBase64String(a.Data))).ToList();
-        var pdfIndex = files.FindIndex(f => f.Name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase) && f.Data.Length > 4 && Encoding.ASCII.GetString(f.Data, 0, 4) == "%PDF");
+        if (!IsVoucher(m, files)) return PlainMail(m, files, windowsAccount);
+        var pdfIndex = files.FindIndex(f => IsPdf(f.Name, f.Data) && HasCodes(f.Data));
+        if (pdfIndex < 0) pdfIndex = files.FindIndex(f => IsPdf(f.Name, f.Data));
         var pdf = pdfIndex >= 0 ? files[pdfIndex].Data : BlankPdf;
         var fileName = pdfIndex >= 0 ? files[pdfIndex].Name : null;
         var extras = files.Where((_, i) => i != pdfIndex).ToList();
@@ -110,18 +138,27 @@ public sealed class MapiIntake
         if (userId is null)
         {
             _log.LogInformation("MAPI-Mail von {Account}: kein Portal-Benutzer – Vorgang {Id} bleibt im Portal", windowsAccount, v.Id);
-            return new MapiResult(true, "Im Portal abgelegt.", v.Id, MapiMode.Portal);
+            return new MapiResult(true, "Im Portal abgelegt.", v.Id, MapiMode.Portal, UnknownUserHint(windowsAccount));
         }
         var user = _users.FindById(userId)!;
         var device = _users.TargetDevice(userId, m.ClientName);
         var mode = _users.EffectiveMapiMode(userId, device?.Id, _opt.CurrentValue.DefaultMode);
-        if (mode == MapiMode.Outlook && !user.SendViaOutlook) mode = MapiMode.Portal; // Outlook nicht freigeschaltet
+        string? hint = null;
+        if (mode == MapiMode.Outlook && !user.SendViaOutlook)
+        {
+            mode = MapiMode.Portal; // Outlook nicht freigeschaltet
+            hint = "Der Beleg liegt im Belegpost-Portal: Senden über Outlook ist für dich nicht freigeschaltet (Einstellungen → Benutzer → Outlook).";
+        }
+        else if (mode == MapiMode.Outlook && device is null)
+            hint = "Der Beleg liegt im Belegpost-Portal: Für dich ist kein Belegpost Melder gekoppelt, der Outlook öffnen könnte.";
+        else if (mode == MapiMode.Outlook && v.Status == VorgangStatus.Error)
+            hint = "Der Beleg hat Fehler und liegt deshalb im Belegpost-Portal:\n" + (v.Messages.FirstOrDefault(x => x.Level == DocumentChecker.Error)?.Text ?? "");
         var title = string.Join(" ", new[] { v.DocumentType, v.VoucherId }.Where(x => !string.IsNullOrWhiteSpace(x)));
         if (title.Length == 0) title = v.Mail.Subject;
 
         switch (mode)
         {
-            case MapiMode.Outlook when v.Status != VorgangStatus.Error:
+            case MapiMode.Outlook when v.Status != VorgangStatus.Error && device is not null:
                 _tasks.Create(userId, device?.Id, MelderTasks.KindOutlook, v.Id, title);
                 _log.LogInformation("MAPI-Mail {Id} → Outlook auf {Device}", v.Id, device?.Name ?? "(nächster Melder)");
                 return new MapiResult(true, "Wird in Outlook geöffnet.", v.Id, mode);
@@ -133,8 +170,72 @@ public sealed class MapiIntake
             default:
                 var first = v.Messages.FirstOrDefault(x => x.Level == DocumentChecker.Error)?.Text ?? v.Messages.FirstOrDefault(x => x.Level == DocumentChecker.Warning)?.Text;
                 _hub.Publish(userId, "neu", v.Id, title, v.Status, first, true);
-                return new MapiResult(true, "Im Portal zur Prüfung.", v.Id, MapiMode.Portal);
+                return new MapiResult(true, "Im Portal zur Prüfung.", v.Id, MapiMode.Portal, hint);
         }
+    }
+
+    /// <summary>
+    /// Normale E-Mail: ohne Prüfung, Briefpapier und Mail-Vorlage als Entwurf in Outlook auf dem PC des Benutzers öffnen –
+    /// so wie es ein normaler Mailclient täte. Alle Anhänge (auch PDFs ohne Steuerzeichen) bleiben Anhänge.
+    /// </summary>
+    private MapiResult PlainMail(MapiMessage m, List<(string Name, byte[] Data)> files, string windowsAccount)
+    {
+        var owner = _users.FindByWindowsAccount(windowsAccount);
+        var device = owner is null ? null : _users.TargetDevice(owner.Id, m.ClientName);
+        var subject = (m.Subject ?? "").Trim();
+        var v = _proc.Process(BlankPdf, "MAPI", files.Count > 0 ? files[0].Name : "E-Mail", windowsAccount, m.ClientName, owner?.Id, beforeSave: x =>
+        {
+            x.DocumentType = "E-Mail";
+            x.VoucherId = null;
+            x.Mail = new MailData
+            {
+                Enabled = true, Plain = true, NoDocument = true, Edited = true,
+                To = Addresses(m, "to"), Cc = Addresses(m, "cc"), Bcc = Addresses(m, "bcc"),
+                Subject = subject, Body = (m.Body ?? "").Replace("\r\n", "\n"),
+                FileName = subject.Length > 0 ? subject : "E-Mail"
+            };
+            if (files.Count > 0)
+            {
+                var dir = Path.Combine(_store.DirectoryFor(x), "anlagen");
+                Directory.CreateDirectory(dir);
+                foreach (var (name, data) in files)
+                {
+                    var path = Unique(Path.Combine(dir, name));
+                    File.WriteAllBytes(path, data);
+                    x.Mail.Attachments.Add(path);
+                }
+            }
+            x.Messages.Clear();
+            if (owner is null)
+                x.Messages.Add(new CheckMessage(DocumentChecker.Warning, $"Windows-Benutzer „{windowsAccount}“ ist keinem Portal-Benutzer zugeordnet (Einstellungen → Benutzer → Druck-Benutzernamen).", "mapi"));
+            else if (device is null)
+                x.Messages.Add(new CheckMessage(DocumentChecker.Warning, "Kein Belegpost Melder gekoppelt – die E-Mail kann nicht in Outlook geöffnet werden.", "mapi"));
+            // Nie automatisch über den Dienst versenden: der Benutzer schickt sie selbst aus Outlook.
+            x.Status = owner is not null && device is not null ? VorgangStatus.Outlook : VorgangStatus.Warning;
+            if (x.Status == VorgangStatus.Outlook) x.OutlookHandedAt = DateTimeOffset.Now;
+        }, publish: false);
+
+        if (owner is null)
+        {
+            _log.LogInformation("Normale MAPI-Mail von {Account}: kein Portal-Benutzer – Vorgang {Id} im Portal", windowsAccount, v.Id);
+            return new MapiResult(true, "Im Portal abgelegt.", v.Id, MapiMode.Portal, UnknownUserHint(windowsAccount));
+        }
+        if (device is null)
+            return new MapiResult(true, "Im Portal abgelegt.", v.Id, MapiMode.Portal,
+                "Die E-Mail liegt im Belegpost-Portal: Für dich ist kein Belegpost Melder gekoppelt, der Outlook auf deinem PC öffnen könnte.");
+        var title = subject.Length > 0 ? subject : "E-Mail";
+        _tasks.Create(owner.Id, device.Id, MelderTasks.KindOutlook, v.Id, title);
+        _log.LogInformation("Normale MAPI-Mail {Id} von {Account} → Outlook auf {Device}", v.Id, windowsAccount, device.Name);
+        return new MapiResult(true, "Wird in Outlook geöffnet.", v.Id, MapiMode.Outlook);
+    }
+
+    private static string UnknownUserHint(string windowsAccount) =>
+        $"Die E-Mail liegt im Belegpost-Portal: Der Windows-Benutzer „{windowsAccount}“ ist keinem Belegpost-Benutzer zugeordnet (Einstellungen → Benutzer → Druck-Benutzernamen).";
+
+    private static bool HasCodes(byte[] pdf)
+    {
+        try { return ControlCodeParser.Parse(PdfText.Extract(pdf).Lines).Codes.Count > 0; }
+        catch { return false; }
     }
 
     private static List<string> Addresses(MapiMessage m, string type) =>
@@ -167,9 +268,18 @@ public sealed class MapiIntake
     }
 
     /// <summary>Leere A4-Seite als Platzhalter, wenn die MAPI-Mail kein PDF enthält (wird nicht angehängt).</summary>
-    public static readonly byte[] BlankPdf = Encoding.ASCII.GetBytes(
-        "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
-        + "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Resources<<>>>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n");
+    public static byte[] BlankPdf => s_blank.Value;
+
+    private static readonly Lazy<byte[]> s_blank = new(() =>
+    {
+        using var doc = new PdfSharp.Pdf.PdfDocument();
+        var page = doc.AddPage();
+        page.Width = PdfSharp.Drawing.XUnit.FromPoint(595);
+        page.Height = PdfSharp.Drawing.XUnit.FromPoint(842);
+        using var ms = new MemoryStream();
+        doc.Save(ms, false);
+        return ms.ToArray();
+    });
 }
 
 /// <summary>

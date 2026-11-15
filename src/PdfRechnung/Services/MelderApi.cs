@@ -225,7 +225,7 @@ public static class MelderApi
             if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
             var v = store.Get(id);
             if (v is null || !PortalAccess.ForUser(f.User).CanSee(v)) return Results.NotFound(new { error = "Vorgang nicht gefunden." });
-            if (!f.User.SendViaOutlook) return Results.Json(new { error = "Senden über Outlook ist für dich nicht freigeschaltet (Einstellungen → Benutzer)." }, statusCode: 403);
+            if (!f.User.SendViaOutlook && !v.Mail.Plain) return Results.Json(new { error = "Senden über Outlook ist für dich nicht freigeschaltet (Einstellungen → Benutzer)." }, statusCode: 403);
             if (!v.Mail.Enabled) return Results.Json(new { error = "Für diesen Beleg ist kein E-Mail-Versand vorgesehen (@@ml0@@)." }, statusCode: 409);
             var (mail, err) = await send.BuildMail(v, ct);
             if (mail is null) return Results.Json(new { error = err }, statusCode: 409);
@@ -249,7 +249,7 @@ public static class MelderApi
             if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
             var v = store.Get(id);
             if (v is null || !PortalAccess.ForUser(f.User).CanSee(v)) return Results.NotFound(new { error = "Vorgang nicht gefunden." });
-            if (!f.User.SendViaOutlook) return Results.Json(new { error = "Senden über Outlook ist für dich nicht freigeschaltet (Einstellungen → Benutzer)." }, statusCode: 403);
+            if (!f.User.SendViaOutlook && !v.Mail.Plain) return Results.Json(new { error = "Senden über Outlook ist für dich nicht freigeschaltet (Einstellungen → Benutzer)." }, statusCode: 403);
             var (mail, err) = await send.BuildMail(v, ct);
             if (mail is null) return Results.Json(new { error = err }, statusCode: 409);
             var msg = MailSender.BuildMime(mailOpt.CurrentValue, mail, includeCopyTo: false);
@@ -265,7 +265,7 @@ public static class MelderApi
         {
             if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
             var v = store.Get(id);
-            if (v is null || !PortalAccess.ForUser(f.User).CanSee(v) || !f.User.SendViaOutlook) return Results.NotFound();
+            if (v is null || !PortalAccess.ForUser(f.User).CanSee(v) || !(f.User.SendViaOutlook || v.Mail.Plain)) return Results.NotFound();
             send.MarkOutlook(id, $"{f.User.Name} (Outlook, {f.Device.Name})");
             return Results.Ok(new { ok = true });
         });

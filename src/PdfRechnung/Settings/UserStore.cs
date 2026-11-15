@@ -367,11 +367,35 @@ public sealed class UserStore
             {
                 var c = clientName.Trim();
                 var hit = mine.FirstOrDefault(d => string.Equals(d.ComputerName, c, StringComparison.OrdinalIgnoreCase))
-                    ?? mine.FirstOrDefault(d => string.Equals(d.Name, c, StringComparison.OrdinalIgnoreCase));
+                    ?? mine.FirstOrDefault(d => string.Equals(d.Name, c, StringComparison.OrdinalIgnoreCase))
+                    ?? mine.Where(d => SameComputer(d.ComputerName, c) || SameComputer(d.Name, c)).OrderByDescending(d => d.LastSeen ?? d.Created).FirstOrDefault();
                 if (hit is not null) return hit;
             }
             return mine.OrderByDescending(d => d.LastSeen ?? d.Created).FirstOrDefault();
         }
+    }
+
+    /// <summary>
+    /// Computername des Melders ↔ RDP-Clientname. RDP-Clients schicken oft gekürzte (NetBIOS, 15 Zeichen) oder anders
+    /// geschriebene Namen – z. B. Mac „Markus-MacBook-Pro.local“ ↔ „MARKUS-MACBOOK-“. Verglichen wird ohne Domäne,
+    /// Satz- und Leerzeichen; ein gekürzter Name passt, wenn er der Anfang des anderen ist (mindestens 8 Zeichen).
+    /// </summary>
+    internal static bool SameComputer(string? deviceName, string? clientName)
+    {
+        var a = NormalizeComputer(deviceName);
+        var b = NormalizeComputer(clientName);
+        if (a.Length == 0 || b.Length == 0) return false;
+        if (a == b) return true;
+        var (shorter, longer) = a.Length <= b.Length ? (a, b) : (b, a);
+        return shorter.Length >= 8 && longer.StartsWith(shorter, StringComparison.Ordinal);
+    }
+
+    private static string NormalizeComputer(string? name)
+    {
+        var n = (name ?? "").Trim();
+        var dot = n.IndexOf('.');
+        if (dot > 0) n = n[..dot];
+        return new string(n.Where(char.IsLetterOrDigit).Select(char.ToUpperInvariant).ToArray());
     }
 
     public MelderDevice? Device(string id)

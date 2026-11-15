@@ -24,6 +24,7 @@ public sealed class SendService
     /// <summary>Mail eines Vorgangs gestalten (für Versand und Vorschau im Portal).</summary>
     public static RenderedMail Render(Vorgang v, MailTemplateOptions templates, string dataDirectory)
     {
+        if (v.Mail.Plain) return new RenderedMail("", v.Mail.Body, new List<InlineImage>()); // normale E-Mail: Text wie übergeben
         var design = v.Mail.Template is null ? null
             : templates.Items.FirstOrDefault(x => string.Equals(x.Name, v.Mail.Template, StringComparison.OrdinalIgnoreCase));
         var values = v.Mail.Variables.Count > 0 ? v.Mail.Variables : Placeholders.Build(v, null, MailTemplate.SafeFileName(v.Mail.FileName) + ".pdf");
@@ -86,7 +87,7 @@ public sealed class SendService
         var rendered = Render(v);
         var mail = new OutgoingMail
         {
-            Subject = v.Mail.Subject, Body = rendered.Text, HtmlBody = rendered.Html,
+            Subject = v.Mail.Subject, Body = rendered.Text, HtmlBody = string.IsNullOrEmpty(rendered.Html) ? null : rendered.Html,
             FromAddress = v.Mail.FromAddress, FromName = v.Mail.FromName, ReplyTo = v.Mail.ReplyTo
         };
         mail.Images.AddRange(rendered.Images);
@@ -239,7 +240,7 @@ public sealed class AutoSendWorker : BackgroundService
         var statuses = o.AutoSendWithWarnings ? new[] { VorgangStatus.Ready, VorgangStatus.Warning } : new[] { VorgangStatus.Ready };
         var candidates = _store.Query(new VorgangFilter { SeeAll = true, Statuses = statuses, Before = due.AddSeconds(1), Limit = 500 }).Where(v =>
             (v.Status == VorgangStatus.Ready || (o.AutoSendWithWarnings && v.Status == VorgangStatus.Warning))
-            && v.SendAttempts == 0 && v.CreatedAt <= due && v.Mail.To.Count > 0
+            && v.SendAttempts == 0 && v.CreatedAt <= due && v.Mail.To.Count > 0 && !v.Mail.Plain // normale E-Mails nie automatisch
             && !(_users?.UsesOutlook(v.OwnerUserId) ?? false)).ToList(); // Benutzer versendet selbst über Outlook
         foreach (var v in candidates)
         {

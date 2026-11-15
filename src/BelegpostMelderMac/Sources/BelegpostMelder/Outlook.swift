@@ -53,6 +53,7 @@ enum OutlookBridge {
         let to = mail["to"] as? [String] ?? [], cc = mail["cc"] as? [String] ?? [], bcc = mail["bcc"] as? [String] ?? []
         let subject = mail["subject"] as? String ?? ""
         let text = mail["text"] as? String ?? ""
+        if html.isEmpty { html = htmlFromText(text) } // normale E-Mail (nur Text): Outlook für Mac erwartet HTML
 
         var result: Result
         if NSWorkspace.shared.urlForApplication(withBundleIdentifier: outlookBundle) != nil {
@@ -111,6 +112,17 @@ enum OutlookBridge {
             return e[NSAppleScript.errorMessage] as? String ?? "Fehler \(num)"
         }
         return nil
+    }
+
+    /// Reinen Text für Outlook als HTML (Zeilenumbrüche bleiben erhalten).
+    static func htmlFromText(_ text: String) -> String {
+        let escaped = text
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\n", with: "<br>")
+        return "<html><body style=\"font-family:-apple-system,Helvetica,Arial,sans-serif;font-size:13px\">" + escaped + "</body></html>"
     }
 
     private static func runOutlookScript(subject: String, html: String, to: [String], cc: [String], bcc: [String], files: [URL]) -> String? {

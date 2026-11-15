@@ -341,6 +341,79 @@ public sealed class DatabaseAndErpTests : IDisposable
     }
 
     [Fact]
+    public async Task Normale_MAPI_Mail_ohne_Steuerzeichen_geht_ungeprueft_nach_Outlook()
+    {
+        var (store, _, users, settings) = Create();
+        var s = DefaultSettings.Create();
+        s.Mail.AutoSend = true; s.Mail.AutoSendWithWarnings = true;
+        var hub = new EventHub();
+        var proc = new DocumentProcessor(store, new StaticOptions<MailOptions>(s.Mail), new StaticOptions<InvoiceOptions>(s.Invoice),
+            NullLogger<DocumentProcessor>.Instance, settings: settings, users: users, events: hub);
+        var send = new SendService(store, settings, new StaticOptions<MailOptions>(s.Mail), new StaticOptions<StorageOptions>(s.Storage),
+            new StaticOptions<MailTemplateOptions>(s.MailTemplates), NullLogger<SendService>.Instance);
+        var tasks = new MelderTasks(store.Db, hub);
+        var (mac, _) = users.AddDevice("martin", "Mac");
+        users.TouchDevice(mac.Id, "Martins-MacBook-Pro");
+        var intake = new MapiIntake(proc, store, users, tasks, hub, send, new StaticOptions<MapiOptions>(new MapiOptions()), NullLogger<MapiIntake>.Instance);
+
+        // WordPad „Senden“: nur ein RTF-Anhang, kein Empfänger, kein Text – dazu ein PDF ohne Steuerzeichen
+        var msg = new MapiMessage
+        {
+            Subject = "Dokument.rtf", ClientName = "MARTINS-MACBOO", // RDP kürzt auf 15 Zeichen
+            Attachments =
+            {
+                new() { Name = "Dokument.rtf", Data = Convert.ToBase64String(Encoding.ASCII.GetBytes(@"{\rtf1 Hallo}")) },
+                new() { Name = "Info.pdf", Data = Convert.ToBase64String(TestData.Pdf(Array.Empty<string>())) }
+            }
+        };
+        Assert.False(MapiIntake.IsVoucher(msg, msg.Attachments.Select(a => (a.Name, Convert.FromBase64String(a.Data))).ToList()));
+        var r = await intake.HandleAsync(msg, "FIRMA\\mmuster", default);
+        Assert.True(r.Ok);
+        Assert.Equal(MapiMode.Outlook, r.Mode);
+        Assert.Null(r.Hint);
+        var v = store.Get(r.VorgangId!)!;
+        Assert.True(v.Mail.Plain);
+        Assert.True(v.Mail.NoDocument);
+        Assert.Equal("E-Mail", v.DocumentType);
+        Assert.Equal(VorgangStatus.Outlook, v.Status);
+        Assert.Empty(v.Messages); // keine Prüfung (kein Empfänger ist hier kein Fehler)
+        Assert.Equal(2, v.Mail.Attachments.Count); // auch das PDF bleibt ein normaler Anhang
+        Assert.Single(tasks.Pending("martin", mac.Id));
+
+        // Mail für Outlook: nur Text, keine CI-Vorlage, kein Logo, Anhänge wie übergeben
+        var (mail, err) = await send.BuildMail(v, default);
+        Assert.Null(err);
+        Assert.Null(mail!.HtmlBody);
+        Assert.Empty(mail.Images);
+        Assert.Equal(new[] { "Dokument.rtf", "Info.pdf" }, mail.Attachments.Select(a => a.Name));
+
+        // „Neu prüfen“ ändert nichts
+        Assert.Equal(VorgangStatus.Outlook, proc.Recheck(v.Id, "Test")!.Status);
+
+        // ohne gekoppelten Melder: Portal mit Hinweis, nie Autoversand
+        var r2 = await intake.HandleAsync(new MapiMessage { Subject = "Hallo", Recipients = { new() { Type = "to", Address = "a@b.at" } } }, "FIRMA\\unbekannt", default);
+        Assert.Equal(MapiMode.Portal, r2.Mode);
+        Assert.Contains("keinem Belegpost-Benutzer", r2.Hint);
+        Assert.True(store.Get(r2.VorgangId!)!.Mail.Plain);
+    }
+
+    [Fact]
+    public void Leere_Platzhalterseite_ist_ein_lesbares_PDF()
+    {
+        var (pages, _) = PdfText.Extract(MapiIntake.BlankPdf);
+        Assert.Equal(1, pages);
+    }
+
+    [Theory]
+    [InlineData("Martins-MacBook-Pro", "MARTINS-MACBOO", true)]
+    [InlineData("Martins-MacBook-Pro.local", "martins-macbook-pro", true)]
+    [InlineData("WORKSTATION-BUERO", "WORKSTATION-BU", true)] // Präfix ab 8 Zeichen
+    [InlineData("PC-1", "PC-12", false)]           // zu kurz für Präfix
+    [InlineData("LAPTOP-EVA", "PC-BUERO", false)]
+    public void Computername_passt_auch_gekuerzt(string device, string client, bool expected) =>
+        Assert.Equal(expected, UserStore.SameComputer(device, client));
+
+    [Fact]
     public void Outlook_Bestaetigung_setzt_110_und_ohne_Bestaetigung_830()
     {
         var (store, proc, _, _) = Create();

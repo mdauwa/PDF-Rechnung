@@ -144,6 +144,11 @@ public static class VorgangApi
                     var (ok, msg) = await send.SendAsync(id, a.Name, req.Force, ct);
                     return ok ? Results.Ok(new { message = msg, vorgang = store.Get(id) }) : Results.BadRequest(new { error = msg, vorgang = store.Get(id) });
                 }
+                case "gotomaxx":
+                {
+                    var (ok, msg) = await ctx.RequestServices.GetRequiredService<GotomaxxService>().HandOverNowAsync(id, a.Name, ct);
+                    return ok ? Results.Ok(new { message = msg, vorgang = store.Get(id) }) : Results.BadRequest(new { error = msg, vorgang = store.Get(id) });
+                }
                 case "pruefen":
                 {
                     var v = proc.Recheck(id, a.Name);

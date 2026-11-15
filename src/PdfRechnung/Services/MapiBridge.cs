@@ -134,6 +134,9 @@ public sealed class MapiIntake
                 x.Messages.Add(new CheckMessage(DocumentChecker.Warning, $"Windows-Benutzer „{windowsAccount}“ ist keinem Portal-Benutzer zugeordnet (Einstellungen → Benutzer → Druck-Benutzernamen).", "mapi"));
         }, publish: false);
 
+        if (v.Status == VorgangStatus.Sending && v.SendChannel == GotomaxxService.Channel)
+            return new MapiResult(true, "An gotomaxx weitergeleitet.", v.Id, MapiMode.Portal);
+
         var userId = v.OwnerUserId;
         if (userId is null)
         {

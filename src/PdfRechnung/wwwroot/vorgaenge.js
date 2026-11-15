@@ -13,13 +13,14 @@ const STATUS = {
   versendet: ["Versendet", "sent"],
   versandfehler: ["Versandfehler", "missing"],
   verworfen: ["Verworfen", "free"],
-  outlook: ["In Outlook", "sent"]
+  outlook: ["In Outlook", "sent"],
+  gotomaxx: ["An gotomaxx", "sent"]
 };
 const FILTERS = {
   offen: { title: "Zu prüfen", status: "fehler,warnung,bereit,versandfehler,inVersand" },
   meine: { title: "Meine Belege", status: "fehler,warnung,bereit,versandfehler,inVersand", mine: true },
   alle: { title: "Alle Vorgänge", status: "" },
-  versendet: { title: "Versendet", status: "versendet,outlook" },
+  versendet: { title: "Versendet", status: "versendet,outlook,gotomaxx" },
   verworfen: { title: "Verworfen", status: "verworfen" }
 };
 const badge = s => { const [t, c] = STATUS[s] || [s, ""]; return `<span class="badge ${c}">${esc(t)}</span>`; };
@@ -215,6 +216,8 @@ function drawVorgang(view, data) {
     if (v.status === "versendet") actions.push(`<button class="btn ghost" data-a="erneut">Erneut senden …</button>`);
     if (!["versendet", "inVersand", "verworfen"].includes(v.status)) actions.push(`<button class="btn ghost" data-a="pruefen">Neu prüfen</button>`, `<button class="btn ghost" data-a="verwerfen">Verwerfen</button>`);
     if (v.status === "verworfen") actions.push(`<button class="btn ghost" data-a="wiederherstellen">Wiederherstellen</button>`);
+    if (portal.gotomaxx && !["inVersand", "verworfen"].includes(v.status))
+      actions.push(`<button class="btn ghost" data-a="gotomaxx" title="Druckt den Beleg auf den gotomaxx-PDFMAILER-Drucker – gotomaxx übernimmt dann den Versand">${["gotomaxx", "versendet"].includes(v.status) ? "Erneut an gotomaxx …" : "An gotomaxx übergeben"}</button>`);
   }
   actions.push(`<a class="btn ghost" href="api/vorgaenge/${encodeURIComponent(v.id)}/pdf?download=true">PDF herunterladen</a>`);
   if (portal.isAdmin && ["verworfen", "versendet", "ohneVersand"].includes(v.status)) actions.push(`<button class="btn ghost" data-a="loeschen">Löschen</button>`);
@@ -379,6 +382,8 @@ function drawVorgang(view, data) {
         if (!await confirmDialog("Trotz Fehler senden", "Der Vorgang hat Fehler (z. B. kann die E-Rechnung nicht erzeugt werden). Trotzdem nur das PDF per E-Mail senden?", "Trotzdem senden", true)) return;
         body = { action: "senden", force: true };
       }
+      if (a === "gotomaxx" && ["gotomaxx", "versendet"].includes(v.status) && !await confirmDialog("Erneut an gotomaxx", "Den Beleg nochmals auf den gotomaxx-Drucker drucken? gotomaxx verarbeitet und versendet ihn dann erneut.", "Erneut übergeben")) return;
+      if (a === "gotomaxx") b.textContent = "Wird gedruckt …";
       if (a === "erneut" && !await confirmDialog("Erneut senden", `Den Beleg nochmals an ${esc(listText(v.mail.to))} senden?`, "Erneut senden")) return;
       if (a === "verwerfen" && !await confirmDialog("Verwerfen", "Den Vorgang verwerfen? Er wird nicht versendet und kann wiederhergestellt werden.", "Verwerfen", true)) return;
       if (a === "loeschen") {

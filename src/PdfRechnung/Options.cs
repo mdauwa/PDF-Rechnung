@@ -15,6 +15,7 @@ public sealed class AppSettings
     public StatusLinkOptions StatusLink { get; set; } = new();
     public ErpOptions Erp { get; set; } = new();
     public MapiOptions Mapi { get; set; } = new();
+    public GotomaxxOptions Gotomaxx { get; set; } = new();
 }
 
 /// <summary>
@@ -176,6 +177,26 @@ public sealed class ServerOptions
 /// Eingang: Hierher legt der Drucker (Microsoft Print to PDF mit eigenem Anschluss) die gedruckten PDFs.
 /// Jede PDF-Datei wird zu einem Vorgang verarbeitet und danach aus dem Ordner entfernt.
 /// </summary>
+/// <summary>Weiterleitung an einen gotomaxx-PDFMAILER-Drucker (Einstellungen → Drucker &amp; Eingang).</summary>
+public sealed class GotomaxxOptions
+{
+    public bool Enabled { get; set; }
+    /// <summary>Standarddrucker für @@pg@@ und „immer weiterleiten“; @@pgName@@ wählt einen anderen.</summary>
+    public string Printer { get; set; } = "";
+    /// <summary>Jeden Beleg weiterleiten (außer mit @@pg0@@) – sonst nur Belege mit @@pg@@.</summary>
+    public bool Always { get; set; }
+    /// <summary>In der Windows-Sitzung des Benutzers am Server drucken (gotomaxx verarbeitet den Auftrag dort wie einen ERP-Druck).</summary>
+    public bool UserSession { get; set; } = true;
+    /// <summary>Ist der Benutzer nicht angemeldet, druckt der Dienst selbst.</summary>
+    public bool ServiceFallback { get; set; } = true;
+    /// <summary>Schriftgröße der neu gedruckten Steuerzeichen (Punkt).</summary>
+    public double CodeFontSize { get; set; } = 2;
+    /// <summary>Steuerzeichen schwarz statt weiß drucken (zum Testen).</summary>
+    public bool CodesVisible { get; set; }
+    /// <summary>Höchstdauer eines Druckauftrags in Sekunden.</summary>
+    public int TimeoutSeconds { get; set; } = 120;
+}
+
 public sealed class InboxOptions
 {
     public bool Enabled { get; set; } = true;

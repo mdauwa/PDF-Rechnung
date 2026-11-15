@@ -14,6 +14,10 @@ using PdfRechnung.Settings;
 //   • --install / --uninstall       → Dienst einrichten/entfernen (von der Oberfläche mit UAC aufgerufen)
 // ======================================================================
 
+// Druck an gotomaxx in der Windows-Sitzung des Benutzers (vom Dienst gestartet) – nichts sonst
+if (OperatingSystem.IsWindows() && args.Contains(PdfRechnung.Printing.WindowsGotomaxxPrinter.HelperArgument))
+    return PdfRechnung.Printing.WindowsGotomaxxPrinter.RunHelper(args);
+
 var isService = WindowsServiceHelpers.IsWindowsService();
 var store = new SettingsStore(SettingsStore.DefaultDataDirectory());
 
@@ -89,6 +93,7 @@ builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection("Sto
 builder.Services.Configure<StatusLinkOptions>(builder.Configuration.GetSection("StatusLink"));
 builder.Services.Configure<ErpOptions>(builder.Configuration.GetSection("Erp"));
 builder.Services.Configure<MapiOptions>(builder.Configuration.GetSection("Mapi"));
+builder.Services.Configure<GotomaxxOptions>(builder.Configuration.GetSection("Gotomaxx"));
 builder.Services.Configure<StationeryOptions>(builder.Configuration.GetSection("Stationery"));
 builder.Services.Configure<MailTemplateOptions>(builder.Configuration.GetSection("MailTemplates"));
 builder.Services.AddSingleton(sp => new RuntimeControl(sp.GetRequiredService<IHostApplicationLifetime>(), isService));
@@ -98,6 +103,10 @@ builder.Services.AddSingleton<EventHub>();
 builder.Services.AddSingleton<DocumentStore>();
 builder.Services.AddSingleton<DocumentProcessor>();
 builder.Services.AddSingleton<SendService>();
+if (OperatingSystem.IsWindows()) builder.Services.AddSingleton<IGotomaxxPrinter, PdfRechnung.Printing.WindowsGotomaxxPrinter>();
+else builder.Services.AddSingleton<IGotomaxxPrinter, UnsupportedGotomaxxPrinter>();
+builder.Services.AddSingleton<GotomaxxService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<GotomaxxService>());
 builder.Services.AddHostedService<InboxWatcher>();
 builder.Services.AddSingleton<AutoSendWorker>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<AutoSendWorker>());
@@ -253,7 +262,7 @@ app.UseStaticFiles();
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok", time = DateTimeOffset.Now }));
 
 app.MapGet("/api/portal", (IOptionsSnapshot<PortalOptions> portal, HttpContext ctx, RuntimeControl rt, CertificateProvider c, PortalAccess access,
-    IOptionsSnapshot<MailOptions> mail) =>
+    IOptionsSnapshot<MailOptions> mail, IOptionsSnapshot<GotomaxxOptions> gotomaxx) =>
 {
     var a = access.For(ctx);
     return Results.Ok(new
@@ -267,6 +276,7 @@ app.MapGet("/api/portal", (IOptionsSnapshot<PortalOptions> portal, HttpContext c
         canSend = a.CanSend,
         userId = a.UserId,
         sendViaOutlook = a.Outlook,
+        gotomaxx = a.Authenticated && gotomaxx.Value.Enabled,
         setupMode = rt.SetupMode,
         mailEnabled = a.Authenticated && mail.Value.Enabled,
         autoSend = a.Authenticated && mail.Value.Enabled && mail.Value.AutoSend,

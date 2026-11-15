@@ -25,6 +25,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- PDF drucken (Weiterleitung an gotomaxx): PDFium, BSD-3/Apache-2.0 -->
+    <PackageReference Include="bblanchon.PDFium.Win32" Version="159.0.8152" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.23" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="9.0.22" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="9.0.22" />
@@ -33,6 +35,8 @@
     <!-- E-Mail-Versand (MIT) -->
     <PackageReference Include="MailKit" Version="4.18.2" />
     <PackageReference Include="PDFsharp" Version="6.2.4" />
+    <!-- Windows-Druck (PrintDocument), MIT -->
+    <PackageReference Include="System.Drawing.Common" Version="9.0.23" />
   </ItemGroup>
 
   <!-- MAPI-Mailclient (src/BelegpostMapi/build.sh) neben Belegpost.exe ausliefern -->

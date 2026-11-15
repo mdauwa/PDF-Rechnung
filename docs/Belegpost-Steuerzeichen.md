@@ -12,6 +12,7 @@ Stand 13.11.2026. Alle Steuerzeichen werden wie bei gotomaxx als `@@xxWert@@` ge
 | `@@pvName=Wert@@` | `@@pvAnrede=Sehr geehrter Herr Maier@@` | **Eigener Platzhalter** für Betreff, Mailtext, Signatur, Fußzeile und Dateiname. Im Text als `{Anrede}` verwenden. Beliebig viele Namen möglich. |
 | `@@pt…@@` | `@@ptFirma B@@` | **Mail-Vorlage** (HTML im CI) wählen. Ohne `@@pt@@` wird die Vorlage in dieser Reihenfolge gesucht: Briefpapier → Absender → Standardvorlage. |
 | `@@pf…@@` | `@@pfservice@firma.at@@` | **Absenderadresse** dieses Belegs. Wählt auch die Mail-Vorlage dieses Absenders. Bei Microsoft 365 muss die App für diese Adresse senden dürfen. |
+| `@@pg…@@` | `@@pg@@`, `@@pgPDFMAILER Rechnung@@`, `@@pg0@@` | **Weiterleitung an gotomaxx PDFMAILER.** Der Beleg wird als echter Druckauftrag an einen gotomaxx-Drucker geschickt (`@@pg@@` = Standarddrucker aus Einstellungen → Drucker & Eingang, `@@pgName@@` = dieser Drucker, `@@pg0@@` = nicht weiterleiten, auch wenn „jeden Beleg weiterleiten“ eingestellt ist). Die Steuerzeichen werden auf derselben Seite neu als Text gedruckt – ohne die Portal-Steuerzeichen `@@pb@@ @@pi@@ @@pu@@ @@pv@@ @@pt@@ @@pf@@ @@pg@@` und `@@xi ERP_VOUCHER_INDEX=…@@`, alle anderen unverändert. Gedruckt wird in der Windows-Sitzung des Benutzers am Server (sonst vom Dienst). Status 140 = übergeben, 840 = fehlgeschlagen. |
 
 ### Platzhalter in Texten (zu `@@pv@@`)
 

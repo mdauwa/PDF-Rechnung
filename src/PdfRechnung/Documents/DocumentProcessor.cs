@@ -130,9 +130,10 @@ public sealed class DocumentProcessor
 
     public DocumentProcessor(DocumentStore store, IOptionsMonitor<MailOptions> mail, IOptionsMonitor<InvoiceOptions> invoice, ILogger<DocumentProcessor> log,
         IOptionsMonitor<InboxOptions>? inbox = null, IOptionsMonitor<StationeryOptions>? stationery = null, Settings.SettingsStore? settings = null,
-        IOptionsMonitor<MailTemplateOptions>? templates = null, Settings.UserStore? users = null, Services.EventHub? events = null)
+        IOptionsMonitor<MailTemplateOptions>? templates = null, Settings.UserStore? users = null, Services.EventHub? events = null,
+        GotomaxxService? gotomaxx = null)
     {
-        _users = users; _events = events;
+        _users = users; _events = events; _gotomaxx = gotomaxx;
         _store = store; _mail = mail; _invoice = invoice; _log = log; _inbox = inbox; _stationery = stationery; _templates = templates;
         _stationeryDir = PdfComposer.StationeryDirectory(settings?.DataDirectory ?? Path.GetDirectoryName(store.Root)!);
     }
@@ -141,6 +142,7 @@ public sealed class DocumentProcessor
     private readonly IOptionsMonitor<MailTemplateOptions>? _templates;
     private readonly Settings.UserStore? _users;
     private readonly Services.EventHub? _events;
+    private readonly GotomaxxService? _gotomaxx;
     public MailTemplateOptions Templates => _templates?.CurrentValue ?? new();
     private readonly string _stationeryDir;
 
@@ -229,7 +231,9 @@ public sealed class DocumentProcessor
             else if (readOk) v.Messages = DocumentChecker.Check(v, p, CurrentSettings()).Concat(v.Messages.Where(m => m.Field == "mapi")).ToList();
             v.UpdateStatus();
         }
+        var forward = readOk && !v.Mail.Plain && Forward(v, p, user ?? source);
         _store.Create(v, pdf, text, sendPdf);
+        if (forward) _gotomaxx?.Enqueue(v.Id);
         _log.LogInformation("Vorgang {Id} angelegt: {Type} {No} → {Status}", v.Id, v.DocumentType, v.VoucherId, v.Status);
         if (publish && v.OwnerUserId is not null && _events is not null)
         {
@@ -240,6 +244,28 @@ public sealed class DocumentProcessor
             _events.Publish(v.OwnerUserId, "neu", v.Id, title, v.Status, first, v.Mail.Enabled);
         }
         return v;
+    }
+
+    /// <summary>
+    /// Weiterleitung an gotomaxx (@@pg@@ oder Einstellung „immer“): Die Belegpost-Prüfung entfällt, weil gotomaxx
+    /// den Beleg selbst verarbeitet und versendet. Liefert true, wenn der Vorgang zur Übergabe vorgemerkt wurde.
+    /// </summary>
+    private bool Forward(Vorgang v, ParsedCodes p, string by)
+    {
+        var o = _gotomaxx?.Options ?? new GotomaxxOptions();
+        if (GotomaxxCodes.Target(p, o) is { } printer)
+        {
+            v.Messages = v.Messages.Where(m => m.Field == "mapi").ToList();
+            GotomaxxService.Mark(v, printer, by, printer.Length > 0 ? $"Weiterleitung an den gotomaxx-Drucker „{printer}“ (@@pg@@)"
+                : p.GotomaxxSet ? "Weiterleitung an den gotomaxx-Standarddrucker (@@pg@@)" : "Weiterleitung an gotomaxx (Einstellung „jeden Beleg“)");
+            return true;
+        }
+        if (p.GotomaxxSet && p.GotomaxxPrinter != "0" && !o.Enabled)
+        {
+            v.Messages.Add(new CheckMessage(DocumentChecker.Error, "@@pg@@: Die Weiterleitung an gotomaxx ist angefordert, aber nicht eingerichtet (Einstellungen → Drucker & Eingang)."));
+            v.UpdateStatus();
+        }
+        return false;
     }
 
     /// <summary>

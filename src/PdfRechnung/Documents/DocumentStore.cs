@@ -356,7 +356,8 @@ public sealed class DocumentStore
             if (v.Status == VorgangStatus.Sent && oldStatus != VorgangStatus.Sent) v.SendCount = oldSendCount + 1;
             if (v.Status != oldStatus && StatusCode.FromVorgang(v, v.SendCount > 1) is { } code && code != v.StatusCode)
             {
-                var channel = v.Status == VorgangStatus.Sent ? v.SendChannel ?? "Mail" : v.Status == VorgangStatus.Outlook ? "Outlook" : null;
+                var channel = v.Status == VorgangStatus.Sent ? v.SendChannel ?? "Mail" : v.Status == VorgangStatus.Outlook ? "Outlook"
+                    : v.Status == VorgangStatus.Gotomaxx || (v.Status == VorgangStatus.SendError && v.SendChannel == GotomaxxService.Channel) ? GotomaxxService.Channel : null;
                 ev = new VorgangEvent(id, DateTimeOffset.Now, code, channel, v.History.LastOrDefault()?.By, null);
                 v.StatusCode = code;
                 AddEventRow(c, ev);

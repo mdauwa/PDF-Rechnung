@@ -9,11 +9,13 @@ public static class VorgangStatus
     public const string Error = "fehler", Warning = "warnung", Ready = "bereit", NoMail = "ohneVersand",
         Sending = "inVersand", Sent = "versendet", SendError = "versandfehler", Discarded = "verworfen",
         /// <summary>Über den Melder als Entwurf in Outlook geöffnet – der Benutzer versendet selbst.</summary>
-        Outlook = "outlook";
+        Outlook = "outlook",
+        /// <summary>Als Druckauftrag an einen gotomaxx-PDFMAILER-Drucker übergeben – gotomaxx übernimmt den Versand.</summary>
+        Gotomaxx = "gotomaxx";
 
-    public static readonly string[] All = { Error, Warning, Ready, NoMail, Sending, Sent, SendError, Discarded, Outlook };
+    public static readonly string[] All = { Error, Warning, Ready, NoMail, Sending, Sent, SendError, Discarded, Outlook, Gotomaxx };
     /// <summary>Abgeschlossen: nur diese werden nach Ablauf der Aufbewahrungsdauer gelöscht.</summary>
-    public static bool IsFinal(string s) => s is Sent or Discarded or NoMail;
+    public static bool IsFinal(string s) => s is Sent or Discarded or NoMail or Gotomaxx;
 }
 
 public sealed class MailData
@@ -77,6 +79,8 @@ public sealed class Vorgang
     public DateTimeOffset? OutlookHandedAt { get; set; }
     public DateTimeOffset? OutlookConfirmedAt { get; set; }
     public int Pages { get; set; }
+    /// <summary>Weiterleitung an gotomaxx: null = nein, "" = Standarddrucker, sonst Druckername (aus @@pg@@ oder „immer“).</summary>
+    public string? GotomaxxPrinter { get; set; }
 
     public string Status { get; set; } = VorgangStatus.Warning;
     public List<CheckMessage> Messages { get; set; } = new();
@@ -113,7 +117,7 @@ public sealed class Vorgang
     /// <summary>Status nach der Prüfung (versendete/verworfene Vorgänge bleiben, wie sie sind).</summary>
     public void UpdateStatus()
     {
-        if (Status is VorgangStatus.Sent or VorgangStatus.Discarded or VorgangStatus.Sending or VorgangStatus.Outlook) return;
+        if (Status is VorgangStatus.Sent or VorgangStatus.Discarded or VorgangStatus.Sending or VorgangStatus.Outlook or VorgangStatus.Gotomaxx) return;
         Status = ErrorCount > 0 ? VorgangStatus.Error
             : !Mail.Enabled ? VorgangStatus.NoMail
             : WarningCount > 0 ? VorgangStatus.Warning
@@ -124,7 +128,7 @@ public sealed class Vorgang
     public object Summary() => new
     {
         Id, CreatedAt, Source, Status, DocumentType, VoucherId, VoucherDate, BuyerId, BuyerName, GrossAmount, Currency,
-        FormatName, To = Mail.To, Mail.Subject, MailEnabled = Mail.Enabled, ErrorCount, WarningCount, SentAt, SentBy, PrintUser, OperatorNumber, OwnerUserId, OwnerName, ErpIndex, StatusCode, SendChannel, OutlookConfirmedAt,
+        FormatName, To = Mail.To, Mail.Subject, MailEnabled = Mail.Enabled, ErrorCount, WarningCount, SentAt, SentBy, PrintUser, OperatorNumber, OwnerUserId, OwnerName, ErpIndex, StatusCode, SendChannel, OutlookConfirmedAt, GotomaxxPrinter,
         FirstMessage = Messages.FirstOrDefault(m => m.Level == DocumentChecker.Error)?.Text ?? Messages.FirstOrDefault(m => m.Level == DocumentChecker.Warning)?.Text
     };
 }

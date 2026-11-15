@@ -57,6 +57,11 @@ public sealed class ParsedCodes
     /// <summary>@@pi…@@ mit ungültigem Wert (nicht numerisch).</summary>
     public string? InvalidErpIndex { get; set; }
 
+    /// <summary>@@pg@@ / @@pgDrucker@@ / @@pg0@@ – Weiterleitung an gotomaxx (Standarddrucker / dieser Drucker / nicht weiterleiten).</summary>
+    public bool GotomaxxSet { get; set; }
+    /// <summary>Druckername aus @@pg…@@; null = Standarddrucker, "0" = nicht weiterleiten.</summary>
+    public string? GotomaxxPrinter { get; set; }
+
     // ---- Bearbeiten / Allgemein ----
     public string? Stationery { get; set; }
     public bool StationerySet { get; set; }
@@ -171,6 +176,7 @@ public static partial class ControlCodeParser
                 if (NormalizeErpIndex(t) is { } bel) r.ErpIndex = bel;
                 else r.InvalidErpIndex = t;
                 break;
+            case "pg": r.GotomaxxSet = true; r.GotomaxxPrinter = t.Length > 0 ? t : null; break;
 
             // ---------- Mail ----------
             case "ml": r.MailEnabled = t != "0"; break;

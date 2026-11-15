@@ -521,7 +521,34 @@ function tabInbox() {
            <li>Im ERP auf diesen Drucker drucken. Die gotomaxx-Steuerzeichen (<code>@@…@@</code>) im Formular bleiben unverändert.</li>
          </ol>
          Zum Testen: PDF-Dateien in den Eingangsordner kopieren oder in der Vorgangsliste über „PDF hochladen“ einspielen.
-       </div>`);
+       </div>`) +
+    section("Weiterleitung an gotomaxx PDFMAILER", gotomaxxSection());
+}
+
+function gotomaxxSection() {
+  const printers = ST.data.printers || [];
+  const current = get(ST.s, "gotomaxx.printer") || "";
+  const opts = [["", printers.length ? "(bitte wählen)" : "(keine Drucker gefunden)"], ...printers.map(p => [p, p])];
+  if (current && !printers.includes(current)) opts.push([current, current + " (nicht installiert)"]);
+  return `${inCheck("gotomaxx.enabled", "Belege an einen gotomaxx-PDFMAILER-Drucker weiterleiten")}
+    <div class="grid2">
+      ${field("Standarddrucker", inSelect("gotomaxx.printer", opts), "Für <code>@@pg@@</code> und „jeden Beleg weiterleiten“. <code>@@pgDruckername@@</code> wählt je Beleg einen anderen gotomaxx-Drucker.")}
+      ${field("Höchstdauer eines Drucks (Sekunden)", inNum("gotomaxx.timeoutSeconds", 10, 900))}
+    </div>
+    ${inCheck("gotomaxx.always", "Jeden Beleg weiterleiten (außer mit <code>@@pg0@@</code>) – sonst nur Belege mit <code>@@pg@@</code>")}
+    ${inCheck("gotomaxx.userSession", "In der Windows-Sitzung des Benutzers am Server drucken (empfohlen – gotomaxx verarbeitet den Auftrag dann wie einen Druck aus dem ERP)")}
+    ${inCheck("gotomaxx.serviceFallback", "Ist der Benutzer nicht angemeldet, druckt der Dienst selbst")}
+    <div class="grid2">
+      ${field("Schriftgröße der Steuerzeichen (pt)", inNum("gotomaxx.codeFontSize", 0.5, 24, 0.1), "Wie im ERP-Formular, z. B. 2.")}
+      <div>${inCheck("gotomaxx.codesVisible", "Steuerzeichen schwarz drucken (zum Testen, sonst weiß)")}</div>
+    </div>
+    <div class="help-box">
+      <b>So funktioniert die Weiterleitung:</b> Der Beleg wird als echter Druckauftrag an den gotomaxx-Drucker geschickt.
+      Die Steuerzeichen werden dafür auf derselben Seite neu als Text gedruckt –
+      <b>ohne</b> die Belegpost-eigenen <code>@@pb@@ @@pi@@ @@pu@@ @@pv@@ @@pt@@ @@pf@@ @@pg@@</code> und <code>@@xi ERP_VOUCHER_INDEX=…@@</code>,
+      alle anderen unverändert (Pfade wie <code>K:\…</code> ohne Pfadzuordnung). Briefpapier, Prüfung und Versand übernimmt dann gotomaxx.
+      Status 140 = an gotomaxx übergeben, 840 = Übergabe fehlgeschlagen. Im Vorgang gibt es zusätzlich den Knopf „An gotomaxx übergeben“.
+    </div>`;
 }
 
 /* ---------------- Tab: Briefpapier ---------------- */

@@ -60,7 +60,7 @@ public sealed class SendService
                 _log.LogWarning(ex, "Versand von {Id} fehlgeschlagen", id);
                 _store.Update(id, x =>
                 {
-                    x.Status = VorgangStatus.SendError; x.SendError = ex.Message;
+                    x.Status = VorgangStatus.SendError; x.SendError = ex.Message; x.SendChannel = "Mail";
                     x.History.Add(new HistoryEntry(DateTimeOffset.Now, by, "versandfehler", ex.Message));
                     return true;
                 });

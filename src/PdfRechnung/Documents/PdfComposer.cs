@@ -38,6 +38,22 @@ public static partial class PdfComposer
             : $"Briefpapier „{name}“ ist nicht angelegt (Einstellungen → Briefpapier).");
     }
 
+    /// <summary>Nur die Steuerzeichen aus dem Seiteninhalt löschen – ohne Briefpapier und Einpassen (z. B. für den Druck an gotomaxx).</summary>
+    public static byte[] StripCodes(byte[] original)
+    {
+        using var input = new MemoryStream(original);
+        var doc = PdfReader.Open(input, PdfDocumentOpenMode.Modify);
+        for (var i = 0; i < doc.PageCount; i++)
+        {
+            var page = doc.Pages[i];
+            var seq = ContentReader.ReadContent(page);
+            if (RemoveControlCodes(seq, page) > 0) page.Contents.ReplaceContent(seq);
+        }
+        using var output = new MemoryStream();
+        doc.Save(output, false);
+        return output.ToArray();
+    }
+
     public static ComposeResult Compose(byte[] original, ParsedCodes p, StationeryOptions stationery, string stationeryDir)
     {
         var messages = new List<CheckMessage>();

@@ -46,7 +46,7 @@ public static class AdminApi
         AuthApi.MapUsers(g);
 
         // ---------- Einstellungen ----------
-        g.MapGet("/settings", (SettingsStore store, CertificateProvider certs, RuntimeControl rt, DocumentStore docs) =>
+        g.MapGet("/settings", (SettingsStore store, CertificateProvider certs, RuntimeControl rt, DocumentStore docs, GotomaxxService gotomaxx) =>
         {
             var s = store.Load();
             var hasEntraSecret = !string.IsNullOrEmpty(s.Auth.Entra.ClientSecret);
@@ -73,6 +73,7 @@ public static class AdminApi
                 statusCodes = PdfRechnung.Documents.StatusCode.All.Select(c => new { code = c, text = PdfRechnung.Documents.StatusCode.Text(c) }),
                 erpValues = PdfRechnung.Erp.ErpValues.All.Select(d => new { key = d.Key, label = d.Label, example = d.Example, date = d.Date, time = d.Time }),
                 mapiModes = MapiMode.All.Select(m => new { key = m, text = MapiMode.Text(m) }),
+                printers = gotomaxx.Printers(),
                 hasEntraLogin = !string.IsNullOrWhiteSpace(s.Auth.Entra.TenantId) && !string.IsNullOrWhiteSpace(s.Auth.Entra.ClientId),
                 entraRedirectUris = CertificateProvider.HostNames(s.Server).Select(h => $"https://{h}:{s.Server.HttpsPort}/signin-oidc"),
                 certificate = certs.Info,
@@ -409,6 +410,9 @@ public static class AdminApi
         if (!string.IsNullOrWhiteSpace(s.Portal.PublicUrl) && (!Uri.TryCreate(s.Portal.PublicUrl.Trim(), UriKind.Absolute, out var pu) || pu.Scheme != "https"))
             e.Add("Die Portal-Adresse für Links muss mit https:// beginnen.");
         if (!MapiMode.All.Contains(s.Mapi.DefaultMode)) e.Add("Unbekannter Standard für MAPI-Mails.");
+        if (s.Gotomaxx.Enabled && string.IsNullOrWhiteSpace(s.Gotomaxx.Printer)) e.Add("Bitte den gotomaxx-Drucker für die Weiterleitung wählen.");
+        if (s.Gotomaxx.CodeFontSize is < 0.5 or > 24) e.Add("Die Schriftgröße der Steuerzeichen für gotomaxx muss zwischen 0,5 und 24 pt liegen.");
+        if (s.Gotomaxx.TimeoutSeconds is < 10 or > 900) e.Add("Die Höchstdauer des gotomaxx-Drucks muss zwischen 10 und 900 Sekunden liegen.");
         if (s.Erp.Enabled)
         {
             var erp = PdfRechnung.Erp.WwsSettings.From(s.Erp, "x").Validate()

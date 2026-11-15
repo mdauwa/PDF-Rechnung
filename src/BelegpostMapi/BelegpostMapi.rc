@@ -1,0 +1,33 @@
+// Versionsinfo und Symbol: Windows zeigt unter Standard-Apps → E-Mail Name und Symbol der aufgerufenen Datei
+// (rundll32 → BelegpostMapi.dll). Ohne diese Angaben steht dort nur „BelegpostMapi.dll“ mit leerem Symbol.
+#include <winver.h>
+
+1 ICON "../../docs/branding/Belegpost.ico"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION     1,0,0,0
+ PRODUCTVERSION  1,0,0,0
+ FILEFLAGSMASK   0x3fL
+ FILEFLAGS       0x0L
+ FILEOS          VOS_NT_WINDOWS32
+ FILETYPE        VFT_DLL
+ FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040704b0"
+    BEGIN
+      VALUE "CompanyName",      "Belegpost"
+      VALUE "FileDescription",  "Belegpost"
+      VALUE "FileVersion",      "1.0.0.0"
+      VALUE "InternalName",     "BelegpostMapi"
+      VALUE "OriginalFilename", "BelegpostMapi.dll"
+      VALUE "ProductName",      "Belegpost"
+      VALUE "ProductVersion",   "1.0.0.0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x407, 1200
+  END
+END

@@ -101,6 +101,14 @@ public static class MapiClient
             prog.SetValue("FriendlyTypeName", "Belegpost – E-Mail");
             using (var pi = prog.CreateSubKey("DefaultIcon", writable: true)) pi.SetValue(null, IconPath);
             using (var po = prog.CreateSubKey("shell\\open\\command", writable: true)) po.SetValue(null, MailtoCommand, RegistryValueKind.ExpandString);
+            // Anzeige unter Standard-Apps: Name und Symbol der App statt „BelegpostMapi.dll“ (sonst nimmt Windows die Datei aus dem Befehl)
+            using (var pa = prog.CreateSubKey("Application", writable: true))
+            {
+                pa.SetValue("ApplicationName", ClientName);
+                pa.SetValue("ApplicationIcon", IconPath);
+                pa.SetValue("ApplicationCompany", ClientName);
+                pa.SetValue("ApplicationDescription", "E-Mails über Belegpost und Outlook am eigenen PC versenden");
+            }
         }
         log("Mailclient „Belegpost“ registriert (64 und 32 Bit) – auch als Windows-App für E-Mail (mailto-Links).");
     }
@@ -110,7 +118,8 @@ public static class MapiClient
     /// <summary>mailto:-Links: die 64-Bit-DLL über rundll32 (Einstieg „Mailto“) – gleiche Übergabe an den Dienst wie MAPI.</summary>
     public const string MailtoCommand = @"%SystemRoot%\System32\rundll32.exe ""%SystemRoot%\System32\BelegpostMapi.dll"",Mailto ""%1""";
 
-    private static string IconPath => Path.Combine(ServiceManager.InstallDirectory, "Belegpost.exe") + ",0";
+    /// <summary>Symbol aus der DLL selbst – liegt immer dort, wohin der mailto-Befehl zeigt (unabhängig vom Programmordner).</summary>
+    private static string IconPath => RegisteredPath + ",0";
 
     // ---------- Windows-Standard-App „E-Mail“ für alle Benutzer (Richtlinie) ----------
 

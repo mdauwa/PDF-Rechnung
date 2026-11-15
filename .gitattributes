@@ -7,6 +7,9 @@
 *.bat     text eol=crlf
 *.cmd     text eol=crlf
 
+# Shell-Skripte (Mac-Build, mingw) immer mit LF – auch beim Auschecken unter Windows
+*.sh      text eol=lf
+
 # Binärdateien nie verändern
 *.pfx     binary
 *.cer     binary

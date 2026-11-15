@@ -16,7 +16,7 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 | Ort | Inhalt |
 |---|---|
 | GitHub `mdauwa/pdf-rechnung` (Branch `main`) | Quellcode, maßgeblicher Stand |
-| `Y:\Dev\eRechnung` | lokale Kopie des Codes (noch **kein** Git-Klon) plus Ordner `Dokumente`, `PdfDrucker` und Test-PDFs des Benutzers |
+| `Y:\Dev\eRechnung` | Git-Klon von `main` (seit 15.11.2026; mit `git pull` aktualisieren) plus Ordner `Dokumente`, `PdfDrucker`, Test-PDFs (per `.git\info\exclude` ignoriert) und `Ausgabe` (fertige Programme, flach: `Belegpost.exe`, `Belegpost-Melder.exe`, `BelegpostMapi-x64/x86.dll`, `wwwroot` – Pflicht neben der EXE) |
 | `Y:\Dev\Firmenportal` | Vorlage für Dienst, Einrichtung, HTTPS, Anmeldung (Repo `mdauwa/Firmenportal`) |
 | claude.ai-Projekt „eRechnung“ | Konzept, Feldzuordnung, diese Übergabe |
 | `docs/` im Repo | Konzept, Feldzuordnung Steuerzeichen → ZUGFeRD, ERP-Vorlage `ERP-Vorlage-Drucksteuerzeichen.json` |
@@ -34,7 +34,7 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 - **Erst normale PDFs, dann ZUGFeRD (13.11.2026):** Zuerst läuft der komplette Weg ohne E-Rechnung: Drucker, Steuerzeichen entfernen, Briefpapier, Versand. ZUGFeRD kommt erst dazu, wenn das stabil funktioniert.
 - **ERP-Ausgabe der Steuerzeichen:** Dass die Steuerzeichen jetzt gedruckt werden, lag an einer internen ERP-Einstellung. Für das Projekt ist das nicht relevant.
 
-## Stand (fertig, getestet, 106 Tests grün)
+## Stand (fertig, getestet, 113 Tests grün – Commit 28c1175)
 
 - **Portal:**
   - Vorgangsliste mit Filtern und Menüzählern
@@ -149,7 +149,13 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 
 ## Nächste Schritte (normale PDFs, ohne ZUGFeRD)
 
-0. **Am Server testen:** MAPI-DLL installieren und mit dem ERP (32 und 64 Bit) eine Mail senden; Outlook-Versandbestätigung prüfen; ERP-Rückmeldung mit eigener SecuredApp einrichten (Servicepass registrieren, im ERP freigeben, Testschreiben). Den Mac-Melder auf dem Mac neu bauen (`build.sh`).
+0. **Servertest (läuft, Stand 15.11.2026 13:35):**
+   - Erledigt: Dienst auf neuen Stand aktualisiert (SQLite-Übernahme ok), MAPI-Client installiert und „für alle als Standard“ gesetzt. MAPI kommt im Dienst an.
+   - Behoben: „Zugriff verweigert auf `vorgaenge`“ (Impersonation, 594cbbc); WordPad-„Senden“ landete wegen fehlendem Empfänger/kaputter Platzhalterseite als Fehler im Portal (28c1175: normale Mail vs. Beleg).
+   - Offen: 28c1175 am Server einspielen und WordPad-„Senden“ erneut testen (Outlook muss aufgehen); ERP-Beleg per MAPI mit 32- und 64-Bit-ERP; Outlook-Versandbestätigung (110); ERP-Rückmeldung mit eigener SecuredApp (Servicepass registrieren, im ERP freigeben, Testschreiben).
+   - Hinweis: `HKCU\Software\Clients\Mail` des Benutzers hat Vorrang vor dem HKLM-Standard (Outlook setzt ihn oft) → pro Benutzer `reg add "HKCU\Software\Clients\Mail" /ve /d "Belegpost" /f` (Anmeldeskript/GPO). Neue MAPI-DLLs werden erst ersetzt, wenn kein Prozess sie geladen hat (sonst beim Neustart).
+   - Idee (nicht umgesetzt, Benutzer gefragt): Melder prüft/setzt HKCU-Wert, Portal warnt bei Benutzern mit Outlook als MAPI-Standard.
+0a. **Mac:** `git pull`, Mac-Melder mit `src/BelegpostMelderMac/build.sh` neu bauen (neu: Hostname als Computername, Text-Mails als HTML für Outlook) und gegen das Portal testen: normale Mail aus der RDP-Sitzung (WordPad → Senden) muss Outlook am Mac öffnen. Die neue `Belegpost-Melder-macOS.zip` nach `Y:\Dev\eRechnung\Ausgabe` neben `Belegpost.exe` legen (fehlt dort noch).
 1. **Drucker einrichten:** Drucker „Belegpost“ mit Microsoft Print to PDF und eigenem Anschluss aus der Oberfläche anlegen und freigeben (bevorzugt Named Pipe, sonst mfilemon). Den Druckauftrag mit Benutzer und Rechner übernehmen.
 2. **Weitere Steuerzeichen:** `@@af@@` (PDF anhängen, `no_stationery`), `@@nd@@` (Druckauftrag teilen), `@@rpc@@` (Seite entfernen).
 3. **Ende-zu-Ende-Test** mit echten Briefpapieren je Firma.
@@ -162,5 +168,6 @@ Danach kommt ZUGFeRD: `@@xt@@`/`@@xi@@`/`@@xr@@` werden zu CII/UBL, dazu **PDF/A
 - **Test-PDFs:** Der Benutzer legt sie in `Y:\Dev\eRechnung` ab oder hängt sie im Chat an.
 - **Steuerzeichen schnell prüfen:** Kleines Konsolenprogramm, das `PdfText.Extract` und `ControlCodeParser.Parse` aufruft. Alternativ `pdftotext -raw <pdf> - | grep @@`.
 - **Bauen und testen:** `dotnet test` im Repo-Stamm. Release: `dotnet publish src/PdfRechnung/PdfRechnung.csproj -c Release -r win-x64` → `Belegpost.exe`.
-- **Lokaler Ordner:** Nach jeder Änderung auf GitHub pushen und `Y:\Dev\eRechnung` mitziehen. Besser: den Ordner einmal als Git-Klon neu anlegen. Die Benutzerordner `Dokumente` und `PdfDrucker` dabei erhalten.
+- **Lokaler Ordner:** Nach jeder Änderung auf GitHub pushen; der Benutzer holt den Stand in `Y:\Dev\eRechnung` mit `git pull`. Fertige Programme nach `Y:\Dev\eRechnung\Ausgabe`. Aus Claude heraus kann nicht in `.git` geschrieben und nichts verschoben/gelöscht werden – solche Schritte gibt der Benutzer per PowerShell aus.
+- **Bauen unter Linux (Claude):** .NET 9 SDK per `dotnet-install.sh`, MAPI-DLLs mit mingw-w64 (`gcc-mingw-w64`), Melder mit `-p:EnableWindowsTargeting=true`. Der Mac-Melder kann nur auf dem Mac gebaut werden.
 - **Sprache:** Antworten auf Deutsch, Ansprache mit „du“.

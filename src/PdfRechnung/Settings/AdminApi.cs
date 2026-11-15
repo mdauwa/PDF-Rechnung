@@ -137,6 +137,9 @@ public static class AdminApi
                     case "installieren": MapiClient.Install(log.Add); break;
                     case "standard": MapiClient.SetDefaultForAll(log.Add); break;
                     case "wiederherstellen": MapiClient.RestoreDefault(log.Add); break;
+                    case "benutzer":
+                        if (!MapiClient.Status().Installed) MapiClient.Install(log.Add);
+                        MapiClient.SetForUsers(log.Add); break;
                     default: return Results.NotFound();
                 }
                 db.Audit(access.For(ctx).Name, "MAPI " + aktion, null, string.Join(" | ", log));

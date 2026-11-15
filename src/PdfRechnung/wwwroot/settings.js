@@ -283,6 +283,10 @@ async function onAction(e) {
           await mapiCall("standard");
         break;
       case "mapi-restore": await mapiCall("wiederherstellen"); break;
+      case "mapi-users":
+        if (await confirmDialog("Standard je Benutzer", "Belegpost als eigenes Standard-Mailprogramm aller Windows-Benutzer dieses Servers setzen? Angemeldete Benutzer sofort, alle anderen bei ihrer nächsten Anmeldung. Der bisherige Wert wird gemerkt.", "Für alle Benutzer setzen"))
+          await mapiCall("benutzer");
+        break;
       case "user-mapi-push": {
         const u = ST.users.users[+btn.dataset.i];
         if (!u.id) throw new Error("Benutzer zuerst speichern.");
@@ -1163,13 +1167,25 @@ async function loadMapiStatus() {
     box.innerHTML = s ? `<table class="kv">
         <tr><th>DLLs neben Belegpost.exe</th><td>${s.available ? "vorhanden" : '<span class="bad">fehlen (BelegpostMapi-x64.dll / -x86.dll)</span>'}</td></tr>
         <tr><th>Installiert</th><td>${s.installed ? "ja (64 und 32 Bit)" : "nein"}${s.problem ? ` <span class="bad">${esc(s.problem)}</span>` : ""}</td></tr>
-        <tr><th>Standard-Mailprogramm (alle Benutzer)</th><td>${s.defaultForAll ? "<b>Belegpost</b>" : esc(s.currentDefault || "–")}</td></tr></table>
+        <tr><th>Standard-Mailprogramm (alle Benutzer)</th><td>${s.defaultForAll ? "<b>Belegpost</b>" : esc(s.currentDefault || "–")}</td></tr>
+        <tr><th>Bei Anmeldung je Benutzer setzen</th><td>${s.perUserLogon ? "ja – jeder Benutzer bekommt Belegpost bei der nächsten Anmeldung" : "nein"}</td></tr></table>
       <div class="actions"><button class="btn ghost" data-st="mapi-install" ${s.available ? "" : "disabled"}>${s.installed ? "Neu installieren" : "Installieren"}</button>
         <button class="btn" data-st="mapi-default" ${s.available ? "" : "disabled"}>Für alle Benutzer als Standard setzen</button>
-        ${s.defaultForAll ? `<button class="btn ghost" data-st="mapi-restore">Vorheriges wiederherstellen</button>` : ""}</div>
-      <p class="help">Nur für einzelne Benutzer (z. B. zum Testen oder per Anmeldeskript): <code>${esc(r.perUserCommand)}</code></p>`
+        <button class="btn ghost" data-st="mapi-users" ${s.available ? "" : "disabled"} title="Eigenen Standard jedes Windows-Benutzers setzen (z. B. wenn Outlook sich dort wieder eingetragen hat)">Bei allen Windows-Benutzern setzen</button>
+        ${s.defaultForAll || s.perUserLogon ? `<button class="btn ghost" data-st="mapi-restore">Vorheriges wiederherstellen</button>` : ""}</div>
+      ${mapiUsersTable(s.users || [])}
+      <p class="help">Windows nimmt zuerst den <b>eigenen Standard des Benutzers</b> (HKCU) – Outlook trägt sich dort oft selbst ein. „Für alle Benutzer als Standard setzen“ setzt deshalb beides:
+        den Standard für alle und den eigenen Standard jedes Benutzers (angemeldete sofort, alle anderen bei der nächsten Anmeldung). Danach das ERP bzw. das Programm neu starten.
+        Von Hand für einen Benutzer: <code>${esc(r.perUserCommand)}</code></p>`
       : `<p class="meta">Nur unter Windows verfügbar.</p>`;
   } catch (e) { box.innerHTML = `<p class="bad">${esc(e.message)}</p>`; }
+}
+
+function mapiUsersTable(users) {
+  if (!users.length) return `<p class="meta">Gerade ist kein Windows-Benutzer am Server angemeldet.</p>`;
+  return `<table class="list mini"><thead><tr><th>Angemeldeter Windows-Benutzer</th><th>Eigener Standard</th><th>MAPI-Mails gehen an</th></tr></thead><tbody>
+    ${users.map(u => `<tr><td>${esc(u.account)}</td><td>${u.value ? esc(u.value) : '<span class="meta">– (Standard für alle)</span>'}</td>
+      <td>${u.belegpost ? "<b>Belegpost</b>" : '<span class="bad">nicht Belegpost</span>'}</td></tr>`).join("")}</tbody></table>`;
 }
 
 /* ---------------- Tab: Status-Link ---------------- */

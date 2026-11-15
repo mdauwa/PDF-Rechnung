@@ -194,10 +194,11 @@ public sealed class DocumentProcessor
     }
 
     public Vorgang Process(byte[] pdf, string source, string? fileName, string? user = null, string? machine = null, string? ownerUserId = null,
-        Action<Vorgang>? beforeSave = null, bool publish = true)
+        Action<Vorgang>? beforeSave = null, bool publish = true, string? processOperator = null)
     {
         var now = DateTimeOffset.Now;
-        var v = new Vorgang { Id = DocumentStore.NewId(now), CreatedAt = now, Source = source, OriginalFileName = fileName, PrintUser = user, PrintMachine = machine };
+        var v = new Vorgang { Id = DocumentStore.NewId(now), CreatedAt = now, Source = source, OriginalFileName = fileName, PrintUser = user, PrintMachine = machine,
+            ProcessOperator = processOperator };
         string text;
         ParsedCodes p;
         try
@@ -269,16 +270,18 @@ public sealed class DocumentProcessor
     }
 
     /// <summary>
-    /// Wem gehört der Beleg? Reihenfolge: @@pb@@ (Bedienernummer) → @@pu@@ (Name) → Benutzer des Druckauftrags
-    /// → beim Upload der hochladende Benutzer.
+    /// Wem gehört der Beleg? Reihenfolge: @@pb@@ (Bedienernummer) → @@pu@@ (Name) → Benutzernummer des druckenden
+    /// Prozesses (z. B. wwa.exe der WebWARE) → Benutzer des Druckauftrags → beim Upload der hochladende Benutzer.
     /// </summary>
     private void AssignOwner(Vorgang v, ParsedCodes p, string? fallbackUserId)
     {
         if (!string.IsNullOrWhiteSpace(p.PrintUser)) v.PrintUser = p.PrintUser.Trim();
-        v.OperatorNumber = p.OperatorNumber;
+        // Steuerzeichen haben Vorrang; sonst die Benutzernummer aus dem druckenden Prozess
+        v.OperatorNumber = p.OperatorNumber ?? (string.IsNullOrWhiteSpace(p.PrintUser) ? v.ProcessOperator : null);
         v.ErpIndex = p.ErpIndex ?? (p.Field("ERP_VOUCHER_INDEX") is { } xi ? ControlCodeParser.NormalizeErpIndex(xi) : null) ?? v.ErpIndex;
         var owner = (p.OperatorNumber is not null ? _users?.FindByOperator(p.OperatorNumber) : null)
             ?? (!string.IsNullOrWhiteSpace(p.PrintUser) ? _users?.FindByPrintName(p.PrintUser) : null)
+            ?? (p.OperatorNumber is null && string.IsNullOrWhiteSpace(p.PrintUser) && v.ProcessOperator is not null ? _users?.FindByOperator(v.ProcessOperator) : null)
             ?? (fallbackUserId is not null ? _users?.FindById(fallbackUserId) : null)
             ?? _users?.FindByPrintName(v.PrintUser);
         v.OwnerUserId = owner?.Id ?? fallbackUserId;

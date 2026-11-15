@@ -67,6 +67,10 @@ public sealed class Vorgang
     public string? OwnerName { get; set; }
     /// <summary>ERP-Bedienernummer aus @@pb@@ (3-stellig).</summary>
     public string? OperatorNumber { get; set; }
+    /// <summary>ERP-Benutzernummer aus dem druckenden Prozess (z. B. wwa.exe 000 …), falls erkannt.</summary>
+    public string? ProcessOperator { get; set; }
+    /// <summary>Druckender Prozess mit Befehlszeile (Anzeige).</summary>
+    public string? PrintProcess { get; set; }
     /// <summary>ERP-Belegindex (BELNDX) aus @@pi@@ – nur dann wird der Status ins ERP zurückgeschrieben.</summary>
     public string? ErpIndex { get; set; }
     /// <summary>Aktueller Belegstatus als 3-stelliger Code (siehe <see cref="StatusCode"/>).</summary>

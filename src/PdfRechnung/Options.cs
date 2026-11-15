@@ -209,6 +209,17 @@ public sealed class InboxOptions
     /// Das ERP druckt Pfade, wie sie am Arbeitsplatz gelten – der Dienst läuft als SYSTEM und sieht keine Netzlaufwerke.
     /// </summary>
     public List<string> PathMappings { get; set; } = new();
+
+    /// <summary>Benutzer aus dem druckenden Prozess erkennen (z. B. WebWARE: alle wwa.exe laufen als SYSTEM). Steuerzeichen @@pb@@/@@pu@@ haben Vorrang.</summary>
+    public bool ProcessUserDetection { get; set; } = true;
+    /// <summary>Überwachte Programme, getrennt mit Semikolon.</summary>
+    public string ProcessNames { get; set; } = "wwa.exe";
+    /// <summary>Position der Benutzernummer in der Befehlszeile (1 = erster Parameter nach dem Programm).</summary>
+    public int ProcessUserArgument { get; set; } = 1;
+    /// <summary>ETW nur in diesen Programmen mitschreiben lassen (schont den Server). Aus = alle RPC-Aufrufe empfangen und selbst filtern.</summary>
+    public bool ProcessFilterByName { get; set; } = true;
+    /// <summary>Drucker im Netzwerk freigeben (für Druck von Arbeitsplätzen).</summary>
+    public bool SharePrinter { get; set; } = true;
 }
 
 public sealed class MailOptions

@@ -127,6 +127,44 @@ public static class AdminApi
             ? Results.Ok(new { status = MapiClient.Status(), perUserCommand = MapiClient.PerUserCommand, pipe = PdfRechnung.Services.MapiPipeServer.PipeName })
             : Results.Ok(new { status = (object?)null, perUserCommand = MapiClient.PerUserCommand, pipe = "belegpost-mapi" }));
 
+        g.MapGet("/drucker", (SettingsStore store, IServiceProvider sp) =>
+        {
+            if (!OperatingSystem.IsWindows()) return Results.Ok(new { available = false });
+            var name = store.Load().Inbox.PrinterName;
+            var tracker = sp.GetService<PdfRechnung.Printing.PrintProcessTracker>();
+            var intake = sp.GetService<PdfRechnung.Printing.PrinterIntake>();
+            return Results.Ok(new
+            {
+                available = true,
+                name,
+                port = PdfRechnung.Printing.PrinterSetup.PortName,
+                status = PdfRechnung.Printing.PrinterSetup.Get(name),
+                listening = intake?.Listening ?? false,
+                recent = intake?.Recent() ?? Array.Empty<PdfRechnung.Printing.PrintIntakeEntry>(),
+                tracker = new
+                {
+                    running = tracker?.Running ?? false,
+                    problem = tracker?.Problem,
+                    calls = (tracker?.RecentCalls() ?? Array.Empty<PdfRechnung.Printing.RpcCall>()).TakeLast(15).Reverse()
+                        .Select(c => new { at = c.Utc, c.Pid, c.Exe, @operator = c.Operator, c.CommandLine, c.Endpoint, iface = c.Interface }),
+                    interfaces = (tracker?.Interfaces() ?? Array.Empty<(Guid, string, int)>()).Select(x => new { iface = x.Item1, endpoint = x.Item2, count = x.Item3 })
+                }
+            });
+        });
+
+        g.MapPost("/drucker/einrichten", (SettingsStore store) =>
+        {
+            if (!OperatingSystem.IsWindows()) return Results.BadRequest(new { error = "Nur unter Windows möglich." });
+            var log = new List<string>();
+            try
+            {
+                var s = store.Load();
+                PdfRechnung.Printing.PrinterSetup.Install(s.Inbox.PrinterName, s.Inbox.SharePrinter, log.Add);
+                return Results.Ok(new { ok = true, log });
+            }
+            catch (Exception ex) { log.Add("FEHLER: " + ex.Message); return Results.Ok(new { ok = false, message = ex.Message, log }); }
+        });
+
         g.MapPost("/mapi/{aktion}", (string aktion, PdfRechnung.Services.PortalAccess access, HttpContext ctx, PdfRechnung.Data.BelegpostDb db) =>
         {
             if (!OperatingSystem.IsWindows()) return Results.BadRequest(new { error = "Nur unter Windows möglich." });
@@ -410,6 +448,8 @@ public static class AdminApi
         if (!string.IsNullOrWhiteSpace(s.Portal.PublicUrl) && (!Uri.TryCreate(s.Portal.PublicUrl.Trim(), UriKind.Absolute, out var pu) || pu.Scheme != "https"))
             e.Add("Die Portal-Adresse für Links muss mit https:// beginnen.");
         if (!MapiMode.All.Contains(s.Mapi.DefaultMode)) e.Add("Unbekannter Standard für MAPI-Mails.");
+        if (string.IsNullOrWhiteSpace(s.Inbox.PrinterName)) e.Add("Bitte einen Namen für den Drucker eintragen.");
+        if (s.Inbox.ProcessUserArgument is < 1 or > 20) e.Add("Die Position der Benutzernummer in der Befehlszeile muss zwischen 1 und 20 liegen.");
         if (s.Gotomaxx.Enabled && string.IsNullOrWhiteSpace(s.Gotomaxx.Printer)) e.Add("Bitte den gotomaxx-Drucker für die Weiterleitung wählen.");
         if (s.Gotomaxx.CodeFontSize is < 0.5 or > 24) e.Add("Die Schriftgröße der Steuerzeichen für gotomaxx muss zwischen 0,5 und 24 pt liegen.");
         if (s.Gotomaxx.TimeoutSeconds is < 10 or > 900) e.Add("Die Höchstdauer des gotomaxx-Drucks muss zwischen 10 und 900 Sekunden liegen.");

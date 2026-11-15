@@ -115,6 +115,13 @@ builder.Services.AddSingleton<MelderTasks>();
 builder.Services.AddHostedService<OutlookWatchWorker>();
 builder.Services.AddSingleton<MapiIntake>();
 if (OperatingSystem.IsWindows()) builder.Services.AddHostedService<MapiPipeServer>();
+if (OperatingSystem.IsWindows())
+{
+    builder.Services.AddSingleton<PdfRechnung.Printing.PrintProcessTracker>();
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<PdfRechnung.Printing.PrintProcessTracker>());
+    builder.Services.AddSingleton<PdfRechnung.Printing.PrinterIntake>();
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<PdfRechnung.Printing.PrinterIntake>());
+}
 builder.Services.AddSingleton<StatusLinkService>();
 builder.Services.AddSingleton<StatusLinkLimiter>();
 builder.Services.AddSingleton<PdfRechnung.Erp.ErpFeedbackService>();

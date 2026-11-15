@@ -37,6 +37,8 @@ public static class DocumentChecker
         if (p.InvalidErpIndex is { } badIdx) W($"Belegindex „{badIdx}“ (@@pi@@) ist ungültig – erwartet wird eine Zahl, z. B. @@pi12345@@. Der Status wird nicht ins ERP zurückgeschrieben.");
         if (p.InvalidOperatorNumber is { } bad) W($"Bedienernummer „{bad}“ (@@pb@@) ist ungültig – erwartet werden 3 Ziffern, z. B. @@pb007@@.");
         else if (p.OperatorNumber is { } no && v.OwnerUserId is null) W($"Bedienernummer {no} ist keinem Benutzer zugeordnet (Einstellungen → Benutzer → ERP-Bediener-Nr.).");
+        else if (p.OperatorNumber is null && string.IsNullOrWhiteSpace(p.PrintUser) && v.ProcessOperator is { } pno && v.OwnerUserId is null)
+            W($"ERP-Benutzer {pno} (aus dem druckenden Prozess) ist keinem Benutzer zugeordnet (Einstellungen → Benutzer → ERP-Bediener-Nr.).");
         m.AddRange(v.LayoutMessages);
         if (v.Stationery is not null) I($"Briefpapier „{v.Stationery}“ unterlegt.");
         if (p.SplitAfterPages.Count > 0) W("Der Druckauftrag enthält mehrere Belege (@@nd@@) – das Aufteilen folgt mit dem Druckdienst.");

@@ -82,6 +82,7 @@ function drawTab() {
   if (ST.tab === "benutzer" && !ST.devices) loadDevices();
   if (ST.tab === "erp") loadErpStatus();
   if (ST.tab === "mapi") loadMapiStatus();
+  if (ST.tab === "eingang") loadPrinterStatus();
   if (ST.tab === "dienst") loadService();
 }
 
@@ -277,6 +278,12 @@ async function onAction(e) {
         const r = await api("POST", "api/admin/erp/testschreiben", { erpIndex: idx, vorgangId: $("#erpPvId").value.trim() || null, code: $("#erpPvCode").value || null, confirm: true });
         msg(r.message, r.ok); break;
       }
+      case "printer-setup": {
+        const r = await api("POST", "api/admin/drucker/einrichten");
+        msg((r.ok ? "" : (r.message || "Fehler") + "\n") + (r.log || []).join("\n"), r.ok);
+        loadPrinterStatus(); break;
+      }
+      case "printer-refresh": loadPrinterStatus(); break;
       case "mapi-install": await mapiCall("installieren"); break;
       case "mapi-default":
         if (await confirmDialog("Standard-Mailprogramm", "Belegpost für alle Benutzer dieses Servers als Standard-Mailprogramm setzen – für MAPI-Mails und als Windows-Standard-App „E-Mail“? Das bisherige wird gemerkt und kann wiederhergestellt werden.", "Als Standard setzen"))
@@ -512,16 +519,22 @@ function tabInbox() {
         "Der Dienst läuft als SYSTEM und sieht keine Netzlaufwerke. Eine Zuordnung pro Zeile: <code>K:\\=\\\\server\\freigabe\\</code>. " +
         "Das Computerkonto des Servers braucht Leserechte auf die Freigabe.")) +
     section("Drucker",
-      `${field("Name des Druckers", inText("inbox.printerName", "Belegpost"))}
-       <div class="help-box">
-         <b>So kommt der Druck in den Eingang</b> (wird im nächsten Schritt hier automatisiert):
-         <ol>
-           <li>Am Server einen Drucker mit dem Treiber <i>Microsoft Print to PDF</i> anlegen und unter dem Namen oben freigeben.</li>
-           <li>Statt des Standardanschlusses <code>PORTPROMPT:</code> (der den Speichern-Dialog öffnet) bekommt der Drucker einen eigenen Anschluss, der jeden Druckauftrag als eigene PDF-Datei in den Eingangsordner schreibt – ohne Nachfrage.</li>
-           <li>Im ERP auf diesen Drucker drucken. Die gotomaxx-Steuerzeichen (<code>@@…@@</code>) im Formular bleiben unverändert.</li>
-         </ol>
-         Zum Testen: PDF-Dateien in den Eingangsordner kopieren oder in der Vorgangsliste über „PDF hochladen“ einspielen.
-       </div>`) +
+      `<div class="grid2">${field("Name des Druckers", inText("inbox.printerName", "Belegpost"), "So heißt der Drucker am Server (und die Freigabe).")}
+         <div>${inCheck("inbox.sharePrinter", "Im Netzwerk freigeben (für Druck von Arbeitsplätzen)")}</div></div>
+       <div id="printerStatus"><p class="meta">Lade Status …</p></div>
+       <p class="help">Der Drucker verwendet den Windows-Treiber <i>Microsoft Print To PDF</i> mit dem Anschluss <code>\\\\.\\pipe\\belegpost-druck</code> statt <code>PORTPROMPT:</code> –
+         es erscheint kein Speichern-Dialog. Jeder Druck kommt als PDF beim Dienst an und wird zum Vorgang. Benutzer, Rechner und Dokumentname kommen aus der Druckwarteschlange.
+         Nach Änderungen an Name oder Freigabe erst speichern, dann „Drucker einrichten“.</p>`) +
+    section("Benutzer aus dem druckenden Prozess (WebWARE)",
+      `${inCheck("inbox.processUserDetection", "ERP-Benutzer aus der Befehlszeile des druckenden Programms erkennen")}
+       <div class="grid2">${field("Programme", inText("inbox.processNames", "wwa.exe"), "Mehrere mit Semikolon trennen.")}
+         ${field("Benutzernummer ist Parameter Nr.", inNum("inbox.processUserArgument", 1, 20), "1 = erster Parameter nach dem Programm, z. B. <code>WWA.EXE <b>000</b> /M:10000 …</code>")}</div>
+       ${inCheck("inbox.processFilterByName", "Nur in diesen Programmen mitschreiben (empfohlen; ausschalten, falls keine Aufrufe erkannt werden)")}
+       <p class="help">Die WebWARE startet pro Benutzer eine <code>wwa.exe</code> – alle laufen als SYSTEM, der Druckauftrag sagt also nicht, wer gedruckt hat.
+         Belegpost schreibt deshalb mit, wann welche <code>wwa.exe</code> die Druckwarteschlange aufruft (Windows-Ereignisablaufverfolgung), und ordnet den Druck
+         der Benutzernummer aus deren Befehlszeile zu – wie <code>@@pb000@@</code>. <b>Steuerzeichen im Druck (<code>@@pb@@</code>, <code>@@pu@@</code>) haben Vorrang.</b>
+         Drucken zwei Benutzer im selben Moment, bekommt der Vorgang eine Warnung.</p>
+       <div id="printerOrigin"></div>`) +
     section("Weiterleitung an gotomaxx PDFMAILER", gotomaxxSection());
 }
 
@@ -549,6 +562,33 @@ function gotomaxxSection() {
       alle anderen unverändert (Pfade wie <code>K:\…</code> ohne Pfadzuordnung). Briefpapier, Prüfung und Versand übernimmt dann gotomaxx.
       Status 140 = an gotomaxx übergeben, 840 = Übergabe fehlgeschlagen. Im Vorgang gibt es zusätzlich den Knopf „An gotomaxx übergeben“.
     </div>`;
+}
+
+async function loadPrinterStatus() {
+  const box = $("#printerStatus"); if (!box) return;
+  const dt = d => d ? new Date(d).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
+  try {
+    const r = await api("GET", "api/admin/drucker");
+    if (!r.available) { box.innerHTML = `<p class="meta">Nur unter Windows verfügbar.</p>`; return; }
+    const s = r.status || {};
+    const ok = s.exists && s.port === r.port && /print to pdf/i.test(s.driver || "");
+    box.innerHTML = `<table class="kv">
+        <tr><th>Drucker „${esc(r.name)}“</th><td>${s.exists ? (ok ? "<b>eingerichtet</b>" : `<span class="bad">vorhanden, aber Treiber/Anschluss passen nicht (${esc(s.driver || "?")} / ${esc(s.port || "?")})</span>`) : "nicht vorhanden"}${s.problem ? ` <span class="bad">${esc(s.problem)}</span>` : ""}</td></tr>
+        <tr><th>Freigabe</th><td>${s.shared ? `\\\\${esc(location.hostname)}\\${esc(s.shareName || r.name)}` : "nicht freigegeben"}</td></tr>
+        <tr><th>Treiber „Microsoft Print To PDF“</th><td>${s.driverInstalled ? "installiert" : '<span class="bad">fehlt</span>'}</td></tr>
+        <tr><th>Annahme (${esc(r.port)})</th><td>${r.listening ? "bereit" : '<span class="bad">nicht bereit</span>'}</td></tr></table>
+      <div class="actions"><button class="btn" data-st="printer-setup">${s.exists ? "Drucker reparieren" : "Drucker einrichten"}</button>
+        <button class="btn ghost" data-st="printer-refresh">Aktualisieren</button></div>
+      ${(r.recent || []).length ? `<h4>Letzte Drucke</h4><div class="table-wrap"><table class="list mini"><thead><tr><th>Zeit</th><th>Auftrag</th><th>Dokument</th><th>Benutzer / Rechner</th><th>Benutzer erkannt</th><th>Vorgang</th></tr></thead><tbody>
+        ${r.recent.map(e => `<tr><td class="nowrap">${dt(e.at)}</td><td>${esc(e.jobId ?? "")}</td><td>${esc(e.document || "")}</td><td>${esc(e.user || "")}${e.machine ? " @ " + esc(e.machine) : ""}</td>
+          <td>${esc(e.origin || "")}</td><td>${e.vorgangId ? `<a href="#/vorgang?id=${encodeURIComponent(e.vorgangId)}">öffnen</a>` : `<span class="bad">${esc(e.problem || "")}</span>`}</td></tr>`).join("")}</tbody></table></div>` : ""}`;
+    const t = r.tracker || {}, ob = $("#printerOrigin");
+    if (ob) ob.innerHTML = `<p class="meta">Prozesserkennung: ${t.running ? "<b>läuft</b>" : `<span class="bad">${esc(t.problem || "aus")}</span>`}</p>
+      ${(t.calls || []).length ? `<div class="table-wrap"><table class="list mini"><thead><tr><th>Zeit</th><th>Prozess</th><th>Benutzer-Nr.</th><th>Aufruf</th><th>Befehlszeile</th></tr></thead><tbody>
+        ${t.calls.map(c => `<tr><td class="nowrap">${dt(c.at)}</td><td>${esc(c.exe)} (${c.pid})</td><td>${esc(c.operator ?? "–")}</td><td><small>${esc(c.endpoint || c.iface)}</small></td><td><small>${esc(c.commandLine || "")}</small></td></tr>`).join("")}
+        </tbody></table></div>` : `<p class="meta">Noch keine Druckaufrufe der überwachten Programme gesehen.</p>`}
+      ${(t.interfaces || []).length ? `<details><summary>Erkannte Aufrufe (Diagnose)</summary><table class="list mini"><tbody>${t.interfaces.map(x => `<tr><td><small>${esc(x.iface)}</small></td><td><small>${esc(x.endpoint)}</small></td><td>${x.count}</td></tr>`).join("")}</tbody></table></details>` : ""}`;
+  } catch (e) { box.innerHTML = `<p class="bad">${esc(e.message)}</p>`; }
 }
 
 /* ---------------- Tab: Briefpapier ---------------- */

@@ -31,7 +31,10 @@ function reText(ed, kind, i, f, value, ph = "", list) {
 function reSelect(ed, kind, i, f, value, options) {
   return `<select ${reAttr(ed, kind, i, f)}>${options.map(([v, t]) => `<option value="${esc(v)}" ${(value || "") === v ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
 }
-const reField = (label, inner, help) => `<label class="field"><span class="lbl">${label}</span>${inner}${help ? `<small class="help">${help}</small>` : ""}</label>`;
+const reField = (label, inner, help) => {
+  const tag = String(inner).includes('class="rte') ? "div" : "label"; // Editor nie in <label> (Fokus)
+  return `<${tag} class="field"><span class="lbl">${label}</span>${inner}${help ? `<small class="help">${help}</small>` : ""}</${tag}>`;
+};
 
 /** Kurzbeschreibung einer Regel für die eingeklappte Zeile. */
 function ruleSummary(r, ed) {

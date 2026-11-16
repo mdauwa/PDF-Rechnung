@@ -437,7 +437,7 @@ td.mt-thumb img { display: block; max-width: 48px; max-height: 28px; object-fit:
 .rte-area, .rte-view { min-height: 140px; max-height: 420px; overflow: auto; padding: 10px 12px; outline: none; background: #fff; color: #1c2330;
   font-family: "Segoe UI", Arial, sans-serif; font-size: 15px; line-height: 1.5; }
 .rte.small .rte-area { min-height: 90px; }
-.rte-area p, .rte-view p { margin: 0 0 10px 0; }
+.rte-area p, .rte-view p { margin: 0; }
 .rte-area img, .rte-view img { max-width: 100%; height: auto; }
 .rte-area img.sel { outline: 2px solid var(--accent, #1f5fbf); }
 .rte-area a { color: #1f5fbf; }

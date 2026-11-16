@@ -102,7 +102,10 @@ function updateSaveBar() { $("#stSave").hidden = !ST.dirty; }
 
 /* ---------------- Formular-Bausteine ---------------- */
 
-const field = (label, inner, help) => `<label class="field"><span class="lbl">${label}</span>${inner}${help ? `<small class="help">${help}</small>` : ""}</label>`;
+const field = (label, inner, help) => {
+  const tag = String(inner).includes('class="rte') ? "div" : "label"; // Editor nie in <label>: Klick im Text würde sonst die Werkzeugleiste fokussieren
+  return `<${tag} class="field"><span class="lbl">${label}</span>${inner}${help ? `<small class="help">${help}</small>` : ""}</${tag}>`;
+};
 const inText = (path, ph = "", type = "text") => `<input type="${type}" data-path="${path}" value="${esc(get(ST.s, path) ?? "")}" placeholder="${esc(ph)}">`;
 const inNum = (path, min = 0, max = 65535, step = 1) => `<input type="number" data-path="${path}" data-type="${step === 1 ? "int" : "dec"}" min="${min}" max="${max}" step="${step}" value="${esc(get(ST.s, path) ?? "")}">`;
 const inCheck = (path, label) => `<label class="check"><input type="checkbox" data-path="${path}" ${get(ST.s, path) ? "checked" : ""}> ${label}</label>`;

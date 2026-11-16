@@ -54,7 +54,7 @@ public sealed class MailHtmlTests : IDisposable
     {
         var html = MailHtml.ToMailHtml("<p>Hallo {Kunde}</p>", new Dictionary<string, string> { ["Kunde"] = "<b>Böse</b> & Co" }, "#1f5fbf");
         Assert.Contains("&lt;b&gt;Böse&lt;/b&gt; &amp; Co", html);
-        Assert.Contains("<p style=\"margin:0 0 10px 0;\">", html);
+        Assert.Contains("<p style=\"margin:0;\">", html);
         Assert.Contains("<strong>fett</strong>", MailHtml.ToMailHtml("**fett**", new Dictionary<string, string>(), "#1f5fbf"));
     }
 

@@ -179,9 +179,11 @@ public static partial class MailDesigner
         if (boxHtml.Length > 0) sb.Append($"<tr><td style=\"padding:8px 32px 8px 32px;font-family:{font};\">{boxHtml}</td></tr>");
         if (sigHtml.Length > 0) sb.Append($"<tr><td style=\"padding:8px 32px 24px 32px;font-family:{font};font-size:15px;line-height:1.55;color:{fg};\">{sigHtml}</td></tr>");
         else sb.Append("<tr><td style=\"padding:0 0 16px 0;\"></td></tr>");
-        sb.Append("</table>");
+        // Fußzeile in derselben Karte – klein, grau, durch eine dünne Linie abgesetzt
         if (footHtml.Length > 0)
-            sb.Append($"<table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:600px;max-width:100%;\"><tr><td style=\"padding:16px 32px;font-family:{font};font-size:12px;line-height:1.5;color:#6b7280;\">{footHtml}</td></tr></table>");
+            sb.Append($"<tr><td style=\"padding:0 32px;\"><div style=\"border-top:1px solid #e5e7eb;font-size:0;line-height:0;\">&nbsp;</div></td></tr>")
+              .Append($"<tr><td style=\"padding:14px 32px 24px 32px;font-family:{font};font-size:12px;line-height:1.5;color:#6b7280;\">{footHtml}</td></tr>");
+        sb.Append("</table>");
         sb.Append("</td></tr></table></body></html>");
         return new RenderedMail(MailHtml.EmbedImages(sb.ToString(), dataDirectory, images), text, images);
     }

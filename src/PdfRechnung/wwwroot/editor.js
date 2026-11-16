@@ -71,6 +71,13 @@ function rteClean(html) {
         }
         keep.length ? child.setAttribute("style", keep.join(";")) : child.removeAttribute("style");
       }
+      // Absätze wie in Outlook: ohne Abstand davor/danach und ohne vergrößerte Zeilenhöhe (Word: 8pt nach, 107 %)
+      if (["P", "DIV", "LI", "H1", "H2", "H3", "H4"].includes(tag)) {
+        child.style.removeProperty("margin"); child.style.removeProperty("margin-top"); child.style.removeProperty("margin-bottom");
+        child.style.removeProperty("line-height");
+        if (tag === "P") child.style.margin = "0";
+        if (!child.getAttribute("style")) child.removeAttribute("style");
+      }
       if (tag === "IMG") {
         const src = child.getAttribute("src") || "";
         if (!/^(https:|cid:|data:image\/(png|jpe?g|gif);base64,)/i.test(src) && !src.includes("api/mailbilder/")) { lostImages++; child.remove(); continue; }
@@ -146,6 +153,7 @@ function rteInsertHtml(html) { document.execCommand("insertHTML", false, html); 
 /** Ereignisse für alle Editoren (einmal pro Seite registrieren). */
 function rteInstall(root = document) {
   if (root.__rte) return; root.__rte = true;
+  try { document.execCommand("defaultParagraphSeparator", false, "p"); } catch { }
   // Auswahl behalten, wenn Knöpfe gedrückt werden
   root.addEventListener("mousedown", e => { if (e.target.closest("button.rte-btn")) e.preventDefault(); });
 

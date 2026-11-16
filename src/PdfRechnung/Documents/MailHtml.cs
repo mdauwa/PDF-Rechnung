@@ -170,8 +170,9 @@ public static partial class MailHtml
         var escaped = values.ToDictionary(kv => kv.Key, kv => WebUtility.HtmlEncode(kv.Value), StringComparer.OrdinalIgnoreCase);
         var html = Sanitize(Placeholders.Apply(content, escaped));
         // einheitlich: Absätze mit festem Abstand, Links in der Hauptfarbe, Bilder ohne Rahmen
-        html = Regex.Replace(html, @"<p(?=[\s>])(?![^>]*style=)", "<p style=\"margin:0 0 10px 0;\"");
-        html = Regex.Replace(html, @"<p style=""(?![^""]*margin)", "<p style=\"margin:0 0 10px 0;");
+        // Absätze wie in Outlook ohne Abstand – eine Leerzeile ist ein leerer Absatz
+        html = Regex.Replace(html, @"<p(?=[\s>])(?![^>]*style=)", "<p style=\"margin:0;\"");
+        html = Regex.Replace(html, @"<p style=""(?![^""]*margin)", "<p style=\"margin:0;");
         html = Regex.Replace(html, @"<a (?![^>]*style=)", $"<a style=\"color:{linkColor};\" ");
         html = Regex.Replace(html, @"<img (?![^>]*style=)", "<img style=\"border:0;max-width:100%;height:auto;\" ");
         html = Regex.Replace(html, @"<(ul|ol)(?=[\s>])(?![^>]*style=)", "<$1 style=\"margin:0 0 10px 0;padding-left:22px;\"");

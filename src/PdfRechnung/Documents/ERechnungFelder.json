@@ -1,0 +1,4761 @@
+[
+ {
+  "name": "SELLER_NAME",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-27",
+  "text": "Verkäufer – Name",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_TRADING_NAME",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-28",
+  "text": "Verkäufer – Handelsname",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_LEGAL_REGISTRATION_ID",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-30",
+  "text": "Verkäufer – Registernummer",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.5"
+ },
+ {
+  "name": "SELLER_ADDRESS_LINE",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-35",
+  "text": "Verkäufer – Straße",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_ADDRESS_LINE2",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-36",
+  "text": "Verkäufer – Adresszusatz",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_ADDRESS_LINE3",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-162",
+  "text": "Verkäufer – Adresszeile 3",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_ADDRESS_ZIP",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-38",
+  "text": "Verkäufer – PLZ",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_ADDRESS_CITY",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-37",
+  "text": "Verkäufer – Ort",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_ADDRESS_COUNTRY",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-40",
+  "text": "Verkäufer – Land",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "ISO-3166-1",
+  "default": "DE",
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_ADDRESS_COUNTRY_SUBDIVISION",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-39",
+  "text": "Verkäufer – Bundesland/Region",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.2"
+ },
+ {
+  "name": "SELLER_GLN",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-29",
+  "text": "Verkäufer – GLN",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_ID",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-29",
+  "text": "Verkäufer – Kennung",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_TAX_ID",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-31",
+  "text": "Verkäufer – USt-IdNr.",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_TAX_REG_ID",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-32",
+  "text": "Verkäufer – Steuernummer",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_ENDPOINT_ID_TYPE",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-34",
+  "text": "Verkäufer – Art der elektronischen Adresse",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "Electronic Address Scheme code list",
+  "default": "EM",
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_ENDPOINT_ID",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-34",
+  "text": "Verkäufer – elektronische Adresse",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_CONTACT_NAME",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-41",
+  "text": "Verkäufer – Ansprechpartner",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_CONTACT_PHONE",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-42",
+  "text": "Verkäufer – Telefon",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_CONTACT_EMAIL",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-43",
+  "text": "Verkäufer – E-Mail",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_PAYMENT_ACCOUNT_NAME",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-85",
+  "text": "Verkäufer – Kontoinhaber",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_IBAN",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-84",
+  "text": "Verkäufer – IBAN",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_BIC",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-86",
+  "text": "Verkäufer – BIC",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_ADDITIONAL_LEGAL_INFO",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-33",
+  "text": "Verkäufer – rechtliche Zusatzangaben",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.5"
+ },
+ {
+  "name": "SELLER_REGULATORY_INFORMATIONS",
+  "table": null,
+  "group": "Verkäufer",
+  "bt": "BT-21/22",
+  "text": "Verkäufer – Pflichtangaben (Geschäftsführung, Register)",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": true,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_OTHER_BANKS_ACCOUNT_NAME",
+  "table": "SELLER_OTHER_BANKS_DETAILS",
+  "group": "Weitere Bankkonten",
+  "bt": "BT-85",
+  "text": "Weiteres Konto – Kontoinhaber",
+  "type": "text",
+  "formats": [
+   "extended",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_OTHER_BANKS_IBAN",
+  "table": "SELLER_OTHER_BANKS_DETAILS",
+  "group": "Weitere Bankkonten",
+  "bt": "BT-84",
+  "text": "Weiteres Konto – IBAN",
+  "type": "text",
+  "formats": [
+   "extended",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_OTHER_BANKS_BIC",
+  "table": "SELLER_OTHER_BANKS_DETAILS",
+  "group": "Weitere Bankkonten",
+  "bt": "BT-86",
+  "text": "Weiteres Konto – BIC",
+  "type": "text",
+  "formats": [
+   "extended",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SELLER_TAXREPRESENTATIVE_NAME",
+  "table": null,
+  "group": "Steuervertreter",
+  "bt": "BT-62",
+  "text": "Steuervertreter – Name",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.3"
+ },
+ {
+  "name": "SELLER_TAXREPRESENTATIVE_ADDRESS_LINE",
+  "table": null,
+  "group": "Steuervertreter",
+  "bt": "BT-64",
+  "text": "Steuervertreter – Straße",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.3"
+ },
+ {
+  "name": "SELLER_TAXREPRESENTATIVE_ADDRESS_LINE2",
+  "table": null,
+  "group": "Steuervertreter",
+  "bt": "BT-65",
+  "text": "Steuervertreter – Adresszusatz",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.3"
+ },
+ {
+  "name": "SELLER_TAXREPRESENTATIVE_ADDRESS_LINE3",
+  "table": null,
+  "group": "Steuervertreter",
+  "bt": "BT-164",
+  "text": "Steuervertreter – Adresszeile 3",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.3"
+ },
+ {
+  "name": "SELLER_TAXREPRESENTATIVE_ADDRESS_ZIP",
+  "table": null,
+  "group": "Steuervertreter",
+  "bt": "BT-67",
+  "text": "Steuervertreter – PLZ",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.3"
+ },
+ {
+  "name": "SELLER_TAXREPRESENTATIVE_ADDRESS_CITY",
+  "table": null,
+  "group": "Steuervertreter",
+  "bt": "BT-66",
+  "text": "Steuervertreter – Ort",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.3"
+ },
+ {
+  "name": "SELLER_TAXREPRESENTATIVE_ADDRESS_COUNTRY",
+  "table": null,
+  "group": "Steuervertreter",
+  "bt": "BT-69",
+  "text": "Steuervertreter – Land",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.3"
+ },
+ {
+  "name": "SELLER_TAXREPRESENTATIVE_TAX_ID",
+  "table": null,
+  "group": "Steuervertreter",
+  "bt": "BT-63",
+  "text": "Steuervertreter – USt-IdNr.",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.3"
+ },
+ {
+  "name": "PAYEE_NAME",
+  "table": null,
+  "group": "Zahlungsempfänger",
+  "bt": "BT-59",
+  "text": "Zahlungsempfänger – Name",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": true,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.6"
+ },
+ {
+  "name": "PAYEE_LEGAL_REGISTRATION_ID",
+  "table": null,
+  "group": "Zahlungsempfänger",
+  "bt": "BT-61",
+  "text": "Zahlungsempfänger – Registernummer",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.6"
+ },
+ {
+  "name": "PAYEE_ADDRESS_LINE",
+  "table": null,
+  "group": "Zahlungsempfänger",
+  "bt": "BT-X-250",
+  "text": "Zahlungsempfänger – Straße",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.6"
+ },
+ {
+  "name": "PAYEE_ADDRESS_LINE2",
+  "table": null,
+  "group": "Zahlungsempfänger",
+  "bt": "BT-X-251",
+  "text": "Zahlungsempfänger – Adresszusatz",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.6"
+ },
+ {
+  "name": "PAYEE_ADDRESS_LINE3",
+  "table": null,
+  "group": "Zahlungsempfänger",
+  "bt": "BT-X-252",
+  "text": "Zahlungsempfänger – Adresszeile 3",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.6"
+ },
+ {
+  "name": "PAYEE_ADDRESS_ZIP",
+  "table": null,
+  "group": "Zahlungsempfänger",
+  "bt": "BT-X-249",
+  "text": "Zahlungsempfänger – PLZ",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.6"
+ },
+ {
+  "name": "PAYEE_ADDRESS_CITY",
+  "table": null,
+  "group": "Zahlungsempfänger",
+  "bt": "BT-X-253",
+  "text": "Zahlungsempfänger – Ort",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.6"
+ },
+ {
+  "name": "PAYEE_ADDRESS_COUNTRY",
+  "table": null,
+  "group": "Zahlungsempfänger",
+  "bt": "BT-X-254",
+  "text": "Zahlungsempfänger – Land",
+  "type": "code",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": true,
+  "ublOnly": false,
+  "codelist": "ISO-3166-1",
+  "default": null,
+  "since": "10.0.6"
+ },
+ {
+  "name": "PAYEE_GLN",
+  "table": null,
+  "group": "Zahlungsempfänger",
+  "bt": "BT-60",
+  "text": "Zahlungsempfänger – GLN",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.6"
+ },
+ {
+  "name": "PAYEE_ID",
+  "table": null,
+  "group": "Zahlungsempfänger",
+  "bt": "BT-60",
+  "text": "Zahlungsempfänger – Kennung/Kundennummer",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.6"
+ },
+ {
+  "name": "PAYEE_TAX_ID",
+  "table": null,
+  "group": "Zahlungsempfänger",
+  "bt": "BT-X-257",
+  "text": "Zahlungsempfänger – USt-IdNr.",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.6"
+ },
+ {
+  "name": "BUYER_NAME",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-44",
+  "text": "Käufer – Name",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "BUYER_TRADING_NAME",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-45",
+  "text": "Käufer – Handelsname",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "BUYER_LEGAL_REGISTRATION_ID",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-47",
+  "text": "Käufer – Registernummer",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.4"
+ },
+ {
+  "name": "BUYER_ADDRESS_LINE",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-50",
+  "text": "Käufer – Straße",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "BUYER_ADDRESS_LINE2",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-51",
+  "text": "Käufer – Adresszusatz",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "BUYER_ADDRESS_LINE3",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-163",
+  "text": "Käufer – Adresszeile 3",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "BUYER_ADDRESS_ZIP",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-53",
+  "text": "Käufer – PLZ",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "BUYER_ADDRESS_CITY",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-52",
+  "text": "Käufer – Ort",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "BUYER_ADDRESS_COUNTRY",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-55",
+  "text": "Käufer – Land",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "ISO-3166-1",
+  "default": "DE",
+  "since": "9.0.2"
+ },
+ {
+  "name": "BUYER_ADDRESS_COUNTRY_SUBDIVISION",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-54",
+  "text": "Käufer – Bundesland/Region",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.2"
+ },
+ {
+  "name": "BUYER_GLN",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-46",
+  "text": "Käufer – GLN",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "BUYER_ID",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-46",
+  "text": "Käufer – Kundennummer",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "BUYER_TAX_ID",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-48",
+  "text": "Käufer – USt-IdNr.",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "BUYER_TAX_REGISTRATION_ID",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-48",
+  "text": "Käufer – Steuernummer",
+  "type": "text",
+  "formats": [
+   "xrechnung-cii"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.7"
+ },
+ {
+  "name": "BUYER_ENDPOINT_ID_TYPE",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-49",
+  "text": "Käufer – Art der elektronischen Adresse",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "Electronic Address Scheme code list",
+  "default": "EM",
+  "since": "9.0.2"
+ },
+ {
+  "name": "BUYER_ENDPOINT_ID",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-49",
+  "text": "Käufer – elektronische Adresse",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "BUYER_CONTACT_NAME",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-56",
+  "text": "Käufer – Ansprechpartner",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "BUYER_CONTACT_PHONE",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-57",
+  "text": "Käufer – Telefon",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "BUYER_CONTACT_EMAIL",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-58",
+  "text": "Käufer – E-Mail",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SHIPPING_ADDRESS_NAME",
+  "table": null,
+  "group": "Lieferanschrift",
+  "bt": "BT-70",
+  "text": "Lieferanschrift – Name",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SHIPPING_ADDRESS_LINE",
+  "table": null,
+  "group": "Lieferanschrift",
+  "bt": "BT-75",
+  "text": "Lieferanschrift – Straße",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SHIPPING_ADDRESS_LINE2",
+  "table": null,
+  "group": "Lieferanschrift",
+  "bt": "BT-76",
+  "text": "Lieferanschrift – Adresszusatz",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SHIPPING_ADDRESS_LINE3",
+  "table": null,
+  "group": "Lieferanschrift",
+  "bt": "BT-165",
+  "text": "Lieferanschrift – Adresszeile 3",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SHIPPING_ADDRESS_ZIP",
+  "table": null,
+  "group": "Lieferanschrift",
+  "bt": "BT-78",
+  "text": "Lieferanschrift – PLZ",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SHIPPING_ADDRESS_CITY",
+  "table": null,
+  "group": "Lieferanschrift",
+  "bt": "BT-77",
+  "text": "Lieferanschrift – Ort",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SHIPPING_ADDRESS_COUNTRY",
+  "table": null,
+  "group": "Lieferanschrift",
+  "bt": "BT-80",
+  "text": "Lieferanschrift – Land",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "ISO-3166-1",
+  "default": "DE",
+  "since": "9.0.2"
+ },
+ {
+  "name": "SHIPPING_ADDRESS_GLN",
+  "table": null,
+  "group": "Lieferanschrift",
+  "bt": "BT-71",
+  "text": "Lieferanschrift – GLN",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SHIPPING_ADDRESS_ID",
+  "table": null,
+  "group": "Lieferanschrift",
+  "bt": "BT-71",
+  "text": "Lieferanschrift – Kennung/Kundennummer",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ULTIMATE_SHIPPING_ADDRESS_NAME",
+  "table": null,
+  "group": "Endempfänger",
+  "bt": "BT-X-164",
+  "text": "Endempfänger – Name",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.0"
+ },
+ {
+  "name": "ULTIMATE_SHIPPING_ADDRESS_LINE",
+  "table": null,
+  "group": "Endempfänger",
+  "bt": "BT-X-441",
+  "text": "Endempfänger – Straße",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.0"
+ },
+ {
+  "name": "ULTIMATE_SHIPPING_ADDRESS_LINE2",
+  "table": null,
+  "group": "Endempfänger",
+  "bt": "BT-X-442",
+  "text": "Endempfänger – Adresszusatz",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.0"
+ },
+ {
+  "name": "ULTIMATE_SHIPPING_ADDRESS_LINE3",
+  "table": null,
+  "group": "Endempfänger",
+  "bt": "BT-X-443",
+  "text": "Endempfänger – Adresszeile 3",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.0"
+ },
+ {
+  "name": "ULTIMATE_SHIPPING_ADDRESS_ZIP",
+  "table": null,
+  "group": "Endempfänger",
+  "bt": "BT-X-440",
+  "text": "Endempfänger – PLZ",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.0"
+ },
+ {
+  "name": "ULTIMATE_SHIPPING_ADDRESS_CITY",
+  "table": null,
+  "group": "Endempfänger",
+  "bt": "BT-X-444",
+  "text": "Endempfänger – Ort",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.0"
+ },
+ {
+  "name": "ULTIMATE_SHIPPING_ADDRESS_COUNTRY",
+  "table": null,
+  "group": "Endempfänger",
+  "bt": "BT-X-445",
+  "text": "Endempfänger – Land",
+  "type": "code",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "ISO-3166-1",
+  "default": "DE",
+  "since": "10.0.0"
+ },
+ {
+  "name": "ULTIMATE_SHIPPING_ADDRESS_GLN",
+  "table": null,
+  "group": "Endempfänger",
+  "bt": "BT-X-163",
+  "text": "Endempfänger – GLN",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.0"
+ },
+ {
+  "name": "ULTIMATE_SHIPPING_ADDRESS_ID",
+  "table": null,
+  "group": "Endempfänger",
+  "bt": "BT-X-162",
+  "text": "Endempfänger – Kennung/Kundennummer",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.0"
+ },
+ {
+  "name": "ULTIMATE_SHIPPING_ADDRESS_TAX_ID",
+  "table": null,
+  "group": "Endempfänger",
+  "bt": "BT-X-180",
+  "text": "Endempfänger – USt-IdNr.",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.0"
+ },
+ {
+  "name": "ULTIMATE_SHIPPING_ADDRESS_CONTACT_NAME",
+  "table": null,
+  "group": "Endempfänger",
+  "bt": "BT-X-167",
+  "text": "Endempfänger – Ansprechpartner",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.0"
+ },
+ {
+  "name": "ULTIMATE_SHIPPING_ADDRESS_CONTACT_PHONE",
+  "table": null,
+  "group": "Endempfänger",
+  "bt": "BT-X-169-00",
+  "text": "Endempfänger – Telefon",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.0"
+ },
+ {
+  "name": "ULTIMATE_SHIPPING_ADDRESS_CONTACT_EMAIL",
+  "table": null,
+  "group": "Endempfänger",
+  "bt": "BT-X-171-00",
+  "text": "Endempfänger – E-Mail",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.0"
+ },
+ {
+  "name": "INVOICEE_ADDRESS_NAME",
+  "table": null,
+  "group": "Rechnungsempfänger",
+  "bt": "BT-X-226",
+  "text": "Rechnungsempfänger – Name",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "INVOICEE_ADDRESS_LINE",
+  "table": null,
+  "group": "Rechnungsempfänger",
+  "bt": "BT-X-462",
+  "text": "Rechnungsempfänger – Straße",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "INVOICEE_ADDRESS_LINE2",
+  "table": null,
+  "group": "Rechnungsempfänger",
+  "bt": "BT-X-463",
+  "text": "Rechnungsempfänger – Adresszusatz",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "INVOICEE_ADDRESS_LINE3",
+  "table": null,
+  "group": "Rechnungsempfänger",
+  "bt": "BT-X-464",
+  "text": "Rechnungsempfänger – Adresszeile 3",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "INVOICEE_ADDRESS_ZIP",
+  "table": null,
+  "group": "Rechnungsempfänger",
+  "bt": "BT-X-461",
+  "text": "Rechnungsempfänger – PLZ",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "INVOICEE_ADDRESS_CITY",
+  "table": null,
+  "group": "Rechnungsempfänger",
+  "bt": "BT-X-465",
+  "text": "Rechnungsempfänger – Ort",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "INVOICEE_ADDRESS_COUNTRY",
+  "table": null,
+  "group": "Rechnungsempfänger",
+  "bt": "BT-X-466",
+  "text": "Rechnungsempfänger – Land",
+  "type": "code",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "ISO-3166-1",
+  "default": "DE",
+  "since": "9.0.2"
+ },
+ {
+  "name": "INVOICEE_ADDRESS_ID",
+  "table": null,
+  "group": "Rechnungsempfänger",
+  "bt": "BT-X-224",
+  "text": "Rechnungsempfänger – Kennung/Kundennummer",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.5"
+ },
+ {
+  "name": "INVOICEE_ADDRESS_GLN",
+  "table": null,
+  "group": "Rechnungsempfänger",
+  "bt": "BT-X-225",
+  "text": "Rechnungsempfänger – GLN",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "INVOICEE_ADDRESS_TAX_ID",
+  "table": null,
+  "group": "Rechnungsempfänger",
+  "bt": "BT-X-242",
+  "text": "Rechnungsempfänger – USt-IdNr.",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.5"
+ },
+ {
+  "name": "DOCUMENT_TYPE",
+  "table": null,
+  "group": "Beleg",
+  "bt": "BT-3",
+  "text": "Belegart (Code)",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "UNTDID 1001",
+  "default": "380",
+  "since": "9.0.2"
+ },
+ {
+  "name": "INVOICE_NOTE",
+  "table": null,
+  "group": "Beleg",
+  "bt": "BT-22",
+  "text": "Belegnotiz",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "VOUCHER_ID",
+  "table": null,
+  "group": "Beleg",
+  "bt": "BT-1",
+  "text": "Rechnungsnummer",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "VOUCHER_DATE",
+  "table": null,
+  "group": "Beleg",
+  "bt": "BT-2",
+  "text": "Rechnungsdatum",
+  "type": "datum",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "INVOICING_PERIOD_START_DATE",
+  "table": null,
+  "group": "Beleg",
+  "bt": "BT-73",
+  "text": "Leistungszeitraum von",
+  "type": "datum",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "INVOICING_PERIOD_END_DATE",
+  "table": null,
+  "group": "Beleg",
+  "bt": "BT-74",
+  "text": "Leistungszeitraum bis",
+  "type": "datum",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "DELIVERY_DATE",
+  "table": null,
+  "group": "Beleg",
+  "bt": "BT-72",
+  "text": "Liefer-/Leistungsdatum",
+  "type": "datum",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": true,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "CURRENCY",
+  "table": null,
+  "group": "Beleg",
+  "bt": "BT-5",
+  "text": "Währung",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "ISO 4217",
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "CURRENCY_VAT",
+  "table": null,
+  "group": "Beleg",
+  "bt": "BT-6",
+  "text": "Währung der Steuer",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "ISO 4217",
+  "default": null,
+  "since": "9.0.3"
+ },
+ {
+  "name": "VAT_EXEPT_REASON_TEXT",
+  "table": null,
+  "group": "Beleg",
+  "bt": "BT-120",
+  "text": "Grund der Steuerbefreiung",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": true,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "DELIVERY_TYPE_CODE",
+  "table": null,
+  "group": "Beleg",
+  "bt": "BT-X-145",
+  "text": "Lieferbedingung (Incoterms)",
+  "type": "code",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "Incoterms",
+  "default": null,
+  "since": "9.0.4"
+ },
+ {
+  "name": "VAT_POINT_DATE",
+  "table": null,
+  "group": "Beleg",
+  "bt": "BT-7",
+  "text": "Steuerdatum",
+  "type": "datum",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.4"
+ },
+ {
+  "name": "VAT_POINT_DATE_CODE",
+  "table": null,
+  "group": "Beleg",
+  "bt": "BT-8",
+  "text": "Steuerdatum (Code)",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "UNTDID 2475 (CII) / UNTDID 2005 (UBL)",
+  "default": null,
+  "since": "10.0.4"
+ },
+ {
+  "name": "INVOICE_NOTES_CONTENT_CODE",
+  "table": "INVOICE_NOTES",
+  "group": "Notizen",
+  "bt": null,
+  "text": "Notiz – Code",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.3"
+ },
+ {
+  "name": "INVOICE_NOTES_CONTENT",
+  "table": "INVOICE_NOTES",
+  "group": "Notizen",
+  "bt": "BT-22",
+  "text": "Notiz – Text",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.3"
+ },
+ {
+  "name": "INVOICE_NOTES_SUBJECT_CODE",
+  "table": "INVOICE_NOTES",
+  "group": "Notizen",
+  "bt": "BT-21",
+  "text": "Notiz – Betreff (Code)",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "UNTDID 4451",
+  "default": null,
+  "since": "9.0.3"
+ },
+ {
+  "name": "ROUTING_ID",
+  "table": null,
+  "group": "Bezüge",
+  "bt": "BT-10",
+  "text": "Leitweg-ID / Käuferreferenz",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "BUYER_ORDER_ID",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-13",
+  "text": "Käufer – Bestellnummer",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "BUYER_ORDER_DATE",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-X-147",
+  "text": "Käufer – Bestelldatum",
+  "type": "datum",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.1"
+ },
+ {
+  "name": "CONTRACT_REFERENCE_ID",
+  "table": null,
+  "group": "Bezüge",
+  "bt": "BT-12",
+  "text": "Vertragsnummer",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "PROJECT_REFERENCE_ID",
+  "table": null,
+  "group": "Bezüge",
+  "bt": "BT-11",
+  "text": "Projektnummer",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "PROJECT_REFERENCE_NAME",
+  "table": null,
+  "group": "Bezüge",
+  "bt": "BT-11-0",
+  "text": "Projektname",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.5"
+ },
+ {
+  "name": "SALES_ORDER_REFERENCE_ID",
+  "table": null,
+  "group": "Bezüge",
+  "bt": "BT-14",
+  "text": "Auftragsnummer",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "SALES_ORDER_REFERENCE_DATE",
+  "table": null,
+  "group": "Bezüge",
+  "bt": "BT-X-146",
+  "text": "Auftragsdatum",
+  "type": "datum",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.3"
+ },
+ {
+  "name": "DESPATCH_ADVICE_REFERENCE_ID",
+  "table": null,
+  "group": "Bezüge",
+  "bt": "BT-16",
+  "text": "Versandanzeige",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "TENDER_LOT_ID",
+  "table": null,
+  "group": "Bezüge",
+  "bt": "BT-17",
+  "text": "Vergabe-/Losnummer",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "INVOICED_OBJECT_ID",
+  "table": null,
+  "group": "Bezüge",
+  "bt": "BT-18",
+  "text": "Objektkennung",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "INVOICED_OBJECT_ID_SCHEME_ID",
+  "table": null,
+  "group": "Bezüge",
+  "bt": "BT-18-1",
+  "text": "Objektkennung – Schema",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "UNTDID 1153",
+  "default": null,
+  "since": "10.0.4"
+ },
+ {
+  "name": "BUYER_ACCOUNTING_REFERENCE",
+  "table": null,
+  "group": "Käufer",
+  "bt": "BT-19",
+  "text": "Käufer – Buchungsreferenz",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.2"
+ },
+ {
+  "name": "PRECEDING_INVOICE_REFERENCE_ID",
+  "table": null,
+  "group": "Bezüge",
+  "bt": "BT-25",
+  "text": "Bezug auf Rechnung",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "PRECEDING_INVOICE_REFERENCE_DATE",
+  "table": null,
+  "group": "Bezüge",
+  "bt": "BT-26",
+  "text": "Bezug auf Rechnung – Datum",
+  "type": "datum",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "DELIVERY_NOTE_REFEERENCE_ID",
+  "table": null,
+  "group": "Bezüge",
+  "bt": "BT-X-202",
+  "text": "Lieferschein",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "DELIVERY_NOTE_REFEERENCE_DATE",
+  "table": null,
+  "group": "Bezüge",
+  "bt": "BT-X-203",
+  "text": "Lieferschein – Datum",
+  "type": "datum",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "OTHER_PRECEDING_INVOICE_REFERENCE_ID",
+  "table": "OTHER_PRECEDING_INVOICES",
+  "group": "Bezugsrechnungen",
+  "bt": "BT-25",
+  "text": "weitere Bezugsrechnung",
+  "type": "text",
+  "formats": [
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": true,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "OTHER_PRECEDING_INVOICE_REFERENCE_DATE",
+  "table": "OTHER_PRECEDING_INVOICES",
+  "group": "Bezugsrechnungen",
+  "bt": "BT-26",
+  "text": "weitere Bezugsrechnung – Datum",
+  "type": "datum",
+  "formats": [
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": true,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "LINE_TOTAL_AMOUNT",
+  "table": null,
+  "group": "Summen",
+  "bt": "BT-106",
+  "text": "Summe Positionen",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "NET_AMOUNT",
+  "table": null,
+  "group": "Summen",
+  "bt": "BT-109",
+  "text": "Nettobetrag",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "TAX_AMOUNT",
+  "table": null,
+  "group": "Summen",
+  "bt": "BT-110",
+  "text": "Steuerbetrag",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "TAX_AMOUNT_ACCOUNTING_CURRENCY",
+  "table": null,
+  "group": "Summen",
+  "bt": "BT-111",
+  "text": "Steuerbetrag in Buchungswährung",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.3"
+ },
+ {
+  "name": "GROSS_AMOUNT",
+  "table": null,
+  "group": "Summen",
+  "bt": "BT-112",
+  "text": "Bruttobetrag",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "CHARGE_AMOUNT",
+  "table": null,
+  "group": "Summen",
+  "bt": "BT-108",
+  "text": "Summe Zuschläge",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": "0",
+  "since": "9.0.2"
+ },
+ {
+  "name": "ALLOWANCE_AMOUNT",
+  "table": null,
+  "group": "Summen",
+  "bt": "BT-107",
+  "text": "Summe Abschläge",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": "0",
+  "since": "9.0.2"
+ },
+ {
+  "name": "PREPAID_AMOUNT",
+  "table": null,
+  "group": "Summen",
+  "bt": "BT-113",
+  "text": "bereits bezahlt",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "DUE_PAYABLE_AMOUNT",
+  "table": null,
+  "group": "Summen",
+  "bt": "BT-115",
+  "text": "offener Betrag",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "PAYMENT_REFERENCE",
+  "table": null,
+  "group": "Zahlung",
+  "bt": "BT-83",
+  "text": "Verwendungszweck",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "PAYMENT_TERMS_DUE_DATE",
+  "table": null,
+  "group": "Zahlung",
+  "bt": "BT-9",
+  "text": "Fälligkeitsdatum",
+  "type": "datum",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "PAYMENT_TERMS_DESCRIPTION",
+  "table": null,
+  "group": "Zahlung",
+  "bt": "BT-20",
+  "text": "Zahlungsbedingung",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "PAYMENT_MEANS_TYPE_CODE",
+  "table": null,
+  "group": "Zahlung",
+  "bt": "BT-81",
+  "text": "Zahlungsart (Code)",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "UNTDID 4461",
+  "default": "30",
+  "since": "9.0.2"
+ },
+ {
+  "name": "PAYMENT_MEANS_TYPE_TEXT",
+  "table": null,
+  "group": "Zahlung",
+  "bt": "BT-82",
+  "text": "Zahlungsart (Text)",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "PAYMENT_DIRECTDEBIT_MANDATE_ID",
+  "table": null,
+  "group": "Zahlung",
+  "bt": "BT-89",
+  "text": "Lastschrift – Mandatsreferenz",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "PAYMENT_DIRECTDEBIT_REFERENCE_ID",
+  "table": null,
+  "group": "Zahlung",
+  "bt": "BT-90",
+  "text": "Lastschrift – Gläubiger-ID",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "PAYMENT_DIRECTDEBIT_IBAN",
+  "table": null,
+  "group": "Zahlung",
+  "bt": "BT-91",
+  "text": "Lastschrift – IBAN des Käufers",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "PAYMENT_TERMS_TABLE_DAYS",
+  "table": "PAYMENT_TERMS_TABLE",
+  "group": "Skonto",
+  "bt": "BT-20",
+  "text": "Skonto – Tage",
+  "type": "text",
+  "formats": [
+   "xrechnung"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "PAYMENT_TERMS_TABLE_PERCENT",
+  "table": "PAYMENT_TERMS_TABLE",
+  "group": "Skonto",
+  "bt": "BT-20",
+  "text": "Skonto – Prozent",
+  "type": "prozent",
+  "formats": [
+   "extended",
+   "xrechnung"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "PAYMENT_TERMS_TABLE_BASEAMOUNT",
+  "table": "PAYMENT_TERMS_TABLE",
+  "group": "Skonto",
+  "bt": "BT-20",
+  "text": "Skonto – Basisbetrag",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "xrechnung"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "PAYMENT_TERMS_TABLE_DATE",
+  "table": "PAYMENT_TERMS_TABLE",
+  "group": "Skonto",
+  "bt": "BT-20",
+  "text": "Skonto – bis Datum",
+  "type": "datum",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "PAYMENT_TERMS_TABLE_AMOUNT",
+  "table": "PAYMENT_TERMS_TABLE",
+  "group": "Skonto",
+  "bt": "BT-20",
+  "text": "Skonto – Betrag",
+  "type": "betrag",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.5"
+ },
+ {
+  "name": "ALLOWANCE_CHARGE_TYPE",
+  "table": "ALLOWANCE_CHARGE",
+  "group": "Zu- und Abschläge",
+  "bt": null,
+  "text": "Zu-/Abschlag – Art",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ALLOWANCE_CHARGE_AMOUNT",
+  "table": "ALLOWANCE_CHARGE",
+  "group": "Zu- und Abschläge",
+  "bt": "BT-92",
+  "text": "Zu-/Abschlag – Betrag",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ALLOWANCE_CHARGE_REASON",
+  "table": "ALLOWANCE_CHARGE",
+  "group": "Zu- und Abschläge",
+  "bt": "BT-97",
+  "text": "Zu-/Abschlag – Grund",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ALLOWANCE_CHARGE_REASON_CODE",
+  "table": "ALLOWANCE_CHARGE",
+  "group": "Zu- und Abschläge",
+  "bt": "BT-105",
+  "text": "Zu-/Abschlag – Grund (Code)",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "UNTDID 5189",
+  "default": null,
+  "since": "10.0.4"
+ },
+ {
+  "name": "ALLOWANCE_CHARGE_CALCULATION_PERCENT",
+  "table": "ALLOWANCE_CHARGE",
+  "group": "Zu- und Abschläge",
+  "bt": "BT-94",
+  "text": "Zu-/Abschlag – Prozent",
+  "type": "prozent",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.2"
+ },
+ {
+  "name": "ALLOWANCE_CHARGE_BASIS_AMOUNT",
+  "table": "ALLOWANCE_CHARGE",
+  "group": "Zu- und Abschläge",
+  "bt": "BT-93",
+  "text": "Zu-/Abschlag – Basisbetrag",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.2"
+ },
+ {
+  "name": "ALLOWANCE_CHARGE_VAT_PERCENT",
+  "table": "ALLOWANCE_CHARGE",
+  "group": "Zu- und Abschläge",
+  "bt": "BT-96",
+  "text": "Zu-/Abschlag – Steuersatz",
+  "type": "prozent",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ALLOWANCE_CHARGE_VAT_CATEGORY",
+  "table": "ALLOWANCE_CHARGE",
+  "group": "Zu- und Abschläge",
+  "bt": "BT-95",
+  "text": "Zu-/Abschlag – Steuerkategorie",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "UNTDID 5305",
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "BASIS_AMOUNT",
+  "table": "VAT",
+  "group": "Steueraufschlüsselung",
+  "bt": "BT-116",
+  "text": "Steuer – Bemessungsgrundlage",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "VAT_LINE_TOTAL_BASIS_AMOUNT",
+  "table": "VAT",
+  "group": "Steueraufschlüsselung",
+  "bt": "BT-X-262",
+  "text": "Steuer – Summe Positionen",
+  "type": "betrag",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.3"
+ },
+ {
+  "name": "VAT_AMOUNT",
+  "table": "VAT",
+  "group": "Steueraufschlüsselung",
+  "bt": "BT-117",
+  "text": "Steuer – Betrag",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "VAT_PERCENT",
+  "table": "VAT",
+  "group": "Steueraufschlüsselung",
+  "bt": "BT-119",
+  "text": "Steuer – Satz",
+  "type": "prozent",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "VAT_CATEGORY",
+  "table": "VAT",
+  "group": "Steueraufschlüsselung",
+  "bt": "BT-118",
+  "text": "Steuer – Kategorie",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "UNTDID 5305",
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ATTACH_ID",
+  "table": "ATTACH",
+  "group": "Anlagen",
+  "bt": "BT-122",
+  "text": "Anlage – Kennung",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ATTACH_NAME",
+  "table": "ATTACH",
+  "group": "Anlagen",
+  "bt": "BT-123",
+  "text": "Anlage – Bezeichnung",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ATTACH_FILE",
+  "table": "ATTACH",
+  "group": "Anlagen",
+  "bt": "BT-125",
+  "text": "Anlage – Datei",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ATTACH_URI",
+  "table": "ATTACH",
+  "group": "Anlagen",
+  "bt": "BT-124",
+  "text": "Anlage – Adresse (URL)",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ATTACH_TYPE",
+  "table": "ATTACH",
+  "group": "Anlagen",
+  "bt": "BT-128-1",
+  "text": "Anlage – Art (Code)",
+  "type": "code",
+  "formats": [
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "UNTDID 1153",
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ATTACH_REFERENCETYPECODE",
+  "table": "ATTACH",
+  "group": "Anlagen",
+  "bt": "BT-X-32",
+  "text": "Anlage – Referenzart",
+  "type": "text",
+  "formats": [
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_LINE_ID",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-126",
+  "text": "Positionsnummer",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_SELLER_ID",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-155",
+  "text": "Artikelnummer",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_BUYER_ID",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-156",
+  "text": "Artikelnummer des Käufers",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_STANDARD_IDENTIFIER",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-157",
+  "text": "Artikelkennung (z. B. GTIN)",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_STANDARD_IDENTIFIER_SCHEME_ID",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-157",
+  "text": "Artikelkennung – Schema",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "ISO/IEC 6523",
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_OBJECT_IDENTIFIER",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-128",
+  "text": "Objektkennung der Position",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_OBJECT_IDENTIFIER_SCHEME_ID",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-128-1",
+  "text": "Objektkennung der Position – Schema",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "UNTDID 1153",
+  "default": null,
+  "since": "10.0.4"
+ },
+ {
+  "name": "ITEM_ACCOUNTING_ID",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-133",
+  "text": "Kostenstelle/Konto",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.5"
+ },
+ {
+  "name": "ITEM_ACCOUNTING_CODE",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-133",
+  "text": "Kontierung (Code)",
+  "type": "code",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "EDIFICAS-EU",
+  "default": null,
+  "since": "9.0.5"
+ },
+ {
+  "name": "ITEM_NAME",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-153",
+  "text": "Bezeichnung",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_DESCRIPTION",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-154",
+  "text": "Beschreibung",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_QUANTITY",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-129",
+  "text": "Menge",
+  "type": "menge",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_PRICE_BASE_QUANTITY",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-149",
+  "text": "Preiseinheit",
+  "type": "menge",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_UNIT",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-130",
+  "text": "Mengeneinheit",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "UN/ECE Recommendation N°20",
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_TOTAL_AMOUNT",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-131",
+  "text": "Positionsbetrag",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_VAT_PERCENT",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-152",
+  "text": "Steuersatz",
+  "type": "prozent",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_VAT_CATEGORY",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-151",
+  "text": "Steuerkategorie",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_VAT_EXEPT_REASON_TEXT",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-X-96",
+  "text": "Grund der Steuerbefreiung",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.4"
+ },
+ {
+  "name": "ITEM_GROSS_PRICE",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-148",
+  "text": "Bruttopreis",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_NET_PRICE",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-146",
+  "text": "Nettopreis",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_PRICE_DISCOUNT",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-147",
+  "text": "Preisnachlass",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_NOTE",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-127",
+  "text": "Positionsnotiz",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_DELIVERY_DATE",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-X-85",
+  "text": "Lieferdatum",
+  "type": "datum",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.4"
+ },
+ {
+  "name": "ITEM_PERIOD_START_DATE",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-134",
+  "text": "Zeitraum von",
+  "type": "datum",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_PERIOD_END_DATE",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-135",
+  "text": "Zeitraum bis",
+  "type": "datum",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_ALLOWANCE_AMOUNT",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-136",
+  "text": "Abschlag – Betrag",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_ALLOWANCE_REASON",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-139",
+  "text": "Abschlag – Grund",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_ALLOWANCE_REASON_CODE",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-140",
+  "text": "Abschlag – Grund (Code)",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "UNTDID 5189",
+  "default": null,
+  "since": "10.0.4"
+ },
+ {
+  "name": "ITEM_ALLOWANCE_BASIS_AMOUNT",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-137",
+  "text": "Abschlag – Basisbetrag",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.2"
+ },
+ {
+  "name": "ITEM_ALLOWANCE_CALCULATION_PERCENT",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-138",
+  "text": "Abschlag – Prozent",
+  "type": "prozent",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.2"
+ },
+ {
+  "name": "ITEM_CHARGE_AMOUNT",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-141",
+  "text": "Zuschlag – Betrag",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_CHARGE_REASON",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-144",
+  "text": "Zuschlag – Grund",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_CHARGE_REASON_CODE",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-145",
+  "text": "Zuschlag – Grund (Code)",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "UNTDID 5189",
+  "default": null,
+  "since": "10.0.4"
+ },
+ {
+  "name": "ITEM_CHARGE_BASIS_AMOUNT",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-142",
+  "text": "Zuschlag – Basisbetrag",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.2"
+ },
+ {
+  "name": "ITEM_CHARGE_CALCULATION_PERCENT",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-143",
+  "text": "Zuschlag – Prozent",
+  "type": "prozent",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.2"
+ },
+ {
+  "name": "ITEM_REFERENCED_PURCHASE_ORDER_LINE_ID",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-132",
+  "text": "Bestellposition",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_REFERENCED_DELIVERY_NOTE_ID",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-X-92",
+  "text": "Lieferschein",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_REFERENCED_DELIVERY_NOTE_LINE_ID",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-X-93",
+  "text": "Lieferscheinposition",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.4"
+ },
+ {
+  "name": "ITEM_REFERENCED_DELIVERY_NOTE_DATE",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-X-94",
+  "text": "Lieferscheindatum",
+  "type": "datum",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_REFERENCED_PURCHASE_ORDER_DATE",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-X-22-00",
+  "text": "Bestelldatum",
+  "type": "datum",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.0"
+ },
+ {
+  "name": "ITEM_REFERENCED_PURCHASE_ORDER_ID",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-X-21",
+  "text": "Bestellnummer",
+  "type": "text",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ },
+ {
+  "name": "ITEM_ORIGIN",
+  "table": "ITEM_DETAILS",
+  "group": "Positionen",
+  "bt": "BT-159",
+  "text": "Ursprungsland",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "ISO-3166-1",
+  "default": null,
+  "since": "9.0.5"
+ },
+ {
+  "name": "ITEM_LINE_ID",
+  "table": "ITEM_ATTR",
+  "group": "Positionsmerkmale",
+  "bt": "BT-126",
+  "text": "Positionsnummer",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.3"
+ },
+ {
+  "name": "ITEM_ATTR_TYPE",
+  "table": "ITEM_ATTR",
+  "group": "Positionsmerkmale",
+  "bt": "BT-X-11",
+  "text": "Merkmal – Art (Code)",
+  "type": "code",
+  "formats": [
+   "extended"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "UNTDED 6313",
+  "default": null,
+  "since": "9.0.3"
+ },
+ {
+  "name": "ITEM_ATTR_DESCRIPTION",
+  "table": "ITEM_ATTR",
+  "group": "Positionsmerkmale",
+  "bt": "BT-160",
+  "text": "Merkmal – Name",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.3"
+ },
+ {
+  "name": "ITEM_ATTR_VALUE",
+  "table": "ITEM_ATTR",
+  "group": "Positionsmerkmale",
+  "bt": "BT-161",
+  "text": "Merkmal – Wert",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.3"
+ },
+ {
+  "name": "ITEM_CLASSIFICATION_CODE",
+  "table": "ITEM_CLASSIFICATION",
+  "group": "Positionsklassifizierung",
+  "bt": "BT-158",
+  "text": "Klassifizierung",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.4"
+ },
+ {
+  "name": "ITEM_CLASSIFICATION_SCHEME_ID",
+  "table": "ITEM_CLASSIFICATION",
+  "group": "Positionsklassifizierung",
+  "bt": "BT-158",
+  "text": "Klassifizierung – Schema",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "UNTDID 7143",
+  "default": null,
+  "since": "10.0.4"
+ },
+ {
+  "name": "ITEM_CLASSIFICATION_SCHEME_VERSION_ID",
+  "table": "ITEM_CLASSIFICATION",
+  "group": "Positionsklassifizierung",
+  "bt": "BT-158",
+  "text": "Klassifizierung – Version",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.4"
+ },
+ {
+  "name": "ITEM_LINE_ID",
+  "table": "ITEM_CHARGE",
+  "group": "Positionszuschläge",
+  "bt": "BT-126",
+  "text": "Positionsnummer",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.5"
+ },
+ {
+  "name": "ITEM_CHARGE_AMOUNT",
+  "table": "ITEM_CHARGE",
+  "group": "Positionszuschläge",
+  "bt": "BT-141",
+  "text": "Zuschlag – Betrag",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.5"
+ },
+ {
+  "name": "ITEM_CHARGE_REASON",
+  "table": "ITEM_CHARGE",
+  "group": "Positionszuschläge",
+  "bt": "BT-144",
+  "text": "Zuschlag – Grund",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.5"
+ },
+ {
+  "name": "ITEM_CHARGE_REASON_CODE",
+  "table": "ITEM_CHARGE",
+  "group": "Positionszuschläge",
+  "bt": "BT-145",
+  "text": "Zuschlag – Grund (Code)",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "UNTDID 5189",
+  "default": null,
+  "since": "10.0.4"
+ },
+ {
+  "name": "ITEM_CHARGE_CALCULATION_PERCENT",
+  "table": "ITEM_CHARGE",
+  "group": "Positionszuschläge",
+  "bt": "BT-143",
+  "text": "Zuschlag – Prozent",
+  "type": "prozent",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.2"
+ },
+ {
+  "name": "ITEM_CHARGE_BASIS_AMOUNT",
+  "table": "ITEM_CHARGE",
+  "group": "Positionszuschläge",
+  "bt": "BT-142",
+  "text": "Zuschlag – Basisbetrag",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.2"
+ },
+ {
+  "name": "ITEM_LINE_ID",
+  "table": "ITEM_ALLOWANCE",
+  "group": "Positionsabschläge",
+  "bt": "BT-126",
+  "text": "Positionsnummer",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.5"
+ },
+ {
+  "name": "ITEM_ALLOWANCE_AMOUNT",
+  "table": "ITEM_ALLOWANCE",
+  "group": "Positionsabschläge",
+  "bt": "BT-136",
+  "text": "Abschlag – Betrag",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.5"
+ },
+ {
+  "name": "ITEM_ALLOWANCE_REASON",
+  "table": "ITEM_ALLOWANCE",
+  "group": "Positionsabschläge",
+  "bt": "BT-139",
+  "text": "Abschlag – Grund",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.5"
+ },
+ {
+  "name": "ITEM_ALLOWANCE_REASON_CODE",
+  "table": "ITEM_ALLOWANCE",
+  "group": "Positionsabschläge",
+  "bt": "BT-140",
+  "text": "Abschlag – Grund (Code)",
+  "type": "code",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": "UNTDID 5189",
+  "default": null,
+  "since": "10.0.4"
+ },
+ {
+  "name": "ITEM_ALLOWANCE_CALCULATION_PERCENT",
+  "table": "ITEM_ALLOWANCE",
+  "group": "Positionsabschläge",
+  "bt": "BT-138",
+  "text": "Abschlag – Prozent",
+  "type": "prozent",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.2"
+ },
+ {
+  "name": "ITEM_ALLOWANCE_BASIS_AMOUNT",
+  "table": "ITEM_ALLOWANCE",
+  "group": "Positionsabschläge",
+  "bt": "BT-137",
+  "text": "Abschlag – Basisbetrag",
+  "type": "betrag",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "10.0.2"
+ },
+ {
+  "name": "ITEM_LINE_ID",
+  "table": "ITEM_CLASSIFICATION",
+  "group": "Positionsklassifizierung",
+  "bt": "BT-126",
+  "text": "Positionsnummer",
+  "type": "text",
+  "formats": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "required": [
+   "extended",
+   "comfort",
+   "xrechnung",
+   "peppol"
+  ],
+  "conditional": false,
+  "ublOnly": false,
+  "codelist": null,
+  "default": null,
+  "since": "9.0.2"
+ }
+]

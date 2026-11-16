@@ -66,39 +66,11 @@ public static class DocumentChecker
         if (fmt is null) E($"Unbekanntes E-Rechnungsformat „{p.InvoiceFormat}“.");
         else if (!fmt.Supported) E($"{fmt.Name} wird noch nicht unterstützt – die E-Rechnung kann noch nicht erzeugt werden.");
 
-        void Req(string field, string label)
-        {
-            if (p.Field(field) is null) E($"Pflichtfeld fehlt: {label} ({field})", field);
-        }
-        Req("VOUCHER_ID", "Rechnungsnummer");
-        Req("VOUCHER_DATE", "Rechnungsdatum");
-        Req("SELLER_NAME", "Verkäufer Name");
-        Req("SELLER_ADDRESS_ZIP", "Verkäufer PLZ");
-        Req("SELLER_ADDRESS_CITY", "Verkäufer Ort");
-        Req("SELLER_ADDRESS_COUNTRY", "Verkäufer Land");
-        Req("BUYER_NAME", "Käufer Name");
-        Req("BUYER_ADDRESS_COUNTRY", "Käufer Land");
-        if (p.Field("SELLER_TAX_ID") is null && p.Field("SELLER_TAX_REG_ID") is null)
-            E("Pflichtfeld fehlt: USt-IdNr. oder Steuernummer des Verkäufers (SELLER_TAX_ID / SELLER_TAX_REG_ID)", "SELLER_TAX_ID");
-        if (p.Field("CURRENCY") is null) W("Keine Währung (CURRENCY) – es wird EUR angenommen.", "CURRENCY");
-        if (p.Field("VOUCHER_DATE") is { } vd && ControlCodeParser.Date(vd) is null) E($"Rechnungsdatum nicht lesbar: {vd}", "VOUCHER_DATE");
-        if (p.Field("DELIVERY_DATE") is { } dd && ControlCodeParser.Date(dd) is null) W($"Lieferdatum nicht lesbar: {dd}", "DELIVERY_DATE");
-
-        if (fmt?.Kind is "xrechnung" or "peppol")
-        {
-            if (p.Field("ROUTING_ID") is null && fmt.Kind == "xrechnung") E("XRechnung: Leitweg-ID / Käuferreferenz fehlt (ROUTING_ID).", "ROUTING_ID");
-            if (p.Field("SELLER_CONTACT_EMAIL") is null) E("XRechnung: E-Mail des Verkäufers fehlt (SELLER_CONTACT_EMAIL).", "SELLER_CONTACT_EMAIL");
-            if (p.Field("SELLER_CONTACT_PHONE") is null) E("XRechnung: Telefon des Verkäufers fehlt (SELLER_CONTACT_PHONE).", "SELLER_CONTACT_PHONE");
-            if (p.Field("SELLER_ENDPOINT_ID") is null) W("Elektronische Adresse des Verkäufers fehlt (SELLER_ENDPOINT_ID).", "SELLER_ENDPOINT_ID");
-            if (p.Field("BUYER_ENDPOINT_ID") is null) E("Elektronische Adresse des Käufers fehlt (BUYER_ENDPOINT_ID).", "BUYER_ENDPOINT_ID");
-        }
+        var profile = ERechnungProfile.For(p.InvoiceFormat);
+        if (profile is not null) CheckFields(m, p, inv, profile, settings);
         if (p.PeppolSend) I("Peppol-Versand angefordert (@@pe1@@) – folgt in einem späteren Schritt.");
 
-        var pm = p.Field("PAYMENT_MEANS_TYPE_CODE");
-        if ((pm is null or "58" or "30") && p.Field("SELLER_IBAN") is null && inv.DocumentTypeCode != "381")
-            W("Keine IBAN des Verkäufers (SELLER_IBAN).", "SELLER_IBAN");
-        if (pm == "59" && p.Field("PAYMENT_DIRECTDEBIT_MANDATE_ID") is null) E("SEPA-Lastschrift ohne Mandatsreferenz (PAYMENT_DIRECTDEBIT_MANDATE_ID).");
-
+        var pm = p.Field("PAYMENT_MEANS_TYPE_CODE") ?? "30";
         // ---------- Positionen ----------
         if (inv.Lines.Count == 0) E("Keine Positionen (@@xr table=ITEM_DETAILS…@@).");
         foreach (var l in inv.Lines)
@@ -141,6 +113,134 @@ public static class DocumentChecker
         if (inv.DocumentTypeCode == "381" && inv.GrossAmount < 0)
             W("Gutschrift mit negativen Beträgen – EN 16931 erwartet bei Gutschriften (381) positive Beträge.");
         return m;
+    }
+
+    /// <summary>Kennzahlen, die Belegpost selbst nachrechnet, wenn sie nicht gedruckt sind.</summary>
+    private static readonly HashSet<string> Computed = new(StringComparer.OrdinalIgnoreCase)
+        { "LINE_TOTAL_AMOUNT", "NET_AMOUNT", "TAX_AMOUNT", "GROSS_AMOUNT", "DUE_PAYABLE_AMOUNT", "CHARGE_AMOUNT", "ALLOWANCE_AMOUNT" };
+
+    /// <summary>Kopf- und Tabellenfelder gegen die gotomaxx-Liste prüfen (Pflicht je Format, Werteformat, unbekannte Felder).</summary>
+    private static void CheckFields(List<CheckMessage> m, ParsedCodes p, InvoiceData inv, ERechnungProfile profile, AppSettings settings)
+    {
+        void E(string text, string? field = null) => m.Add(new CheckMessage(Error, text, field));
+        void W(string text, string? field = null) => m.Add(new CheckMessage(Warning, text, field));
+        void I(string text, string? field = null) => m.Add(new CheckMessage(Info, text, field));
+        var fmt = profile.Name;
+        var pm = p.Field("PAYMENT_MEANS_TYPE_CODE") ?? "30";
+        var transfer = pm is "30" or "58" or "31" or "42";
+
+        // ---------- Pflichtfelder im Kopf ----------
+        var computed = new List<string>();
+        var defaults = new List<string>();
+        foreach (var f in ERechnungCatalog.Header.Where(profile.Requires))
+        {
+            if (p.Field(f.Name) is not null) continue;
+            switch (f.Name)
+            {
+                case "SELLER_TAX_ID" or "SELLER_TAX_REG_ID":
+                    continue; // entweder–oder, siehe unten
+                case "SELLER_IBAN" or "SELLER_BIC":
+                    if (!transfer || inv.DocumentTypeCode == "381") continue;
+                    if (f.Name == "SELLER_BIC") { W($"BIC des Verkäufers fehlt (SELLER_BIC) – laut gotomaxx Pflicht bei {fmt}.", f.Name); continue; }
+                    E($"Pflichtfeld fehlt: IBAN des Verkäufers (SELLER_IBAN) – Zahlungsart {pm} ist eine Überweisung.", f.Name);
+                    continue;
+                case "CURRENCY":
+                    W("Keine Währung (CURRENCY) – es wird EUR angenommen.", f.Name);
+                    continue;
+            }
+            if (Computed.Contains(f.Name)) { computed.Add(f.Name); continue; }
+            if (f.Default is not null) { defaults.Add($"{f.Name}={f.Default}"); continue; }
+            E($"Pflichtfeld fehlt ({fmt}): {f.Label} – @@xi {f.Name}=…@@", f.Name);
+        }
+        if (p.Field("SELLER_TAX_ID") is null && p.Field("SELLER_TAX_REG_ID") is null)
+            E("Pflichtfeld fehlt: USt-IdNr. oder Steuernummer des Verkäufers (SELLER_TAX_ID / SELLER_TAX_REG_ID)", "SELLER_TAX_ID");
+        if (defaults.Count > 0) I($"Nicht gedruckt, Vorbelegung laut gotomaxx: {string.Join(", ", defaults)}.");
+        if (computed.Count > 0) I($"Nicht gedruckt, wird nachgerechnet: {string.Join(", ", computed)}.");
+
+        // ---------- bedingte Pflichtfelder ----------
+        var payee = p.Fields.Keys.Where(k => k.StartsWith("PAYEE_", StringComparison.OrdinalIgnoreCase)).ToList();
+        if (payee.Count > 0 && p.Field("PAYEE_NAME") is null) E("Abweichender Zahlungsempfänger ohne Namen (PAYEE_NAME, BR-17).", "PAYEE_NAME");
+        if (payee.Any(k => k.StartsWith("PAYEE_ADDRESS", StringComparison.OrdinalIgnoreCase)) && p.Field("PAYEE_ADDRESS_COUNTRY") is null)
+            E("Adresse des Zahlungsempfängers ohne Land (PAYEE_ADDRESS_COUNTRY).", "PAYEE_ADDRESS_COUNTRY");
+        if (p.Field("PROJECT_REFERENCE_ID") is not null && p.Field("PROJECT_REFERENCE_NAME") is null)
+            E("Projektnummer ohne Projektname (PROJECT_REFERENCE_NAME, Pflicht zu BT-11).", "PROJECT_REFERENCE_NAME");
+        if (p.Field("DELIVERY_DATE") is null && p.Field("INVOICING_PERIOD_START_DATE") is null && !inv.Lines.Any(l => l.HasDate))
+            W("Weder Lieferdatum (DELIVERY_DATE) noch Leistungszeitraum (INVOICING_PERIOD_…) – umsatzsteuerlich (§ 14 UStG) nötig.", "DELIVERY_DATE");
+
+        // ---------- Werte und unbekannte Felder ----------
+        var unknown = new List<string>();
+        var notInFormat = new List<string>();
+        foreach (var (name, value) in p.Fields)
+        {
+            var f = ERechnungCatalog.Field(name);
+            if (f is null)
+            {
+                if (ERechnungCatalog.All.Any(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                    W($"{name} gehört in eine Tabelle (@@xr table=…@@), nicht in @@xi.", name);
+                else unknown.Add(name);
+                continue;
+            }
+            if (!profile.Has(f)) notInFormat.Add(name);
+            CheckValue(f, value, null, E, W);
+        }
+        if (unknown.Count > 0) W($"Unbekannte Felder (Tippfehler?): {string.Join(", ", unknown.Select(u => $"@@xi {u}=…@@"))}");
+        if (notInFormat.Count > 0) I($"In {fmt} nicht vorgesehen, wird nicht übertragen: {string.Join(", ", notInFormat)}.");
+
+        // ---------- Tabellen ----------
+        var unknownTables = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        var tableNotInFormat = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        var tableUnknownFields = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (row, idx) in p.Rows.Select((r, i) => (r, i)))
+        {
+            if (!ERechnungCatalog.IsTable(row.Table)) { unknownTables.Add(row.Table); continue; }
+            var no = p.Rows.Take(idx).Count(r => r.Table.Equals(row.Table, StringComparison.OrdinalIgnoreCase)) + 1;
+            var where = row.Get("ITEM_LINE_ID") is { } lid ? $"{row.Table} Position {lid}" : $"{row.Table} Zeile {no}";
+            foreach (var (name, value) in row.Values)
+            {
+                var f = ERechnungCatalog.Field(name, row.Table);
+                if (f is null) { tableUnknownFields.Add($"{row.Table}.{name}"); continue; }
+                if (!profile.Has(f)) tableNotInFormat.Add($"{row.Table}.{name}");
+                CheckValue(f, value, where, E, W);
+            }
+            if (row.Table.Equals("ITEM_DETAILS", StringComparison.OrdinalIgnoreCase) || row.Table.Equals("VAT", StringComparison.OrdinalIgnoreCase)) continue; // eigene Prüfung
+            foreach (var f in ERechnungCatalog.TableFields(row.Table).Where(profile.Requires))
+                if (row.Get(f.Name) is null) E($"{where}: Pflichtfeld fehlt ({fmt}): {f.Label} ({f.Name}).");
+        }
+        if (unknownTables.Count > 0) W($"Unbekannte Tabelle(n): {string.Join(", ", unknownTables)} (@@xr table=…@@).");
+        if (tableUnknownFields.Count > 0) W($"Unbekannte Tabellenfelder (Tippfehler?): {string.Join(", ", tableUnknownFields)}.");
+        if (tableNotInFormat.Count > 0) I($"In {fmt} nicht vorgesehen, wird nicht übertragen: {string.Join(", ", tableNotInFormat)}.");
+
+        // ---------- gedruckte Steueraufschlüsselung (table=VAT) ----------
+        var tol = settings.Invoice.SumTolerance;
+        foreach (var r in p.Table("VAT"))
+        {
+            var pct = ControlCodeParser.Number(r.Get("VAT_PERCENT"));
+            var cat = (r.Get("VAT_CATEGORY") ?? "S").ToUpperInvariant();
+            var calc = inv.Vat.FirstOrDefault(x => x.Category == cat && x.Percent == (pct ?? 0));
+            if (calc is null) { W($"Steuersatz {pct:0.##} % ({cat}) ist gedruckt (table=VAT), kommt in den Positionen aber nicht vor."); continue; }
+            if (ControlCodeParser.Number(r.Get("BASIS_AMOUNT")) is { } b && Math.Abs(b - calc.Basis) > tol)
+                W($"Steuersatz {pct:0.##} %: gedruckte Bemessungsgrundlage {b:N2}, nachgerechnet {calc.Basis:N2}.");
+            if (ControlCodeParser.Number(r.Get("VAT_AMOUNT")) is { } t && Math.Abs(t - calc.Tax) > tol)
+                W($"Steuersatz {pct:0.##} %: gedruckter Steuerbetrag {t:N2}, nachgerechnet {calc.Tax:N2}.");
+        }
+    }
+
+    private static void CheckValue(ERechnungField f, string value, string? where, Action<string, string?> E, Action<string, string?> W)
+    {
+        var v = value.Trim();
+        if (v.Length == 0) return;
+        var at = where is null ? "" : where + ": ";
+        switch (f.Type)
+        {
+            case "datum" when ControlCodeParser.Date(v) is null:
+                E($"{at}{f.Text} ({f.Name}) ist kein Datum: „{v}“ – erwartet TT.MM.JJJJ.", f.Name); break;
+            case "betrag" or "prozent" or "menge" when ControlCodeParser.Number(v) is null:
+                E($"{at}{f.Text} ({f.Name}) ist keine Zahl: „{v}“.", f.Name); break;
+        }
+        if (f.Codelist?.StartsWith("ISO-3166", StringComparison.OrdinalIgnoreCase) == true && !(v.Length == 2 && v.All(char.IsAsciiLetterUpper)))
+            E($"{at}{f.Text} ({f.Name}) „{v}“ ist kein Ländercode (ISO 3166 Alpha-2, z. B. AT, DE).", f.Name);
+        if (f.Codelist?.StartsWith("ISO 4217", StringComparison.OrdinalIgnoreCase) == true && !(v.Length == 3 && v.All(char.IsAsciiLetterUpper)))
+            E($"{at}{f.Text} ({f.Name}) „{v}“ ist kein Währungscode (ISO 4217, z. B. EUR).", f.Name);
     }
 
     public static bool IsMail(string s)

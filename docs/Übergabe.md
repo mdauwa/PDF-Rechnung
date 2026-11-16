@@ -204,3 +204,10 @@ Danach kommt ZUGFeRD: `@@xt@@`/`@@xi@@`/`@@xr@@` werden zu CII/UBL, dazu **PDF/A
 - eXite nach dem Vorbild von BWEDI (Y:\Visual Studio 2012\Kundenprojekte\Italcos\BWEDI, `Exite.vb`): Senden „SSend_…“ + „CSend_…“ (`ser(S) typ(X|E)`), Abholen in Schleifen mit „CRecv_…“ `ser(H) typ(X|E) so(1)` bis „RRecv_…“ leer ist; J-/P-Dateien werden danach gelöscht. Kommt nach dem Senden keine J-Datei, gilt die Datei als übergeben (kein doppeltes Senden). Getestet gegen ein nachgebautes eXite-FTPS-Postfach (`EXITE_TEST=1`).
 - Ausgangsordner je Versandweg (wie BWEDI `FTPLocalUploadPath`): Dateien (z. B. EDI/XML aus dem ERP) aus einem lokalen Ordner per FTP/FTPS/SFTP/eXite/AS2 senden, danach nach „gesendet“ verschieben – läuft im Abruf-Intervall.
 
+
+## E-Rechnung: Feldkatalog (16.11.2026)
+- `src/PdfRechnung/Documents/ERechnungFelder.json` (eingebettet) wird mit `tools/erechnung_katalog.py "<Pfad>\Steuerzeichen eRechnung.xlsx"` aus der gotomaxx-Liste erzeugt.
+  Übernommen werden nur technische Fakten (Parametername, Tabelle, BT-Nummer, Typ, Codeliste, Formate verfügbar/Pflicht, Vorbelegung, ab Version).
+  Beschreibungen, Bemerkungen und Beispiele von gotomaxx werden bewusst NICHT übernommen; die Bezeichnungen sind eigene Texte. Die Excel-Datei liegt nicht im Repo.
+- Die Prüfung (DocumentChecker.CheckFields) richtet sich nach dem Format aus @@xt: Pflichtfelder je Format, Vorbelegungen (Info), nachgerechnete Summen (Info),
+  Datums-/Zahl-/Länder-/Währungsformat, unbekannte Felder und Tabellen (Tippfehler), Felder, die im Format nicht übertragen werden, gedruckte table=VAT gegen Nachrechnung.

@@ -102,6 +102,45 @@ public class ControlCodeTests
         Assert.Contains(m, x => x.Level == DocumentChecker.Error && x.Text.Contains("Kein E-Mail-Empfänger"));
     }
 
+    private static List<CheckMessage> CheckWith(params (string From, string To)[] replace)
+    {
+        var text = string.Join("\n", TestData.InvoiceCodes);
+        foreach (var (f, t) in replace) text = text.Replace(f, t);
+        var p = ControlCodeParser.Parse(text);
+        var v = new Vorgang { Mail = new MailData { To = { "einkauf@kunde.at" }, Subject = "x" }, Invoice = InvoiceData.From(p, DefaultSettings.Units) };
+        return DocumentChecker.Check(v, p, DefaultSettings.Create());
+    }
+
+    [Fact]
+    public void Feldkatalog_ist_vollstaendig_und_eigenformuliert()
+    {
+        Assert.True(ERechnungCatalog.All.Count > 200);
+        Assert.Equal("Rechnungsnummer", ERechnungCatalog.Field("VOUCHER_ID")!.Text);
+        Assert.Equal("BT-1", ERechnungCatalog.Field("VOUCHER_ID")!.Bt);
+        Assert.Equal("380", ERechnungCatalog.Field("DOCUMENT_TYPE")!.Default);
+        Assert.NotNull(ERechnungCatalog.Field("ITEM_LINE_ID", "ITEM_CLASSIFICATION"));
+        Assert.All(ERechnungCatalog.All, f => Assert.False(string.IsNullOrWhiteSpace(f.Text)));
+    }
+
+    [Fact]
+    public void Pruefung_je_Format_aus_dem_Feldkatalog()
+    {
+        // Tippfehler im Feldnamen, falsches Datum, falsches Land
+        var m = CheckWith(("VOUCHER_ID=", "VOUCHR_ID="), ("BUYER_ADDRESS_COUNTRY=AT", "BUYER_ADDRESS_COUNTRY=Österreich"));
+        Assert.Contains(m, x => x.Text.Contains("Unbekannte Felder") && x.Text.Contains("VOUCHR_ID"));
+        Assert.Contains(m, x => x.Level == DocumentChecker.Error && x.Text.Contains("Rechnungsnummer") && x.Text.Contains("VOUCHER_ID"));
+        Assert.Contains(m, x => x.Level == DocumentChecker.Error && x.Text.Contains("Ländercode"));
+
+        // XRechnung verlangt Leitweg-ID; ZUGFeRD Comfort nicht
+        var x1 = CheckWith(("@@xt gotomaxx.invoice.zugferd2.comfort@@", "@@xt gotomaxx.invoice.xrechnung3.cii@@"));
+        Assert.Contains(x1, x => x.Level == DocumentChecker.Error && x.Text.Contains("ROUTING_ID"));
+        Assert.DoesNotContain(CheckWith(), x => x.Text.Contains("ROUTING_ID"));
+
+        // Extended-Feld in Comfort wird nicht übertragen
+        var x2 = CheckWith(("@@xi VOUCHER_DATE=", "@@xi ULTIMATE_SHIPPING_ADDRESS_NAME=Endkunde@@\n@@xi VOUCHER_DATE="));
+        Assert.Contains(x2, x => x.Level == DocumentChecker.Info && x.Text.Contains("nicht übertragen") && x.Text.Contains("ULTIMATE_SHIPPING_ADDRESS_NAME"));
+    }
+
     [Fact]
     public void Beleg_ohne_ERechnung_ist_bereit()
     {

@@ -44,6 +44,7 @@
 
   <!-- MAPI-Mailclient (src/BelegpostMapi/build.sh) neben Belegpost.exe ausliefern -->
   <ItemGroup>
+    <EmbeddedResource Include="Documents\ERechnungFelder.json" LogicalName="ERechnungFelder.json" />
     <None Include="..\BelegpostMapi\out\BelegpostMapi-*.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" Link="%(Filename)%(Extension)" />
   </ItemGroup>
 

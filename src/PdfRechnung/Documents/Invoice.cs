@@ -37,6 +37,8 @@ public sealed class InvoiceLine
     public decimal? VatPercent { get; set; }
     public string? VatCategory { get; set; }
     public decimal? Total { get; set; }
+    /// <summary>Position hat Lieferdatum oder Leistungszeitraum.</summary>
+    public bool HasDate { get; set; }
 }
 
 public sealed class InvoiceCharge
@@ -124,7 +126,8 @@ public sealed class InvoiceData
                 AllowanceReason = r.Get("ITEM_ALLOWANCE_REASON"),
                 VatPercent = n(r.Get("ITEM_VAT_PERCENT")),
                 VatCategory = r.Get("ITEM_VAT_CATEGORY") ?? "S",
-                Total = n(r.Get("ITEM_TOTAL_AMOUNT"))
+                Total = n(r.Get("ITEM_TOTAL_AMOUNT")),
+                HasDate = r.Get("ITEM_DELIVERY_DATE") is not null || r.Get("ITEM_PERIOD_START_DATE") is not null
             });
         }
 

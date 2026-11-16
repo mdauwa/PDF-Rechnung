@@ -102,6 +102,8 @@ public sealed class Vorgang
     public string? MandantReason { get; set; }
     /// <summary>Druckender Prozess mit Befehlszeile (Anzeige).</summary>
     public string? PrintProcess { get; set; }
+    /// <summary>Zusätzlicher Belegpost-Drucker, über den gedruckt wurde (Kennung); null = Hauptdrucker bzw. andere Quelle.</summary>
+    public string? PrinterId { get; set; }
     /// <summary>ERP-Belegindex (BELNDX) aus @@pi@@ – nur dann wird der Status ins ERP zurückgeschrieben.</summary>
     public string? ErpIndex { get; set; }
     /// <summary>Aktueller Belegstatus als 3-stelliger Code (siehe <see cref="StatusCode"/>).</summary>

@@ -41,7 +41,7 @@ public static class DocumentChecker
         else if (p.OperatorNumber is null && string.IsNullOrWhiteSpace(p.PrintUser) && v.ProcessOperator is { } pno && v.OwnerUserId is null)
             W($"ERP-Benutzer {pno} (aus dem druckenden Prozess) ist keinem Benutzer zugeordnet (Einstellungen → Benutzer → ERP-Bediener-Nr.).");
         m.AddRange(v.LayoutMessages);
-        if (v.Stationery is not null) I($"Briefpapier „{v.Stationery}“ unterlegt.");
+        if (v.Stationery is not null) I($"Briefpapier „{v.Stationery}“ unterlegt{(p.StationeryFromPrinter is { } pn ? $" (Vorgabe des Druckers „{pn}“)" : "")}.");
         if (p.SplitAfterPages.Count > 0) W("Der Druckauftrag enthält mehrere Belege (@@nd@@) – das Aufteilen folgt mit dem Druckdienst.");
         if (p.RemovePages.Count > 0) I($"Seite(n) {string.Join(", ", p.RemovePages.Distinct())} sollen entfernt werden (@@rpc@@) – folgt mit dem Druckdienst.");
         if (p.AppendPdfs.Count > 0 || p.EmbedFiles.Count > 0) I("PDFs anhängen/Dateien einbetten (@@af@@/@@ef@@) folgt mit dem Druckdienst.");

@@ -197,6 +197,16 @@ public sealed class DocumentProcessor
     /// <summary>Eingestellter Mandant eines Vorgangs (null = keiner bzw. nicht eingerichtet).</summary>
     public Mandant? MandantOf(Vorgang v) => _mandanten?.CurrentValue.Find(v.Mandant);
 
+    /// <summary>Briefpapier des zusätzlichen Druckers, wenn der Druck kein @@bp@@ enthält.</summary>
+    private ParsedCodes ApplyPrinter(ParsedCodes p, string? printerId)
+    {
+        if (p.StationerySet || _inbox?.CurrentValue.FindPrinter(printerId) is not { Stationery.Length: > 0 } pr) return p;
+        p.StationerySet = true;
+        p.Stationery = pr.Stationery.Trim() == "-" ? null : pr.Stationery.Trim();
+        p.StationeryFromPrinter = pr.Name;
+        return p;
+    }
+
     /// <summary>Mandant setzen: @@pm@@ im Beleg → Herkunft (Prozess /M:, Eingangsordner).</summary>
     private void SetMandant(Vorgang v, ParsedCodes p)
     {
@@ -233,12 +243,12 @@ public sealed class DocumentProcessor
 
     public Vorgang Process(byte[] pdf, string source, string? fileName, string? user = null, string? machine = null, string? ownerUserId = null,
         Action<Vorgang>? beforeSave = null, bool publish = true, string? processOperator = null, string? mapiSubject = null, List<string>? mapiTo = null,
-        string? originMandant = null, string? originMandantReason = null)
+        string? originMandant = null, string? originMandantReason = null, string? printerId = null)
     {
         var now = DateTimeOffset.Now;
         var v = new Vorgang { Id = DocumentStore.NewId(now), CreatedAt = now, Source = source, OriginalFileName = fileName, PrintUser = user, PrintMachine = machine,
             ProcessOperator = processOperator, MapiSubject = string.IsNullOrWhiteSpace(mapiSubject) ? null : mapiSubject.Trim(), MapiTo = mapiTo ?? new(),
-            OriginMandant = MandantOptions.Normalize(originMandant), MandantReason = originMandantReason };
+            OriginMandant = MandantOptions.Normalize(originMandant), MandantReason = originMandantReason, PrinterId = printerId };
         string text;
         ParsedCodes p;
         try
@@ -246,7 +256,7 @@ public sealed class DocumentProcessor
             var (pages, lines) = PdfText.Extract(pdf);
             v.Pages = pages;
             text = string.Join("\n", lines.Select(l => $"[{l.Page}] {l.Line}"));
-            p = Map(ControlCodeParser.Parse(lines), v.OriginMandant);
+            p = Map(ApplyPrinter(ControlCodeParser.Parse(lines), v.PrinterId), v.OriginMandant);
         }
         catch (Exception ex)
         {
@@ -375,8 +385,8 @@ public sealed class DocumentProcessor
         if (_store.Get(id) is { Mail.Plain: true } plain) return plain; // normale E-Mail: nichts zu prüfen
         ParsedCodes p;
         var original = File.ReadAllBytes(path);
-        var originMandant = _store.Get(id)?.OriginMandant;
-        try { p = Map(ControlCodeParser.Parse(PdfText.Extract(original).Lines), originMandant); }
+        var stored = _store.Get(id);
+        try { p = Map(ApplyPrinter(ControlCodeParser.Parse(PdfText.Extract(original).Lines), stored?.PrinterId), stored?.OriginMandant); }
         catch { p = new ParsedCodes(); }
         return _store.Update(id, v =>
         {
@@ -399,7 +409,7 @@ public sealed class DocumentProcessor
         if (v.Mail.Plain) { v.Messages = v.Messages.Where(m => m.Field == "mapi").ToList(); v.UpdateStatus(); return; }
         var path = _store.FilePath(v.Id, DocumentStore.PdfFile);
         ParsedCodes p;
-        try { p = path is null ? new ParsedCodes() : Map(ControlCodeParser.Parse(PdfText.Extract(File.ReadAllBytes(path)).Lines), v.OriginMandant); }
+        try { p = path is null ? new ParsedCodes() : Map(ApplyPrinter(ControlCodeParser.Parse(PdfText.Extract(File.ReadAllBytes(path)).Lines), v.PrinterId), v.OriginMandant); }
         catch { p = new ParsedCodes(); }
         v.Messages = DocumentChecker.Check(v, p, CurrentSettings());
         v.UpdateStatus();

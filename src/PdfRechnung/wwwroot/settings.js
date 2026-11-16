@@ -317,6 +317,22 @@ async function onAction(e) {
         loadPrinterStatus(); break;
       }
       case "printer-refresh": loadPrinterStatus(); break;
+      case "xp-add": (ST.s.inbox.printers ||= []).push({ id: "", name: "", share: true, mandant: "", stationery: "" }); markDirty(); drawTab(); break;
+      case "xp-del": {
+        const x = ST.s.inbox.printers[+btn.dataset.i];
+        if (x.id && !await confirmDialog("Drucker aus der Liste löschen", `„${esc(x.name)}“ aus der Liste löschen? Der Windows-Drucker bleibt bestehen – vorher „Aus Windows entfernen“, wenn er weg soll.`, "Löschen", true)) break;
+        ST.s.inbox.printers.splice(+btn.dataset.i, 1); markDirty(); drawTab(); break;
+      }
+      case "xp-setup": {
+        if (ST.dirty) throw new Error("Bitte zuerst speichern.");
+        const r = await api("POST", "api/admin/drucker/einrichten?id=" + encodeURIComponent(btn.dataset.id));
+        msg((r.ok ? "" : (r.message || "Fehler") + "\n") + (r.log || []).join("\n"), r.ok); loadPrinterStatus(); break;
+      }
+      case "xp-remove": {
+        if (!await confirmDialog("Drucker aus Windows entfernen", `Drucker „${esc(btn.dataset.name)}“ und seinen Anschluss aus Windows entfernen?`, "Entfernen", true)) break;
+        const r = await api("POST", `api/admin/drucker/entfernen?id=${encodeURIComponent(btn.dataset.id)}&name=${encodeURIComponent(btn.dataset.name)}`);
+        msg((r.ok ? "" : (r.message || "Fehler") + "\n") + (r.log || []).join("\n"), r.ok); loadPrinterStatus(); break;
+      }
       case "mapi-install": await mapiCall("installieren"); break;
       case "mapi-default":
         if (await confirmDialog("Standard-Mailprogramm", "Belegpost für alle Benutzer dieses Servers als Standard-Mailprogramm setzen – für MAPI-Mails und als Windows-Standard-App „E-Mail“? Das bisherige wird gemerkt und kann wiederhergestellt werden.", "Als Standard setzen"))
@@ -572,6 +588,7 @@ function tabInbox() {
        <p class="help">Der Drucker verwendet den Windows-Treiber <i>Microsoft Print To PDF</i> mit dem Anschluss <code>\\\\.\\pipe\\belegpost-druck</code> statt <code>PORTPROMPT:</code> –
          es erscheint kein Speichern-Dialog. Jeder Druck kommt als PDF beim Dienst an und wird zum Vorgang. Benutzer, Rechner und Dokumentname kommen aus der Druckwarteschlange.
          Nach Änderungen an Name oder Freigabe erst speichern, dann „Drucker einrichten“.</p>`) +
+    section("Weitere Drucker", extraPrintersSection(), `<button class="btn ghost small" data-st="xp-add">+ Drucker</button>`) +
     section("Benutzer aus dem druckenden Prozess (WebWARE)",
       `${inCheck("inbox.processUserDetection", "ERP-Benutzer aus der Befehlszeile des druckenden Programms erkennen")}
        <div class="grid2">${field("Programme", inText("inbox.processNames", "wwa.exe"), "Mehrere mit Semikolon trennen.")}
@@ -583,6 +600,31 @@ function tabInbox() {
          Drucken zwei Benutzer im selben Moment, bekommt der Vorgang eine Warnung.</p>
        <div id="printerOrigin"></div>`) +
     section("Weiterleitung an gotomaxx PDFMAILER", gotomaxxSection());
+}
+
+function extraPrintersSection() {
+  const X = (ST.s.inbox.printers ||= []);
+  const mand = (ST.s.mandanten?.items || []).filter(m => m.number);
+  const bps = (ST.s.stationery?.items || []).map(b => b.name).filter(Boolean);
+  const sel = (path, cur, opts) => `<select data-path="${path}">${opts.map(([v, t]) => `<option value="${esc(v)}" ${cur === v ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`;
+  return `<p class="help">Jeder weitere Drucker bekommt einen eigenen Anschluss. Optional legst du je Drucker einen <b>Mandanten</b> und ein <b>Briefpapier</b> fest –
+      z. B. „Belegpost Firma B“ mit Mandant 2 und Briefpapier „Firma B“. Vorrang hat immer, was im Druck steht: <code>@@pm@@</code> und
+      <code>/M:</code> aus wwa.exe vor dem Mandanten des Druckers, <code>@@bp@@</code> vor seinem Briefpapier. Benutzer- und Prozesserkennung gelten wie beim Hauptdrucker.</p>
+    ${X.length ? `<div class="table-wrap"><table class="list mini xprinters"><thead><tr><th>Name des Druckers</th><th>Freigeben</th><th>Mandant</th><th>Briefpapier</th><th>Status</th><th></th></tr></thead><tbody>
+      ${X.map((x, i) => { const P = `inbox.printers.${i}`;
+        const mOpts = [["", "–"], ...mand.map(m => [m.number, m.name ? `${m.number} – ${m.name}` : m.number])];
+        if (x.mandant && !mand.some(m => m.number === x.mandant)) mOpts.push([x.mandant, x.mandant + " (nicht angelegt)"]);
+        const bOpts = [["", "Standard"], ["-", "ohne Briefpapier"], ...bps.map(b => [b, b])];
+        if (x.stationery && x.stationery !== "-" && !bps.includes(x.stationery)) bOpts.push([x.stationery, x.stationery + " (nicht vorhanden)"]);
+        return `<tr><td>${inText(`${P}.name`, "Belegpost Firma B")}</td>
+          <td><input type="checkbox" data-path="${P}.share" ${x.share !== false ? "checked" : ""}></td>
+          <td>${sel(`${P}.mandant`, x.mandant || "", mOpts)}</td>
+          <td>${sel(`${P}.stationery`, x.stationery || "", bOpts)}</td>
+          <td class="xp-status" data-xp="${esc(x.id || "")}">${x.id ? '<span class="meta-inline">…</span>' : '<span class="meta-inline">neu – erst speichern</span>'}</td>
+          <td class="nowrap">${x.id ? `<button class="btn ghost small" data-st="xp-setup" data-id="${esc(x.id)}">Einrichten</button>
+              <button class="btn ghost small" data-st="xp-remove" data-id="${esc(x.id)}" data-name="${esc(x.name || "")}" title="Drucker und Anschluss aus Windows entfernen">Aus Windows entfernen</button>` : ""}
+            <button class="icon-btn" data-st="xp-del" data-i="${i}" title="Aus der Liste löschen">✕</button></td></tr>`; }).join("")}
+      </tbody></table></div>` : `<p class="meta">Keine weiteren Drucker – alle Drucke laufen über den Hauptdrucker.</p>`}`;
 }
 
 function gotomaxxSection() {
@@ -629,6 +671,14 @@ async function loadPrinterStatus() {
       ${(r.recent || []).length ? `<h4>Letzte Drucke</h4><div class="table-wrap"><table class="list mini"><thead><tr><th>Zeit</th><th>Auftrag</th><th>Dokument</th><th>Benutzer / Rechner</th><th>Benutzer erkannt</th><th>Vorgang</th></tr></thead><tbody>
         ${r.recent.map(e => `<tr><td class="nowrap">${dt(e.at)}</td><td>${esc(e.jobId ?? "")}</td><td>${esc(e.document || "")}</td><td>${esc(e.user || "")}${e.machine ? " @ " + esc(e.machine) : ""}</td>
           <td>${esc(e.origin || "")}</td><td>${e.vorgangId ? `<a href="#/vorgang?id=${encodeURIComponent(e.vorgangId)}">öffnen</a>` : `<span class="bad">${esc(e.problem || "")}</span>`}</td></tr>`).join("")}</tbody></table></div>` : ""}`;
+    for (const x of r.printers || []) {
+      const cell = document.querySelector(`.xp-status[data-xp="${CSS.escape(x.id)}"]`); if (!cell) continue;
+      const st = x.status || {};
+      const good = st.exists && st.port === x.port && /print to pdf/i.test(st.driver || "");
+      cell.innerHTML = !st.exists ? '<span class="meta-inline">nicht eingerichtet</span>'
+        : good ? `eingerichtet${st.shared ? ", freigegeben" : ""}${x.listening ? "" : ' · <span class="bad">Annahme nicht bereit</span>'}`
+        : `<span class="bad">Treiber/Anschluss passen nicht</span>`;
+    }
     const t = r.tracker || {}, ob = $("#printerOrigin");
     if (ob) ob.innerHTML = `<p class="meta">Prozesserkennung: ${t.running ? "<b>läuft</b>" : `<span class="bad">${esc(t.problem || "aus")}</span>`}</p>
       ${(t.calls || []).length ? `<div class="table-wrap"><table class="list mini"><thead><tr><th>Zeit</th><th>Prozess</th><th>Benutzer-Nr.</th><th>Aufruf</th><th>Befehlszeile</th></tr></thead><tbody>

@@ -75,6 +75,8 @@ public sealed class ParsedCodes
     // ---- Bearbeiten / Allgemein ----
     public string? Stationery { get; set; }
     public bool StationerySet { get; set; }
+    /// <summary>Briefpapier kommt nicht aus @@bp@@, sondern vom Drucker (Name).</summary>
+    public string? StationeryFromPrinter { get; set; }
     public string? FileName { get; set; }
     /// <summary><c>@@mf@@</c> aus der ERP-Vorlage: Dateiname des Mail-Anhangs (Vorrang hat <c>@@fn@@</c>).</summary>
     public string? MailFileName { get; set; }

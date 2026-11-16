@@ -105,3 +105,17 @@ public class GotomaxxSmtpProfileTests
         finally { try { Directory.Delete(dir, true); } catch { } }
     }
 }
+
+public class ExtraPrinterTests
+{
+    [Fact]
+    public void Zusatzdrucker_hat_eigenen_Anschluss()
+    {
+        var x = new ExtraPrinter { Id = "a1b2c3d4", Name = "Belegpost Firma B" };
+        Assert.Equal(@"\\.\pipe\belegpost-druck-a1b2c3d4", x.PortName);
+        Assert.True(PdfRechnung.Printing.PrinterIntake.IsValidId(x.Id));
+        Assert.False(PdfRechnung.Printing.PrinterIntake.IsValidId("../x"));
+        var o = new InboxOptions { Printers = { x } };
+        Assert.Same(x, o.FindPrinter("A1B2C3D4"));
+    }
+}

@@ -112,6 +112,13 @@ public static class AdminApi
             s.Erp.Password = req.ClearErpPassword ? null
                 : !string.IsNullOrEmpty(req.ErpPassword) ? store.Secrets.Protect(req.ErpPassword)
                 : old.Erp.Password;
+            // Zusätzliche Drucker: feste Kennung vergeben
+            s.Inbox.Printers = s.Inbox.Printers.Where(x => !string.IsNullOrWhiteSpace(x.Name)).ToList();
+            foreach (var x in s.Inbox.Printers)
+            {
+                x.Name = x.Name.Trim(); x.Mandant = x.Mandant.Trim(); x.Stationery = x.Stationery.Trim();
+                if (!PdfRechnung.Printing.PrinterIntake.IsValidId(x.Id)) x.Id = Guid.NewGuid().ToString("N")[..8];
+            }
             // Mandanten: Kennwörter verschlüsseln bzw. behalten, nur-Anzeige-Felder nicht speichern
             s.Mandanten.Items = s.Mandanten.Items.Where(m => !string.IsNullOrWhiteSpace(m.Number)).ToList();
             foreach (var m in s.Mandanten.Items)
@@ -166,6 +173,12 @@ public static class AdminApi
                 port = PdfRechnung.Printing.PrinterSetup.PortName,
                 status = PdfRechnung.Printing.PrinterSetup.Get(name),
                 listening = intake?.Listening ?? false,
+                printers = store.Load().Inbox.Printers.Where(x => PdfRechnung.Printing.PrinterIntake.IsValidId(x.Id)).Select(x => new
+                {
+                    x.Id, x.Name, port = x.PortName,
+                    status = string.IsNullOrWhiteSpace(x.Name) ? null : PdfRechnung.Printing.PrinterSetup.Get(x.Name),
+                    listening = intake?.ListeningFor(x.PipeName) ?? false
+                }),
                 recent = intake?.Recent() ?? Array.Empty<PdfRechnung.Printing.PrintIntakeEntry>(),
                 tracker = new
                 {
@@ -178,14 +191,37 @@ public static class AdminApi
             });
         });
 
-        g.MapPost("/drucker/einrichten", (SettingsStore store) =>
+        g.MapPost("/drucker/einrichten", (string? id, SettingsStore store) =>
         {
             if (!OperatingSystem.IsWindows()) return Results.BadRequest(new { error = "Nur unter Windows möglich." });
             var log = new List<string>();
             try
             {
                 var s = store.Load();
+                if (!string.IsNullOrEmpty(id))
+                {
+                    var x = s.Inbox.FindPrinter(id) ?? throw new InvalidOperationException("Drucker nicht gefunden – bitte zuerst speichern.");
+                    PdfRechnung.Printing.PrinterSetup.Install(x.Name, x.Share, x.PortName, log.Add);
+                    return Results.Ok(new { ok = true, log });
+                }
                 PdfRechnung.Printing.PrinterSetup.Install(s.Inbox.PrinterName, s.Inbox.SharePrinter, log.Add);
+                return Results.Ok(new { ok = true, log });
+            }
+            catch (Exception ex) { log.Add("FEHLER: " + ex.Message); return Results.Ok(new { ok = false, message = ex.Message, log }); }
+        });
+
+        // Zusätzlichen Drucker aus Windows entfernen (Eintrag in den Einstellungen bleibt, bis er dort gelöscht und gespeichert wird)
+        g.MapPost("/drucker/entfernen", (string id, string? name, SettingsStore store) =>
+        {
+            if (!OperatingSystem.IsWindows()) return Results.BadRequest(new { error = "Nur unter Windows möglich." });
+            if (!PdfRechnung.Printing.PrinterIntake.IsValidId(id)) return Results.BadRequest(new { error = "Ungültige Kennung." });
+            var x = store.Load().Inbox.FindPrinter(id);
+            var printerName = x?.Name ?? name;
+            if (string.IsNullOrWhiteSpace(printerName)) return Results.BadRequest(new { error = "Drucker nicht gefunden." });
+            var log = new List<string>();
+            try
+            {
+                PdfRechnung.Printing.PrinterSetup.Remove(printerName, new ExtraPrinter { Id = id }.PortName, log.Add);
                 return Results.Ok(new { ok = true, log });
             }
             catch (Exception ex) { log.Add("FEHLER: " + ex.Message); return Results.Ok(new { ok = false, message = ex.Message, log }); }
@@ -452,6 +488,12 @@ public static class AdminApi
             if (m.OwnErp && string.IsNullOrWhiteSpace(m.ErpSecureAppId)) e.Add($"Mandant {m.Number}: für die eigene ERP-Anbindung die SecuredApp-Zugriffs-ID angeben.");
             if (m.OwnErp && m.ErpSecureAppId.Trim() is { Length: > 0 } sa && !(sa.Length <= 25 && sa.All(char.IsAsciiDigit))) e.Add($"Mandant {m.Number}: SecuredApp-Zugriffs-ID prüfen (1–25 Ziffern).");
         }
+        s.Inbox.Printers ??= new();
+        var printerNames = s.Inbox.Printers.Where(x => !string.IsNullOrWhiteSpace(x.Name)).Select(x => x.Name.Trim()).ToList();
+        foreach (var d in printerNames.Append(s.Inbox.PrinterName.Trim()).GroupBy(n => n, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
+            e.Add($"Den Druckernamen „{d.Key}“ gibt es mehrfach.");
+        foreach (var n in printerNames.Where(n => n.IndexOfAny(new[] { '\\', '/', ',', '!', '\'' }) >= 0))
+            e.Add($"Druckername „{n}“: bitte ohne \\ / , ! und '.");
         foreach (var d in s.Mandanten.Items.Where(m => !string.IsNullOrWhiteSpace(m.Number)).GroupBy(m => MandantOptions.Key(m.Number), StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
             e.Add($"Mandant {d.Key} ist mehrfach eingetragen.");
         if (!PortOk(s.Server.HttpsPort)) e.Add("HTTPS-Port ist ungültig.");

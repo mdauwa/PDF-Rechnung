@@ -105,7 +105,9 @@ public static class PrinterSetup
         catch (Exception ex) { return new Status(false, null, null, false, null, false, ex.Message); }
     }
 
-    public static void Install(string name, bool share, Action<string> log)
+    public static void Install(string name, bool share, Action<string> log) => Install(name, share, PortName, log);
+
+    public static void Install(string name, bool share, string portName, Action<string> log)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Bitte einen Druckernamen angeben.");
         var output = PowerShell($$"""
@@ -113,15 +115,27 @@ public static class PrinterSetup
             if (-not (Get-PrinterDriver -Name '{{Driver}}' -ErrorAction SilentlyContinue)) {
               throw "Der Treiber '{{Driver}}' ist nicht installiert (Windows-Feature 'Microsoft Print to PDF' bzw. Serverrolle Druckdienste)."
             }
-            if (-not (Get-PrinterPort -Name '{{PortName}}' -ErrorAction SilentlyContinue)) { Add-PrinterPort -Name '{{PortName}}'; 'Anschluss {{PortName}} angelegt.' }
-            else { 'Anschluss {{PortName}} vorhanden.' }
+            if (-not (Get-PrinterPort -Name '{{Q(portName)}}' -ErrorAction SilentlyContinue)) { Add-PrinterPort -Name '{{Q(portName)}}'; 'Anschluss {{Q(portName)}} angelegt.' }
+            else { 'Anschluss {{Q(portName)}} vorhanden.' }
             if (Get-Printer -Name '{{Q(name)}}' -ErrorAction SilentlyContinue) {
-              Set-Printer -Name '{{Q(name)}}' -DriverName '{{Driver}}' -PortName '{{PortName}}'; 'Drucker {{Q(name)}} aktualisiert.'
+              Set-Printer -Name '{{Q(name)}}' -DriverName '{{Driver}}' -PortName '{{Q(portName)}}'; 'Drucker {{Q(name)}} aktualisiert.'
             } else {
-              Add-Printer -Name '{{Q(name)}}' -DriverName '{{Driver}}' -PortName '{{PortName}}'; 'Drucker {{Q(name)}} angelegt.'
+              Add-Printer -Name '{{Q(name)}}' -DriverName '{{Driver}}' -PortName '{{Q(portName)}}'; 'Drucker {{Q(name)}} angelegt.'
             }
             if ({{(share ? "$true" : "$false")}}) { Set-Printer -Name '{{Q(name)}}' -Shared $true -ShareName '{{Q(name)}}'; 'Freigegeben als {{Q(name)}}.' }
             else { Set-Printer -Name '{{Q(name)}}' -Shared $false; 'Nicht freigegeben.' }
+            """);
+        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) log(line);
+    }
+
+    /// <summary>Drucker und seinen Anschluss aus Windows entfernen.</summary>
+    public static void Remove(string name, string portName, Action<string> log)
+    {
+        var output = PowerShell($$"""
+            $ErrorActionPreference = 'Stop'
+            if (Get-Printer -Name '{{Q(name)}}' -ErrorAction SilentlyContinue) { Remove-Printer -Name '{{Q(name)}}'; 'Drucker {{Q(name)}} entfernt.' } else { 'Drucker {{Q(name)}} war nicht vorhanden.' }
+            Start-Sleep -Milliseconds 500
+            if (Get-PrinterPort -Name '{{Q(portName)}}' -ErrorAction SilentlyContinue) { Remove-PrinterPort -Name '{{Q(portName)}}'; 'Anschluss {{Q(portName)}} entfernt.' }
             """);
         foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) log(line);
     }
@@ -177,10 +191,46 @@ public sealed class PrinterIntake : BackgroundService
         _opt = opt; _processor = processor; _tracker = tracker; _settings = settings; _log = log;
     }
 
-    public bool Listening { get; private set; }
+    /// <summary>Hauptdrucker nimmt an.</summary>
+    public bool Listening => _listening.ContainsKey(PrinterSetup.PipeName);
+    /// <summary>Kennungen der zusätzlichen Drucker, deren Anschluss bereit ist.</summary>
+    public bool ListeningFor(string pipeName) => _listening.ContainsKey(pipeName);
     public IReadOnlyList<PrintIntakeEntry> Recent() => _recent.Reverse().ToList();
 
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> _listening = new();
+
+    /// <summary>Je Drucker (Haupt- und zusätzliche) ein eigener Anschluss; Änderungen der Einstellungen werden laufend übernommen.</summary>
     protected override async Task ExecuteAsync(CancellationToken ct)
+    {
+        var running = new Dictionary<string, (CancellationTokenSource Cts, Task Task)>();
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                var wanted = new HashSet<string> { PrinterSetup.PipeName };
+                foreach (var x in _opt.CurrentValue.Printers.Where(x => IsValidId(x.Id))) wanted.Add(x.PipeName);
+                foreach (var gone in running.Keys.Where(k => !wanted.Contains(k)).ToList())
+                {
+                    running[gone].Cts.Cancel(); running.Remove(gone); _listening.TryRemove(gone, out _);
+                }
+                foreach (var pipeName in wanted.Where(w => !running.ContainsKey(w)))
+                {
+                    var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    running[pipeName] = (cts, Task.Run(() => ListenAsync(pipeName, cts.Token), cts.Token));
+                }
+                try { await Task.Delay(TimeSpan.FromSeconds(3), ct); } catch (OperationCanceledException) { break; }
+            }
+        }
+        finally { foreach (var r in running.Values) r.Cts.Cancel(); _listening.Clear(); }
+    }
+
+    public static bool IsValidId(string? id) => id is { Length: >= 1 and <= 32 } && id.All(c => char.IsAsciiLetterOrDigit(c) || c == '-');
+
+    /// <summary>Zum Anschluss gehörender Drucker: Hauptdrucker (null) oder ein zusätzlicher.</summary>
+    private ExtraPrinter? ExtraFor(string pipeName) =>
+        pipeName == PrinterSetup.PipeName ? null : _opt.CurrentValue.Printers.FirstOrDefault(x => x.PipeName == pipeName);
+
+    private async Task ListenAsync(string pipeName, CancellationToken ct)
     {
         var security = new PipeSecurity();
         // Der Druckspooler (SYSTEM) schreibt – je nach Anschluss auch im Namen des druckenden Benutzers
@@ -193,30 +243,32 @@ public sealed class PrinterIntake : BackgroundService
             NamedPipeServerStream? pipe = null;
             try
             {
-                pipe = NamedPipeServerStreamAcl.Create(PrinterSetup.PipeName, PipeDirection.In, NamedPipeServerStream.MaxAllowedServerInstances,
+                pipe = NamedPipeServerStreamAcl.Create(pipeName, PipeDirection.In, NamedPipeServerStream.MaxAllowedServerInstances,
                     PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 0, 1024 * 1024, security);
-                Listening = true;
+                _listening[pipeName] = true;
                 await pipe.WaitForConnectionAsync(ct);
+                var extra = ExtraFor(pipeName);
+                var printerName = extra?.Name ?? _opt.CurrentValue.PrinterName;
                 // Sofort nachsehen, welcher Auftrag gerade gedruckt wird – solange er noch in der Warteschlange steht
                 SpoolJob? job = null;
-                try { job = SpoolJobs.Current(_opt.CurrentValue.PrinterName); } catch (Exception ex) { _log.LogDebug(ex, "Druckwarteschlange"); }
+                try { job = SpoolJobs.Current(printerName); } catch (Exception ex) { _log.LogDebug(ex, "Druckwarteschlange"); }
                 var p = pipe;
                 pipe = null;
-                _ = Task.Run(() => HandleAsync(p, job, ct), ct);
+                _ = Task.Run(() => HandleAsync(p, job, extra, ct), ct);
             }
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
             {
-                Listening = false;
-                _log.LogWarning(ex, "Drucker-Pipe");
+                _listening.TryRemove(pipeName, out _);
+                _log.LogWarning(ex, "Drucker-Pipe {Pipe}", pipeName);
                 try { await Task.Delay(2000, ct); } catch (OperationCanceledException) { break; }
             }
             finally { pipe?.Dispose(); }
         }
-        Listening = false;
+        _listening.TryRemove(pipeName, out _);
     }
 
-    private async Task HandleAsync(NamedPipeServerStream pipe, SpoolJob? job, CancellationToken ct)
+    private async Task HandleAsync(NamedPipeServerStream pipe, SpoolJob? job, ExtraPrinter? extra, CancellationToken ct)
     {
         byte[] data;
         try
@@ -260,14 +312,17 @@ public sealed class PrinterIntake : BackgroundService
 
         try
         {
+            // Mandant: /M: des druckenden Prozesses → Vorgabe des Druckers (@@pm@@ im Beleg geht ohnehin vor)
             var originMandant = MandantOptions.FromCommandLine(origin?.CommandLine);
+            var mandantReason = originMandant is not null ? $"Parameter /M: des druckenden Prozesses ({origin!.Exe})" : null;
+            if (originMandant is null && MandantOptions.Normalize(extra?.Mandant) is { } pm) { originMandant = pm; mandantReason = $"Drucker „{extra!.Name}“"; }
             var v = _processor.Process(data, "Drucker", name, job?.UserName, job?.MachineName, processOperator: origin?.Operator,
-                originMandant: originMandant, originMandantReason: originMandant is null ? null : $"Parameter /M: des druckenden Prozesses ({origin!.Exe})", beforeSave: x =>
+                originMandant: originMandant, originMandantReason: mandantReason, printerId: extra?.Id, beforeSave: x =>
             {
                 x.PrintProcess = origin?.Pid is not null ? $"{origin.Explanation}{(string.IsNullOrEmpty(origin.CommandLine) ? "" : " – " + origin.CommandLine)}" : null;
                 if (origin?.Warning is { } w) x.Messages.Add(new CheckMessage(DocumentChecker.Warning, w, "druck"));
                 x.History.Add(new HistoryEntry(DateTimeOffset.Now, "Drucker", "druck",
-                    $"Druckauftrag {job?.JobId} von {job?.UserName ?? "?"}{(string.IsNullOrEmpty(job?.MachineName) ? "" : " @ " + job!.MachineName)} · Benutzer: {originText}"));
+                    $"Druckauftrag {job?.JobId}{(extra is null ? "" : $" (Drucker „{extra.Name}“)")} von {job?.UserName ?? "?"}{(string.IsNullOrEmpty(job?.MachineName) ? "" : " @ " + job!.MachineName)} · Benutzer: {originText}"));
             });
             Remember(new PrintIntakeEntry(DateTimeOffset.Now, job?.JobId, name, job?.UserName, job?.MachineName, data.Length, v.Id, originText, null));
         }

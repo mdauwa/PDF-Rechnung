@@ -324,6 +324,30 @@ public sealed class InboxOptions
     public bool ProcessFilterByName { get; set; } = true;
     /// <summary>Drucker im Netzwerk freigeben (für Druck von Arbeitsplätzen).</summary>
     public bool SharePrinter { get; set; } = true;
+    /// <summary>Weitere Belegpost-Drucker, je optional mit Mandant und Briefpapier.</summary>
+    public List<ExtraPrinter> Printers { get; set; } = new();
+
+    public ExtraPrinter? FindPrinter(string? id) =>
+        string.IsNullOrEmpty(id) ? null : Printers.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase));
+}
+
+/// <summary>
+/// Zusätzlicher Drucker (gleicher Treiber, eigener Anschluss <c>\\.\pipe\belegpost-druck-&lt;Id&gt;</c>).
+/// Vorgaben gelten nur, wenn der Druck selbst nichts angibt: @@pm@@ und /M: gehen vor dem Mandanten, @@bp@@ vor dem Briefpapier.
+/// </summary>
+public sealed class ExtraPrinter
+{
+    /// <summary>Feste Kennung (Anschlussname), ändert sich beim Umbenennen nicht.</summary>
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public bool Share { get; set; } = true;
+    /// <summary>Mandant für Drucke über diesen Drucker. Leer = keiner.</summary>
+    public string Mandant { get; set; } = "";
+    /// <summary>Briefpapier (Name) für Drucke ohne @@bp@@. Leer = Standard; "-" = ohne Briefpapier.</summary>
+    public string Stationery { get; set; } = "";
+
+    public string PipeName => "belegpost-druck-" + Id;
+    public string PortName => @"\\.\pipe\" + PipeName;
 }
 
 public sealed class MailOptions

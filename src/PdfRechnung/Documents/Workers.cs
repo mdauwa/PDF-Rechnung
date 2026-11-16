@@ -28,7 +28,7 @@ public sealed class SendService
         var design = v.Mail.Template is null ? null
             : templates.Items.FirstOrDefault(x => string.Equals(x.Name, v.Mail.Template, StringComparison.OrdinalIgnoreCase));
         var values = v.Mail.Variables.Count > 0 ? v.Mail.Variables : Placeholders.Build(v, null, MailTemplate.SafeFileName(v.Mail.FileName) + ".pdf");
-        return MailDesigner.Render(design, v.Mail.Body, values, MailDesigner.Directory(dataDirectory), MailFacts.From(v));
+        return MailDesigner.Render(design, v.Mail.Body, values, MailDesigner.Directory(dataDirectory), MailFacts.From(v), v.Mail.SignatureText);
     }
 
     public RenderedMail Render(Vorgang v) => Render(v, _templates.CurrentValue, _settings.DataDirectory);
@@ -235,13 +235,13 @@ public sealed class AutoSendWorker : BackgroundService
     public async Task RunOnce(CancellationToken ct)
     {
         var o = _opt.CurrentValue;
-        if (!o.Enabled || !o.AutoSend) return;
+        if (!o.Enabled) return;
         var due = DateTimeOffset.Now.AddMinutes(-Math.Max(0, o.AutoSendDelayMinutes));
         var statuses = o.AutoSendWithWarnings ? new[] { VorgangStatus.Ready, VorgangStatus.Warning } : new[] { VorgangStatus.Ready };
         var candidates = _store.Query(new VorgangFilter { SeeAll = true, Statuses = statuses, Before = due.AddSeconds(1), Limit = 500 }).Where(v =>
             (v.Status == VorgangStatus.Ready || (o.AutoSendWithWarnings && v.Status == VorgangStatus.Warning))
             && v.SendAttempts == 0 && v.CreatedAt <= due && v.Mail.To.Count > 0 && !v.Mail.Plain // normale E-Mails nie automatisch
-            && !(_users?.UsesOutlook(v.OwnerUserId) ?? false)).ToList(); // Benutzer versendet selbst über Outlook
+            && IsAutomatic(v, o)).ToList();
         foreach (var v in candidates)
         {
             if (ct.IsCancellationRequested) break;
@@ -249,6 +249,17 @@ public sealed class AutoSendWorker : BackgroundService
             if (!ok) _log.LogWarning("Autoversand {Id}: {Msg}", v.Id, msg);
         }
     }
+
+    /// <summary>
+    /// Versandweg (Regel bzw. @@pw@@): „direkt“ = immer automatisch, „freigabe“/„outlook“ = nie;
+    /// sonst wie eingestellt – außer der Benutzer versendet selbst über Outlook.
+    /// </summary>
+    private bool IsAutomatic(Vorgang v, MailOptions o) => v.Mail.Route switch
+    {
+        MailRoute.Direct => true,
+        MailRoute.Standard => o.AutoSend && !(_users?.UsesOutlook(v.OwnerUserId) ?? false),
+        _ => false
+    };
 }
 
 /// <summary>Löscht abgeschlossene Vorgänge (versendet, verworfen, ohne Versand) nach der Aufbewahrungsdauer.</summary>

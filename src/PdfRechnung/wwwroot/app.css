@@ -386,3 +386,36 @@ span.bill { color: #2f6fd6; font-weight: 600; }
 .tl-it.k-zeiterfassung { background: var(--c); opacity: .85; }
 .tl-it.tl-timr-strip { z-index: 4; top: 0 !important; height: 4px !important; background: var(--c); border-radius: 2px; }
 .tl-sum small.flag.timr { color: #c86f00; font-weight: 600; }
+
+/* ---- Benutzerübersicht (einzeilig) und Benutzer-Maske ---- */
+table.users-compact td { padding-top: 8px; padding-bottom: 8px; vertical-align: middle; }
+table.users-compact tr.clickable { cursor: pointer; }
+table.users-compact tr.clickable:hover td { background: var(--surface-2); }
+table.users-compact tr.inactive td { opacity: .55; }
+table.users-compact .badge { margin-right: 2px; }
+.mono { font-family: ui-monospace, Consolas, monospace; }
+.spacer { flex: 1; }
+.user-mask-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.user-mask-head h2 { margin: 0; font-size: 18px; }
+.btn.danger { color: var(--missing); border-color: color-mix(in srgb, var(--missing) 40%, var(--border)); }
+.btn.small { padding: 4px 10px; font-size: 12px; }
+
+/* ---- Regel-Editor ---- */
+.re-section { display: flex; flex-direction: column; gap: 10px; }
+.re-section + .re-section { margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--border); }
+.re-section-head { display: flex; align-items: center; justify-content: space-between; }
+.re-section h4, .re-body h4 { margin: 4px 0 0; font-size: 13px; font-weight: 600; }
+.re-card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; background: var(--surface); }
+.re-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.re-assign { color: var(--muted); font-size: 12px; }
+details.re-rule { padding: 0; gap: 0; }
+details.re-rule > summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; }
+details.re-rule > summary::-webkit-details-marker { display: none; }
+details.re-rule[open] > summary { border-bottom: 1px solid var(--border); }
+details.re-rule.off { opacity: .6; }
+.re-no { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; border-radius: 999px; background: var(--surface-2); font-size: 12px; }
+.re-sum { color: var(--muted); font-size: 12px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.re-tools { display: flex; gap: 4px; }
+.re-tools .icon-btn { width: 28px; height: 28px; }
+.re-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 10px; }
+.re-checks { display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; }

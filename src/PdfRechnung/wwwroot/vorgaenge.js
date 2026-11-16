@@ -276,6 +276,10 @@ function drawVorgang(view, data) {
             <p class="meta">${v.mail.template ? `Mail-Vorlage <b>${esc(v.mail.template)}</b> (${esc(v.mail.templateReason || "")})` : "Ohne Mail-Vorlage (schlichte Mail)"}${v.mail.fromAddress ? ` · Absender ${esc(v.mail.fromName ? v.mail.fromName + " <" + v.mail.fromAddress + ">" : v.mail.fromAddress)}` : ""}
               · <a href="#" id="mPreviewBtn">So sieht die Mail aus</a>
               ${portal.sendViaOutlook && portal.userId && v.mail.enabled && v.status !== "fehler" ? ` · <a href="#" data-a="outlook">In Outlook öffnen</a>` : ""}</p>
+            ${v.mail.signatureName || v.mail.signatureText === "" || v.mail.route || (v.mail.ruleNotes || []).length ? `<p class="meta">${[
+              v.mail.signatureName ? `Signatur <b>${esc(v.mail.signatureName)}</b> (${esc(v.mail.signatureReason || "")})` : v.mail.signatureText === "" ? "ohne Signatur (@@ps@@)" : "",
+              v.mail.route ? `Versandweg <b>${esc({ direkt: "direkt", freigabe: "nach Freigabe", outlook: "über Outlook", gotomaxx: "an gotomaxx", keine: "keine Mail" }[v.mail.route] || v.mail.route)}</b> (${esc(v.mail.routeReason || "")})` : "",
+              ...(v.mail.ruleNotes || []).map(esc)].filter(Boolean).join(" · ")}</p>` : ""}
             <div id="mPreview"></div>
             ${editable ? `<div class="actions"><button class="btn" data-a="mail-save" disabled>Versanddaten speichern</button><span class="meta-inline">Änderungen werden geprüft und bleiben bei „Neu prüfen“ erhalten.</span></div>` : ""}
           </div>

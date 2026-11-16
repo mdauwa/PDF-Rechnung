@@ -449,6 +449,7 @@ public static class AdminApi
             e.Add("Die Portal-Adresse für Links muss mit https:// beginnen.");
         if (!MapiMode.All.Contains(s.Mapi.DefaultMode)) e.Add("Unbekannter Standard für MAPI-Mails.");
         if (string.IsNullOrWhiteSpace(s.Inbox.PrinterName)) e.Add("Bitte einen Namen für den Drucker eintragen.");
+        e.AddRange(MailRuleStore.Validate(s.MailRules, global: true));
         if (s.Inbox.ProcessUserArgument is < 1 or > 20) e.Add("Die Position der Benutzernummer in der Befehlszeile muss zwischen 1 und 20 liegen.");
         if (s.Gotomaxx.Enabled && string.IsNullOrWhiteSpace(s.Gotomaxx.Printer)) e.Add("Bitte den gotomaxx-Drucker für die Weiterleitung wählen.");
         if (s.Gotomaxx.CodeFontSize is < 0.5 or > 24) e.Add("Die Schriftgröße der Steuerzeichen für gotomaxx muss zwischen 0,5 und 24 pt liegen.");

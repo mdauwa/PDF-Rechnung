@@ -20,7 +20,9 @@ public static class GotomaxxCodes
         "pv", // eigene Platzhalter
         "pt", // Mail-Vorlage
         "pf", // Absender
-        "pg"  // Weiterleitung an gotomaxx (dieses Steuerzeichen)
+        "pg", // Weiterleitung an gotomaxx (dieses Steuerzeichen)
+        "ps", // Signatur
+        "pw"  // Versandweg
     };
 
     /// <summary>Belegpost-Erweiterung in <c>@@xi@@</c>: <c>@@xi ERP_VOUCHER_INDEX=…@@</c>.</summary>

@@ -131,9 +131,10 @@ public sealed class DocumentProcessor
     public DocumentProcessor(DocumentStore store, IOptionsMonitor<MailOptions> mail, IOptionsMonitor<InvoiceOptions> invoice, ILogger<DocumentProcessor> log,
         IOptionsMonitor<InboxOptions>? inbox = null, IOptionsMonitor<StationeryOptions>? stationery = null, Settings.SettingsStore? settings = null,
         IOptionsMonitor<MailTemplateOptions>? templates = null, Settings.UserStore? users = null, Services.EventHub? events = null,
-        GotomaxxService? gotomaxx = null)
+        GotomaxxService? gotomaxx = null, IOptionsMonitor<MailRuleOptions>? rules = null, MailRuleStore? ruleStore = null,
+        Services.MelderTasks? melderTasks = null)
     {
-        _users = users; _events = events; _gotomaxx = gotomaxx;
+        _users = users; _events = events; _gotomaxx = gotomaxx; _rules = rules; _ruleStore = ruleStore; _melderTasks = melderTasks;
         _store = store; _mail = mail; _invoice = invoice; _log = log; _inbox = inbox; _stationery = stationery; _templates = templates;
         _stationeryDir = PdfComposer.StationeryDirectory(settings?.DataDirectory ?? Path.GetDirectoryName(store.Root)!);
     }
@@ -143,6 +144,9 @@ public sealed class DocumentProcessor
     private readonly Settings.UserStore? _users;
     private readonly Services.EventHub? _events;
     private readonly GotomaxxService? _gotomaxx;
+    private readonly IOptionsMonitor<MailRuleOptions>? _rules;
+    private readonly MailRuleStore? _ruleStore;
+    private readonly Services.MelderTasks? _melderTasks;
     public MailTemplateOptions Templates => _templates?.CurrentValue ?? new();
     private readonly string _stationeryDir;
 
@@ -233,8 +237,14 @@ public sealed class DocumentProcessor
             v.UpdateStatus();
         }
         var forward = readOk && !v.Mail.Plain && Forward(v, p, user ?? source);
+        var outlook = !forward && readOk && OutlookRoute(v);
         _store.Create(v, pdf, text, sendPdf);
         if (forward) _gotomaxx?.Enqueue(v.Id);
+        if (outlook && _melderTasks is not null)
+        {
+            var title = string.Join(" ", new[] { v.DocumentType, v.VoucherId }.Where(x => !string.IsNullOrWhiteSpace(x)));
+            _melderTasks.Create(v.OwnerUserId!, null, Services.MelderTasks.KindOutlook, v.Id, title.Length > 0 ? title : v.OriginalFileName ?? v.Id);
+        }
         _log.LogInformation("Vorgang {Id} angelegt: {Type} {No} → {Status}", v.Id, v.DocumentType, v.VoucherId, v.Status);
         if (publish && v.OwnerUserId is not null && _events is not null)
         {
@@ -254,11 +264,24 @@ public sealed class DocumentProcessor
     private bool Forward(Vorgang v, ParsedCodes p, string by)
     {
         var o = _gotomaxx?.Options ?? new GotomaxxOptions();
-        if (GotomaxxCodes.Target(p, o) is { } printer)
+        var target = GotomaxxCodes.Target(p, o);
+        var why = target is null ? null : target.Length > 0 ? $"Weiterleitung an den gotomaxx-Drucker „{target}“ (@@pg@@)"
+            : p.GotomaxxSet ? "Weiterleitung an den gotomaxx-Standarddrucker (@@pg@@)" : "Weiterleitung an gotomaxx (Einstellung „jeden Beleg“)";
+        // Versandweg gotomaxx aus Regel oder @@pw@@ (außer @@pg0@@)
+        if (target is null && v.Mail.Route == MailRoute.Gotomaxx && !(p.GotomaxxSet && p.GotomaxxPrinter == "0"))
+        {
+            if (o.Enabled) { target = v.Mail.RoutePrinter ?? ""; why = $"Weiterleitung an gotomaxx ({v.Mail.RouteReason})"; }
+            else
+            {
+                v.Messages.Add(new CheckMessage(DocumentChecker.Error, $"Versandweg gotomaxx ({v.Mail.RouteReason}), aber die Weiterleitung an gotomaxx ist nicht eingerichtet (Einstellungen → Drucker & Eingang)."));
+                v.UpdateStatus();
+                return false;
+            }
+        }
+        if (target is { } printer)
         {
             v.Messages = v.Messages.Where(m => m.Field == "mapi").ToList();
-            GotomaxxService.Mark(v, printer, by, printer.Length > 0 ? $"Weiterleitung an den gotomaxx-Drucker „{printer}“ (@@pg@@)"
-                : p.GotomaxxSet ? "Weiterleitung an den gotomaxx-Standarddrucker (@@pg@@)" : "Weiterleitung an gotomaxx (Einstellung „jeden Beleg“)");
+            GotomaxxService.Mark(v, printer, by, why!);
             return true;
         }
         if (p.GotomaxxSet && p.GotomaxxPrinter != "0" && !o.Enabled)
@@ -267,6 +290,24 @@ public sealed class DocumentProcessor
             v.UpdateStatus();
         }
         return false;
+    }
+
+    /// <summary>Versandweg Outlook (Regel/@@pw@@): Entwurf über den Melder des Benutzers – prüft, ob das geht.</summary>
+    private bool OutlookRoute(Vorgang v)
+    {
+        if (v.Mail.Route != MailRoute.Outlook || v.Mail.Plain || !v.Mail.Enabled || v.Source == "MAPI") return false;
+        var owner = v.OwnerUserId is null ? null : _users?.FindById(v.OwnerUserId);
+        string? problem = owner is null ? "der Beleg ist keinem Portal-Benutzer zugeordnet"
+            : !owner.SendViaOutlook ? $"Senden über Outlook ist für {owner.Name} nicht freigeschaltet"
+            : v.Status == VorgangStatus.Error ? "der Beleg hat Fehler" : null;
+        if (problem is not null)
+        {
+            v.Messages.Add(new CheckMessage(DocumentChecker.Warning, $"Versandweg Outlook ({v.Mail.RouteReason}) nicht möglich: {problem} – der Beleg wartet im Portal auf Freigabe."));
+            v.UpdateStatus();
+            return false;
+        }
+        v.History.Add(new HistoryEntry(DateTimeOffset.Now, "Regeln", "outlook", $"Wird in Outlook bei {owner!.Name} geöffnet ({v.Mail.RouteReason})"));
+        return true;
     }
 
     /// <summary>
@@ -365,16 +406,50 @@ public sealed class DocumentProcessor
         var custom = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (k, val) in p.Variables) custom[k] = Clean(val, $"Platzhalter {{{k}}}");
 
-        // Vorlage und Absender
+        // Vorlage, Absender, Signatur, Versandweg: Steuerzeichen → eigene Regeln → globale Regeln → Zuordnung → Standard
         var stationery = _stationery is null ? v.Stationery : PdfComposer.Select(p, _stationery.CurrentValue).Item?.Name ?? v.Stationery;
+        var userRules = _ruleStore?.Get(v.OwnerUserId);
+        var globalRules = _rules?.CurrentValue;
+        var ctx = new MailRuleContext(
+            MailRuleEngine.GuessDocumentType(v.DocumentType, p.MailFileName, p.FileName, p.Subject, v.OriginalFileName),
+            stationery, p.Sender?.Trim() ?? o.FromAddress, m.To, v.BuyerId, v.BuyerName, v.Source, p.InvoiceFormat,
+            string.Join(" ", new[] { p.Subject, p.MailFileName, p.FileName, v.OriginalFileName }.Where(x => !string.IsNullOrWhiteSpace(x))),
+            v.OwnerUserId);
+        var rr = MailRuleEngine.Evaluate(ctx, userRules, globalRules);
+        m.RuleNotes = new List<string>();
+
         var sender = p.Sender?.Trim();
-        var (design, reason, warn) = MailDesigner.Select(Templates, p.MailTemplate, stationery, sender ?? o.FromAddress);
+        if (string.IsNullOrEmpty(sender) && rr.FromAddress is { } rf) { sender = rf.Text; m.RuleNotes.Add($"Absender {rf.Text} aus {rf.Reason}"); }
+        var (design, reason, warn) = !string.IsNullOrWhiteSpace(p.MailTemplate) || rr.Template is null
+            ? MailDesigner.Select(Templates, p.MailTemplate, stationery, sender ?? o.FromAddress)
+            : MailDesigner.Select(Templates, rr.Template.Text, stationery, sender ?? o.FromAddress, rr.Template.Reason);
         m.Template = design?.Name;
         m.TemplateReason = reason;
         if (warn is not null) fixes.Add("!" + warn);
         m.FromAddress = !string.IsNullOrWhiteSpace(sender) ? sender : !string.IsNullOrWhiteSpace(design?.FromAddress) ? design!.FromAddress.Trim() : null;
-        m.FromName = !string.IsNullOrWhiteSpace(design?.FromName) ? design!.FromName.Trim() : null;
-        m.ReplyTo = !string.IsNullOrWhiteSpace(design?.ReplyTo) ? design!.ReplyTo.Trim() : null;
+        m.FromName = rr.FromName?.Text ?? (!string.IsNullOrWhiteSpace(design?.FromName) ? design!.FromName.Trim() : null);
+        m.ReplyTo = rr.ReplyTo?.Text ?? (!string.IsNullOrWhiteSpace(design?.ReplyTo) ? design!.ReplyTo.Trim() : null);
+        if (rr.FromName is { } fnr) m.RuleNotes.Add($"Absendername aus {fnr.Reason}");
+        if (rr.ReplyTo is { } rtr) m.RuleNotes.Add($"Antwort an {rtr.Text} aus {rtr.Reason}");
+        // CC/BCC aus Regeln nur, wenn keine gedruckt wurden
+        if (m.Cc.Count == 0 && rr.Cc.Count > 0) { m.Cc = rr.Cc.Distinct(StringComparer.OrdinalIgnoreCase).ToList(); m.RuleNotes.Add($"CC aus {rr.CcReason}"); }
+        if (m.Bcc.Count == 0 && rr.Bcc.Count > 0) { m.Bcc = rr.Bcc.Distinct(StringComparer.OrdinalIgnoreCase).ToList(); m.RuleNotes.Add($"BCC aus {rr.BccReason}"); }
+
+        // Signatur: @@ps@@ → Regel → Benutzer (Briefpapier, Absender, Standard) → global → Vorlage
+        if (p.SignatureSet && p.Signature is null) { m.SignatureName = null; m.SignatureText = ""; m.SignatureReason = "Steuerzeichen @@ps@@ (keine Signatur)"; }
+        else
+        {
+            var (req, reqWhy) = p.Signature is { } ps ? (ps, $"Steuerzeichen @@ps{ps}@@") : rr.Signature is { } rs ? (rs.Text, rs.Reason) : ((string?)null, (string?)null);
+            var (sig, sigWhy, sigWarn) = MailRuleEngine.SelectSignature(req, reqWhy, stationery, sender ?? o.FromAddress, userRules, globalRules);
+            m.SignatureName = sig?.Name; m.SignatureText = sig?.Text; m.SignatureReason = sigWhy;
+            if (sigWarn is not null) fixes.Add("!" + sigWarn);
+        }
+
+        // Versandweg: @@pw@@ → Regel
+        if (p.Route is { } pr) { m.Route = pr; m.RouteReason = $"Steuerzeichen @@pw{pr}@@"; }
+        else if (rr.Route is { } rro) { m.Route = rro.Text; m.RouteReason = rro.Reason; m.RoutePrinter = rr.GotomaxxPrinter?.Text; }
+        if (p.InvalidRoute is { } ir) fixes.Add($"!Versandweg „{ir}“ (@@pw@@) ist unbekannt – erlaubt sind direkt, freigabe, outlook, gotomaxx, keine.");
+        if (m.Route == MailRoute.None && p.MailEnabled is null) m.Enabled = false;
 
         var fileTemplate = p.FileName ?? p.MailFileName ?? o.DefaultFileName;
         var baseValues = Placeholders.Build(v, custom, null, m.FromName ?? o.FromName);
@@ -397,10 +472,11 @@ public sealed class DocumentProcessor
         // Platzhalter in Signatur/Fußzeile der Vorlage prüfen
         if (design is not null)
         {
-            Placeholders.Apply(design.Signature, values, missing);
+            Placeholders.Apply(m.SignatureText ?? design.Signature, values, missing);
             Placeholders.Apply(design.Footer, values, missing);
             Placeholders.Apply(design.HeaderText, values, missing);
         }
+        else if (!string.IsNullOrEmpty(m.SignatureText)) Placeholders.Apply(m.SignatureText, values, missing);
         m.Variables = values;
         m.TextFixes = fixes.Distinct().ToList();
         m.MissingPlaceholders = missing;

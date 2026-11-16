@@ -16,6 +16,8 @@ public sealed class AppSettings
     public ErpOptions Erp { get; set; } = new();
     public MapiOptions Mapi { get; set; } = new();
     public GotomaxxOptions Gotomaxx { get; set; } = new();
+    /// <summary>Globale Mail-Regeln und Signaturen.</summary>
+    public PdfRechnung.Documents.MailRuleOptions MailRules { get; set; } = new();
 }
 
 /// <summary>

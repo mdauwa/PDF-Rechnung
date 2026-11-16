@@ -46,6 +46,12 @@ public sealed class ParsedCodes
     public string? MailTemplate { get; set; }
     /// <summary><c>@@pf adresse@firma.at@@</c>: Absenderadresse dieses Belegs.</summary>
     public string? Sender { get; set; }
+    /// <summary>@@psName@@ – Signatur; @@ps@@ / @@ps0@@ = keine Signatur.</summary>
+    public bool SignatureSet { get; set; }
+    public string? Signature { get; set; }
+    /// <summary>@@pw…@@ – Versandweg: direkt, freigabe, outlook, gotomaxx, keine.</summary>
+    public string? Route { get; set; }
+    public string? InvalidRoute { get; set; }
     /// <summary>@@pu benutzer@@ – wer gedruckt hat (Windows- oder ERP-Benutzer); überschreibt den Benutzer des Druckauftrags.</summary>
     public string? PrintUser { get; set; }
     /// <summary>@@pb007@@ – ERP-Bedienernummer (3-stellig, numerisch). Ordnet den Beleg dem Benutzer mit dieser Nummer zu.</summary>
@@ -167,6 +173,11 @@ public static partial class ControlCodeParser
             }
             case "pt": r.MailTemplate = t.Length > 0 ? t : null; break;
             case "pf": r.Sender = t.Length > 0 ? t : null; break;
+            case "ps": r.SignatureSet = true; r.Signature = t.Length > 0 && t != "0" ? t : null; break;
+            case "pw":
+                if (MailRoute.Normalize(t) is { } route) r.Route = route;
+                else r.InvalidRoute = t;
+                break;
             case "pu": r.PrintUser = t.Length > 0 ? t : null; break;
             case "pb":
                 if (Settings.UserStore.NormalizeOperator(t) is { } no) r.OperatorNumber = no;

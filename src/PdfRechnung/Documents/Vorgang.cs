@@ -44,6 +44,17 @@ public sealed class MailData
     public string? FromAddress { get; set; }
     public string? FromName { get; set; }
     public string? ReplyTo { get; set; }
+    /// <summary>Gewählte Signatur (Name, Text, Grund). Text null = Signatur der Mail-Vorlage.</summary>
+    public string? SignatureName { get; set; }
+    public string? SignatureText { get; set; }
+    public string? SignatureReason { get; set; }
+    /// <summary>Versandweg (<see cref="MailRoute"/>), "" = wie eingestellt.</summary>
+    public string Route { get; set; } = "";
+    public string? RouteReason { get; set; }
+    /// <summary>Bei Versandweg gotomaxx: Drucker ("" = Standard).</summary>
+    public string? RoutePrinter { get; set; }
+    /// <summary>Herkunft von Absender, CC/BCC usw. aus Regeln (Anzeige im Vorgang).</summary>
+    public List<string> RuleNotes { get; set; } = new();
     /// <summary>Platzhalterwerte (eingebaute + @@pv@@) für Vorlage, Signatur und Fußzeile.</summary>
     public Dictionary<string, string> Variables { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>Automatische Textkorrekturen (Umlaute, Sonderzeichen).</summary>

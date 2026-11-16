@@ -66,7 +66,8 @@ function renderMenu() {
   if (!portal.authenticated) { $("#menu").innerHTML = ""; return; }
   let html = `<div class="menu-group">Vorgänge</div>`;
   html += MENU.filter(m => !m.needsUser || portal.userId).map(m => `<a href="#/${m.key}?f=${m.filter}" data-key="${m.key}:${m.filter}">${icon(m.icon)}<span>${esc(m.title)}</span><span class="menu-count" data-count="${m.filter}"></span></a>`).join("");
-  if (portal.userId) html += `<div class="menu-group">Persönlich</div><a href="#/melder" data-key="melder">${icon("bell")}<span>Melder &amp; Hinweise</span><span class="menu-dot" id="liveDot" title="Live-Verbindung"></span></a>`;
+  if (portal.userId) html += `<div class="menu-group">Persönlich</div><a href="#/melder" data-key="melder">${icon("bell")}<span>Melder &amp; Hinweise</span><span class="menu-dot" id="liveDot" title="Live-Verbindung"></span></a>`
+    + `<a href="#/regeln" data-key="regeln">${icon("send")}<span>Meine Mail-Regeln</span></a>`;
   if (portal.isAdmin) html += `<div class="menu-group">System</div><a href="#/einstellungen" data-key="einstellungen">${icon("settings")}<span>Einstellungen</span></a>`;
   $("#menu").innerHTML = html;
 }
@@ -90,7 +91,8 @@ const VIEWS = {
   vorgaenge: { title: "Vorgänge", render: v => renderVorgaenge(v) },
   vorgang: { title: "Vorgang", render: v => renderVorgang(v) },
   einstellungen: { title: "Einstellungen", render: v => renderSettings(v) },
-  melder: { title: "Melder & Hinweise", render: v => renderMelder(v) }
+  melder: { title: "Melder & Hinweise", render: v => renderMelder(v) },
+  regeln: { title: "Meine Mail-Regeln", render: v => renderMyRules(v) }
 };
 
 function route() {

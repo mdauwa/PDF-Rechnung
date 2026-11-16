@@ -1,6 +1,6 @@
 # Belegpost: eigene und erweiterte Steuerzeichen
 
-Stand 13.11.2026. Alle Steuerzeichen werden wie bei gotomaxx als `@@xxWert@@` gedruckt und aus dem Versand-PDF entfernt. Groß-/Kleinschreibung des Kürzels ist egal. Die Position im Ausdruck spielt keine Rolle: Klein, gedreht oder auf jeder Seite gedruckt funktioniert alles.
+Stand 16.11.2026. Alle Steuerzeichen werden wie bei gotomaxx als `@@xxWert@@` gedruckt und aus dem Versand-PDF entfernt. Groß-/Kleinschreibung des Kürzels ist egal. Die Position im Ausdruck spielt keine Rolle: Klein, gedreht oder auf jeder Seite gedruckt funktioniert alles.
 
 ## 1. Neue Steuerzeichen (gibt es in gotomaxx nicht)
 
@@ -13,6 +13,8 @@ Stand 13.11.2026. Alle Steuerzeichen werden wie bei gotomaxx als `@@xxWert@@` ge
 | `@@pt…@@` | `@@ptFirma B@@` | **Mail-Vorlage** (HTML im CI) wählen. Ohne `@@pt@@` wird die Vorlage in dieser Reihenfolge gesucht: Briefpapier → Absender → Standardvorlage. |
 | `@@pf…@@` | `@@pfservice@firma.at@@` | **Absenderadresse** dieses Belegs. Wählt auch die Mail-Vorlage dieses Absenders. Bei Microsoft 365 muss die App für diese Adresse senden dürfen. |
 | `@@pg…@@` | `@@pg@@`, `@@pgPDFMAILER Rechnung@@`, `@@pg0@@` | **Weiterleitung an gotomaxx PDFMAILER.** Der Beleg wird als echter Druckauftrag an einen gotomaxx-Drucker geschickt (`@@pg@@` = Standarddrucker aus Einstellungen → Drucker & Eingang, `@@pgName@@` = dieser Drucker, `@@pg0@@` = nicht weiterleiten, auch wenn „jeden Beleg weiterleiten“ eingestellt ist). Die Steuerzeichen werden auf derselben Seite neu als Text gedruckt – ohne die Portal-Steuerzeichen `@@pb@@ @@pi@@ @@pu@@ @@pv@@ @@pt@@ @@pf@@ @@pg@@` und `@@xi ERP_VOUCHER_INDEX=…@@`, alle anderen unverändert. Gedruckt wird in der Windows-Sitzung des Benutzers am Server (sonst vom Dienst). Status 140 = übergeben, 840 = fehlgeschlagen. |
+| `@@ps…@@` | `@@psMartin – Firma A@@`, `@@ps@@` | **Signatur** dieses Belegs (Name einer eigenen oder globalen Signatur). `@@ps@@` bzw. `@@ps0@@` = ohne Signatur. Ohne `@@ps@@` gilt: Regel → eigene Signatur für Briefpapier/Absender/Standard → globale → Signatur der Mail-Vorlage. |
+| `@@pw…@@` | `@@pwdirekt@@`, `@@pwfreigabe@@`, `@@pwoutlook@@`, `@@pwgotomaxx@@`, `@@pwkeine@@` | **Versandweg** – übersteuert die Regeln: direkt (automatisch versenden), nach Freigabe im Portal, über Outlook des Benutzers (Melder), an gotomaxx, keine Mail. |
 
 ### Platzhalter in Texten (zu `@@pv@@`)
 
@@ -23,6 +25,10 @@ Stand 13.11.2026. Alle Steuerzeichen werden wie bei gotomaxx als `@@xxWert@@` ge
   - `**fett**` und `*kursiv*`
   - Zeilen mit `- ` werden zur Aufzählung.
   - Adressen und Links werden klickbar.
+
+### Mail-Regeln und Signaturen
+
+Unter Einstellungen → **Regeln & Signaturen** (global) und je Benutzer (Persönlich → **Meine Mail-Regeln**, für Admins auch in der Benutzer-Maske) legen Regeln Vorlage, Absender, Absendername, Antwort-an, Signatur, Versandweg und CC/BCC fest – abhängig von Belegart, Briefpapier, Absender, Empfänger, Kunde, Quelle, E-Rechnungsformat und Text. Eigene Regeln gelten vor globalen; je Aktion gewinnt die erste passende Regel. **Steuerzeichen haben immer Vorrang** (`@@pt@@`, `@@pf@@`, `@@ps@@`, `@@pw@@`, `@@pg@@`, `@@cc@@`/`@@bc@@`, `@@ml0@@`).
 
 ## 2. gotomaxx-Steuerzeichen mit zusätzlicher Funktion
 

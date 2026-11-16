@@ -15,6 +15,7 @@ const TABS = [
   ["briefpapier", "Briefpapier"],
   ["mail", "E-Mail & Versand"],
   ["mailvorlagen", "Mail-Vorlagen"],
+  ["regeln", "Regeln & Signaturen"],
   ["erechnung", "E-Rechnung"],
   ["ablage", "Ablage"],
   ["erp", "ERP-Rückmeldung"],
@@ -76,7 +77,7 @@ function drawTab() {
   const body = $("#stBody");
   if (!ST.s) return;
   const fn = { dienst: tabService, server: tabServer, eingang: tabInbox, briefpapier: tabStationery, mail: tabMail, mailvorlagen: tabTemplates, erechnung: tabInvoice, ablage: tabStorage, benutzer: tabUsers, anmeldung: tabAuth,
-    erp: tabErp, mapi: tabMapi, statuslink: tabStatusLink }[ST.tab] || tabService;
+    erp: tabErp, mapi: tabMapi, statuslink: tabStatusLink, regeln: tabRules }[ST.tab] || tabService;
   body.innerHTML = fn();
   if (ST.tab === "benutzer" && !ST.users) loadUsers();
   if (ST.tab === "benutzer" && !ST.devices) loadDevices();
@@ -111,6 +112,7 @@ const section = (title, inner, extra = "") => `<section class="st-card"><div cla
 
 function onInput(e) {
   const el = e.target;
+  if (ruleEditorInput(el, e)) return;
   if (ST.tab === "benutzer" && onUsersInput(el, e)) return;
   if (el.dataset.entrasecret !== undefined) { ST.entraSecret = el.value; markDirty(); return; }
   if (el.dataset.mailpw !== undefined) { ST.mailPassword = el.value; markDirty(); return; }
@@ -168,6 +170,7 @@ function onInput(e) {
 }
 
 async function onAction(e) {
+  if (await ruleEditorClick(e)) return;
   const goto = e.target.closest("[data-goto]")?.dataset.goto;
   if (goto) { ST.tab = goto; drawTab(); return; }
   const a = e.target.closest("[data-st]")?.dataset.st;
@@ -305,20 +308,34 @@ async function onAction(e) {
       case "unit-del": delete ST.s.invoice.units[btn.dataset.key]; markDirty(); drawTab(); break;
       case "user-add":
         ST.users.users.push({ id: "", name: "", email: "", logins: [], printNames: [], operatorNumbers: [], visibility: "eigene", alsoSees: [], sendViaOutlook: false, canSend: true, isAdmin: false, active: true });
-        ST.usersDirty = true; drawTab(); break;
+        ST.usersDirty = true; ST.userEdit = ST.users.users.length - 1; drawTab(); break;
+      case "user-open": ST.userEdit = +e.target.closest("[data-st]").dataset.i; drawTab(); window.scrollTo(0, 0); break;
+      case "user-back":
+        if (ST.userRules?.dirty && !await confirmDialog("Ungespeicherte Regeln", "Die Änderungen an Signaturen/Regeln dieses Benutzers sind noch nicht gespeichert. Trotzdem zurück?", "Zurück")) break;
+        if (ST.userRules?.dirty) ST.userRules = null;
+        ST.userEdit = null; drawTab(); break;
       case "user-del": {
         const u = ST.users.users[+btn.dataset.i];
-        if (await confirmDialog("Benutzer entfernen", `„${esc(u.name || u.email || "neuer Benutzer")}“ entfernen?`, "Entfernen", true)) {
-          ST.users.users.splice(+btn.dataset.i, 1); ST.usersDirty = true; drawTab();
+        if (await confirmDialog("Benutzer entfernen", `„${esc(u.name || u.email || "neuer Benutzer")}“ entfernen? Gespeichert wird mit „Speichern“.`, "Entfernen", true)) {
+          ST.users.users.splice(+btn.dataset.i, 1); ST.usersDirty = true; ST.userEdit = null; drawTab();
         }
         break;
       }
-      case "users-save":
+      case "users-save": {
+        const editedId = ST.userEdit != null ? ST.users.users[ST.userEdit]?.id : null, editedNew = ST.userEdit != null && !editedId;
         await api("PUT", "api/admin/users", { users: ST.users.users });
         for (const u of ST.users.users.filter(x => x.id && x._mapiChanged)) await api("POST", `api/melder/benutzer/${encodeURIComponent(u.id)}/mapi`, { mode: u.mapiMode || "" });
+        if (ST.userRules?.dirty && !ST.userRules.error) {
+          await api("PUT", `api/meine-regeln?user=${encodeURIComponent(ST.userRules.userId)}`, { set: ST.userRules.set });
+          ST.userRules.dirty = false;
+        }
         await loadUsers();
-        msg("Benutzer gespeichert – Änderungen gelten sofort.", true);
+        if (editedNew) ST.userEdit = ST.users.users.length - 1; // neuer Benutzer: in der Maske bleiben
+        else if (editedId) { const k = ST.users.users.findIndex(x => x.id === editedId); ST.userEdit = k >= 0 ? k : null; }
+        drawTab();
+        msg("Gespeichert – Änderungen gelten sofort.", true);
         break;
+      }
       case "local-pw": {
         const cur = $("#lpCur").value, n1 = $("#lpNew").value, n2 = $("#lpNew2").value;
         if (n1 !== n2) throw new Error("Die neuen Kennwörter stimmen nicht überein.");
@@ -915,42 +932,108 @@ function tabUsers() {
   const U = ST.users;
   if (!U) return `<p class="meta">Lade Benutzer …</p>`;
   if (U.error) return `<div class="notice">${esc(U.error)}</div>`;
-  const fmtLogin = d => d ? new Date(d).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–";
+  if (ST.userEdit != null && U.users[ST.userEdit]) return userMask(ST.userEdit);
+  ST.userEdit = null;
+  const fmt = d => d ? new Date(d).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–";
+  const vis = u => u.isAdmin ? "alle" : ({ eigene: "eigene", auswahl: "eigene + Auswahl", alle: "alle" }[u.visibility || "eigene"]);
+  const devs = u => (ST.devices || []).filter(d => d.userId === u.id);
   return section("Benutzer",
-    `<p class="help">Anmeldung mit dem Microsoft-365-Konto (E-Mail-Adresse). <b>Versenden</b> = darf Versanddaten ändern, senden und verwerfen; ohne dieses Recht nur ansehen.
-      <b>Outlook</b> = darf lokal über das eigene Outlook senden („Freigeben &amp; in Outlook senden“ öffnet die fertige Mail mit Anhängen über den Melder); seine Belege werden nicht automatisch versendet. <b>Admin</b> = zusätzlich Einstellungen. <b>Aktiv</b> abgewählt = keine Anmeldung.
-      <b>ERP-Nr.</b> = dreistellige ERP-Bedienernummer; das ERP druckt sie als <code>@@pb007@@</code>. Der Beleg gehört dann diesem Benutzer und öffnet sich über seinen Melder.
-      <b>Druck-Benutzer</b> = Windows- oder ERP-Benutzer dieser Person (aus dem Druckauftrag oder <code>@@pu…@@</code>). Ohne Eintrag wird der Anmeldename ohne Domäne verglichen.
-      So landet ein gedruckter Beleg bei „Meine Belege“ und öffnet sich über den Melder auf dem PC dieser Person.
-      <b>Sieht Belege</b>: nur eigene, eigene plus die ausgewählter Kollegen (z. B. Vertretung, Sekretariat) oder alle. Admins sehen immer alle; Belege ohne zugeordneten Benutzer sehen nur „alle“ und Admins.</p>
-    ${U.users.length ? `<div class="table-wrap"><table class="list mini users"><thead><tr><th>Name</th><th title="ERP-Bedienernummer, 3-stellig – im Druck @@pb007@@">ERP-Nr.</th><th>E-Mail (Anmeldename)</th><th>Weitere Anmeldenamen</th>
-      <th>Versenden</th><th title="Darf Belege lokal über das eigene Outlook senden (über den Belegpost Melder)">Outlook</th><th>Admin</th><th>Aktiv</th><th>Letzte Anmeldung</th><th></th></tr></thead><tbody>
-      ${U.users.map((u, i) => `<tr class="${u.active ? "" : "inactive"}">
-        <td><input data-u="${i}|name" value="${esc(u.name)}" placeholder="Vorname Nachname"></td>
-        <td><input class="erp-no" data-u="${i}|operatorNumbers" value="${esc((u.operatorNumbers || []).join(", "))}" placeholder="007" inputmode="numeric" title="ERP-Bedienernummer (3 Ziffern). Mehrere mit Komma."></td>
-        <td><input data-u="${i}|email" value="${esc(u.email || "")}" placeholder="name@firma.at"></td>
-        <td><input data-u="${i}|logins" value="${esc((u.logins || []).join(", "))}" placeholder="optional"></td>
-        <td><input type="checkbox" data-u="${i}|canSend" ${u.canSend ? "checked" : ""}></td>
-        <td><input type="checkbox" data-u="${i}|sendViaOutlook" ${u.sendViaOutlook ? "checked" : ""} title="Lokal über Outlook senden"></td>
-        <td><input type="checkbox" data-u="${i}|isAdmin" ${u.isAdmin ? "checked" : ""}></td>
-        <td><input type="checkbox" data-u="${i}|active" ${u.active ? "checked" : ""}></td>
-        <td class="meta-inline">${fmtLogin(u.lastLogin)}</td>
-        <td><button class="icon-btn" data-st="user-del" data-i="${i}" title="Entfernen">✕</button></td></tr>
-        <tr class="user-sub ${u.active ? "" : "inactive"}"><td colspan="10"><div class="user-sub-grid">
-          <label>Windows-Benutzer (Druckauftrag)<input data-u="${i}|printNames" value="${esc((u.printNames || []).join(", "))}" placeholder="z. B. FIRMA\\mmuster"></label>
-          <label>MAPI-Mails (Vorgabe)<select data-u="${i}|mapiMode">
-            <option value="" ${!u.mapiMode ? "selected" : ""}>Standard (${esc(mapiText(ST.s.mapi?.defaultMode || "outlook"))})</option>
-            ${(ST.data.mapiModes || []).map(m => `<option value="${m.key}" ${u.mapiMode === m.key ? "selected" : ""}>${esc(m.text)}</option>`).join("")}</select></label>
-          <div class="user-devices">${userDevices(u, i)}</div>
-          <label>Sieht Belege<select data-u="${i}|visibility" ${u.isAdmin ? "disabled" : ""}>
-            ${[["eigene", "nur eigene"], ["auswahl", "eigene + ausgewählte Benutzer"], ["alle", "alle"]].map(([k, t]) =>
-              `<option value="${k}" ${(u.isAdmin ? "alle" : (u.visibility || "eigene")) === k ? "selected" : ""}>${t}</option>`).join("")}</select></label>
-          ${!u.isAdmin && u.visibility === "auswahl" ? `<div class="user-also"><span>zusätzlich die Belege von:</span>
-            ${U.users.filter(o => o !== u && o.id).map(o => `<label class="check"><input type="checkbox" data-also="${i}" value="${esc(o.id)}" ${(u.alsoSees || []).includes(o.id) ? "checked" : ""}> ${esc(o.name || o.email)}</label>`).join("") || '<span class="meta-inline">(neue Benutzer erst speichern)</span>'}</div>` : ""}
-        </div></td></tr>`).join("")}
+    `${U.users.length ? `<div class="table-wrap"><table class="list users-compact"><thead><tr>
+        <th>Name</th><th title="ERP-Bedienernummer">ERP-Nr.</th><th>E-Mail</th><th>Rechte</th><th>Sieht</th><th>Melder</th><th>Letzte Anmeldung</th><th></th></tr></thead><tbody>
+      ${U.users.map((u, i) => `<tr class="clickable ${u.active ? "" : "inactive"}" data-st="user-open" data-i="${i}">
+        <td><b>${esc(u.name || "(ohne Namen)")}</b>${u.active ? "" : ' <span class="badge">inaktiv</span>'}${u.id ? "" : ' <span class="badge partial">neu</span>'}</td>
+        <td class="mono">${esc((u.operatorNumbers || []).join(", ") || "–")}</td>
+        <td>${esc(u.email || "–")}</td>
+        <td class="nowrap">${[u.isAdmin ? '<span class="badge ok">Admin</span>' : "", u.canSend || u.isAdmin ? '<span class="badge">Versenden</span>' : '<span class="badge">nur ansehen</span>', u.sendViaOutlook ? '<span class="badge remote">Outlook</span>' : ""].join(" ")}</td>
+        <td>${esc(vis(u))}</td>
+        <td class="nowrap">${devs(u).length ? `${devs(u).length} PC${devs(u).length > 1 ? "s" : ""}` : '<span class="meta-inline">–</span>'}</td>
+        <td class="nowrap meta-inline">${fmt(u.lastLogin)}</td>
+        <td class="nowrap"><button class="btn ghost small" data-st="user-open" data-i="${i}">Bearbeiten</button></td></tr>`).join("")}
       </tbody></table></div>` : `<p class="meta">Noch keine Benutzer. Bis dahin ist nur die Anmeldung als Administrator direkt am Server möglich.</p>`}
-    <div class="actions"><button class="btn" data-st="users-save" ${ST.usersDirty ? "" : "disabled"}>Benutzer speichern</button></div>`,
+     <div class="actions"><button class="btn" data-st="users-save" ${ST.usersDirty ? "" : "disabled"}>Benutzer speichern</button></div>`,
     `<button class="btn ghost" data-st="user-add">+ Benutzer</button>`);
+}
+
+/** Eigene Maske für einen Benutzer: Person, Rechte, Zuordnung, Sicht, MAPI/Melder, Signaturen und Regeln. */
+function userMask(i) {
+  const U = ST.users, u = U.users[i];
+  const fmt = d => d ? new Date(d).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–";
+  const inp = (k, val, ph = "", extra = "") => `<input data-u="${i}|${k}" value="${esc(val ?? "")}" placeholder="${esc(ph)}" ${extra}>`;
+  const chk = (k, label, help) => `<label class="check"><input type="checkbox" data-u="${i}|${k}" ${u[k] ? "checked" : ""}> ${label}${help ? ` <small class="meta-inline">– ${help}</small>` : ""}</label>`;
+  const rules = ST.userRules?.userId === u.id ? ST.userRules : null;
+  let rulesHtml;
+  if (!u.id) rulesHtml = `<p class="meta">Signaturen und Regeln gibt es, sobald der Benutzer gespeichert ist.</p>`;
+  else if (!rules) { loadUserRules(u.id); rulesHtml = `<p class="meta">Lade …</p>`; }
+  else if (rules.error) rulesHtml = `<div class="notice">${esc(rules.error)}</div>`;
+  else rulesHtml = ruleEditorHtml(ruleEditor("user", {
+    set: rules.set, choices: { ...rules.choices, outlook: u.sendViaOutlook }, global: false,
+    onChange: () => { rules.dirty = true; markUsersDirty(); }, redraw: () => drawTab()
+  }));
+
+  return `<div class="user-mask-head"><button class="btn ghost" data-st="user-back">← Alle Benutzer</button>
+      <h2>${esc(u.name || "Neuer Benutzer")}</h2>${u.active ? "" : '<span class="badge">inaktiv</span>'}
+      <span class="spacer"></span>
+      <button class="btn ghost danger" data-st="user-del" data-i="${i}">Entfernen</button>
+      <button class="btn" data-st="users-save" ${ST.usersDirty ? "" : "disabled"}>Speichern</button></div>` +
+    section("Person und Anmeldung",
+      `<div class="grid2">
+         ${field("Name", inp("name", u.name, "Vorname Nachname"))}
+         ${field("E-Mail (Anmeldename)", inp("email", u.email, "name@firma.at"), "Anmeldung mit dem Microsoft-365-Konto.")}
+         ${field("Weitere Anmeldenamen", inp("logins", (u.logins || []).join(", "), "optional"), "Falls die Anmeldung (UPN) von der E-Mail abweicht. Mehrere mit Komma.")}
+         <div class="plain-field"><span class="lbl">Letzte Anmeldung</span><span>${fmt(u.lastLogin)}</span></div>
+       </div>
+       ${chk("active", "Aktiv", "abgewählt = keine Anmeldung")}`) +
+    section("Rechte",
+      `${chk("canSend", "Versenden", "darf Versanddaten ändern, senden und verwerfen; sonst nur ansehen")}
+       ${chk("sendViaOutlook", "Über Outlook senden", "„Freigeben & in Outlook senden“ öffnet die fertige Mail über den Melder; seine Belege werden nicht automatisch versendet")}
+       ${chk("isAdmin", "Administrator", "zusätzlich Einstellungen; sieht alle Belege")}`) +
+    section("Zuordnung gedruckter Belege",
+      `<div class="grid2">
+         ${field("ERP-Bedienernummer(n)", inp("operatorNumbers", (u.operatorNumbers || []).join(", "), "007", 'inputmode="numeric" class="erp-no"'),
+           "Dreistellig; das ERP druckt sie als <code>@@pb007@@</code>, bei der WebWARE kommt sie aus dem Prozess (<code>wwa.exe 007 …</code>). Mehrere mit Komma.")}
+         ${field("Windows-/ERP-Benutzer (Druckauftrag)", inp("printNames", (u.printNames || []).join(", "), "z. B. FIRMA\\mmuster"),
+           "Aus dem Druckauftrag oder <code>@@pu…@@</code>. Ohne Eintrag wird der Anmeldename ohne Domäne verglichen.")}
+       </div>`) +
+    section("Sichtbarkeit",
+      `${field("Sieht Belege", `<select data-u="${i}|visibility" ${u.isAdmin ? "disabled" : ""}>
+          ${[["eigene", "nur eigene"], ["auswahl", "eigene + ausgewählte Benutzer"], ["alle", "alle"]].map(([k, t]) =>
+            `<option value="${k}" ${(u.isAdmin ? "alle" : (u.visibility || "eigene")) === k ? "selected" : ""}>${t}</option>`).join("")}</select>`,
+          "Admins sehen immer alle; Belege ohne zugeordneten Benutzer sehen nur „alle“ und Admins.")}
+       ${!u.isAdmin && u.visibility === "auswahl" ? `<div class="user-also"><span>zusätzlich die Belege von:</span>
+          ${U.users.filter(o => o !== u && o.id).map(o => `<label class="check"><input type="checkbox" data-also="${i}" value="${esc(o.id)}" ${(u.alsoSees || []).includes(o.id) ? "checked" : ""}> ${esc(o.name || o.email)}</label>`).join("") || '<span class="meta-inline">(neue Benutzer erst speichern)</span>'}</div>` : ""}`) +
+    section("MAPI-Mails und Melder",
+      `${field("MAPI-Mails (Vorgabe)", `<select data-u="${i}|mapiMode">
+          <option value="" ${!u.mapiMode ? "selected" : ""}>Standard (${esc(mapiText(ST.s.mapi?.defaultMode || "outlook"))})</option>
+          ${(ST.data.mapiModes || []).map(m => `<option value="${m.key}" ${u.mapiMode === m.key ? "selected" : ""}>${esc(m.text)}</option>`).join("")}</select>`)}
+       <div class="user-devices">${userDevices(u, i)}</div>`) +
+    section("Signaturen und Mail-Regeln", rulesHtml);
+}
+
+async function loadUserRules(id) {
+  try { const r = await api("GET", `api/meine-regeln?user=${encodeURIComponent(id)}`); ST.userRules = { userId: id, set: r.set, choices: r.choices, dirty: false }; }
+  catch (e) { ST.userRules = { userId: id, error: e.message }; }
+  if (ST.tab === "benutzer") drawTab();
+}
+
+/* ---------------- Tab: Regeln & Signaturen (global) ---------------- */
+
+function tabRules() {
+  ST.s.mailRules ||= { signatures: [], rules: [] };
+  if (!ST.users) loadUsers();
+  const ed = ruleEditor("global", {
+    set: ST.s.mailRules, global: true,
+    users: (ST.users?.users || []).filter(u => u.id).map(u => ({ id: u.id, name: u.name || u.email })),
+    choices: {
+      templates: (ST.s.mailTemplates?.items || []).map(t => t.name).filter(Boolean),
+      stationeries: (ST.s.stationery?.items || []).map(t => t.name).filter(Boolean),
+      globalSignatures: [], gotomaxx: !!ST.s.gotomaxx?.enabled, printers: ST.data.printers || [], defaultSender: ST.s.mail?.fromAddress
+    },
+    onChange: () => markDirty(), redraw: () => drawTab()
+  });
+  return section("Regeln und Signaturen für alle",
+    `<p class="help">Regeln legen fest, welche Mail-Vorlage, welcher Absender, welche Signatur und welcher Versandweg für einen Beleg gelten – abhängig von Belegart, Briefpapier, Absender, Empfänger, Kunde usw.
+      Jeder Benutzer kann zusätzlich eigene Signaturen und Regeln anlegen (Persönlich → Meine Mail-Regeln; als Admin auch unter Benutzer). Eigene Regeln gelten vor diesen.</p>
+     ${ruleEditorHtml(ed)}`);
 }
 
 function markUsersDirty() {

@@ -76,15 +76,15 @@ public static partial class MailDesigner
     /// <summary>
     /// Vorlage wählen: @@pt@@ → Vorlage, die dem Briefpapier zugeordnet ist → Vorlage des Absenders → Standard.
     /// </summary>
-    public static (MailDesign? Design, string? Reason, string? Warning) Select(MailTemplateOptions o, string? requested, string? stationery, string? sender)
+    public static (MailDesign? Design, string? Reason, string? Warning) Select(MailTemplateOptions o, string? requested, string? stationery, string? sender, string? requestReason = null)
     {
         if (!string.IsNullOrWhiteSpace(requested))
         {
             var r = requested.Trim();
             var hit = o.Items.FirstOrDefault(x => string.Equals(x.Name, r, StringComparison.OrdinalIgnoreCase));
-            if (hit is not null) return (hit, $"Steuerzeichen @@pt{r}@@", null);
+            if (hit is not null) return (hit, requestReason ?? $"Steuerzeichen @@pt{r}@@", null);
             var fallback = Select(o, null, stationery, sender);
-            return (fallback.Design, fallback.Reason, $"Mail-Vorlage „{r}“ (@@pt@@) gibt es nicht – {(fallback.Design is null ? "einfache Mail" : $"„{fallback.Design.Name}“")} wird verwendet.");
+            return (fallback.Design, fallback.Reason, $"Mail-Vorlage „{r}“ ({requestReason ?? "@@pt@@"}) gibt es nicht – {(fallback.Design is null ? "einfache Mail" : $"„{fallback.Design.Name}“")} wird verwendet.");
         }
         if (!string.IsNullOrWhiteSpace(stationery))
         {
@@ -105,10 +105,17 @@ public static partial class MailDesigner
         return (null, null, null);
     }
 
-    public static RenderedMail Render(MailDesign? d, string body, IReadOnlyDictionary<string, string> values, string? logoDirectory, MailFacts? facts = null)
+    /// <param name="signatureOverride">Signatur aus Benutzer-/Regel-Signaturen; null = Signatur der Vorlage, "" = keine.</param>
+    public static RenderedMail Render(MailDesign? d, string body, IReadOnlyDictionary<string, string> values, string? logoDirectory, MailFacts? facts = null,
+        string? signatureOverride = null)
     {
         body = (body ?? "").Replace("\r\n", "\n").Trim('\n');
-        if (d is null) return new RenderedMail(Simple(body), body, new());
+        if (d is null)
+        {
+            var sig = Placeholders.Apply(signatureOverride, values).Trim('\n');
+            if (sig.Length > 0) body = body + "\n\n" + sig;
+            return new RenderedMail(Simple(body), body, new());
+        }
 
         var images = new List<InlineImage>();
         string logoHtml = "";
@@ -124,7 +131,7 @@ public static partial class MailDesigner
             }
         }
 
-        var signature = Placeholders.Apply(d.Signature, values);
+        var signature = Placeholders.Apply(signatureOverride ?? d.Signature, values);
         var footer = Placeholders.Apply(d.Footer, values);
         var header = Placeholders.Apply(d.HeaderText, values);
         var font = CssValue(d.FontFamily, "Segoe UI, Arial, Helvetica, sans-serif");

@@ -485,3 +485,19 @@ public class ErpIndexFormatTests
     public void Belegindex_11_Zeichen(string input, string? expected)
         => Assert.Equal(expected, PdfRechnung.Documents.ControlCodeParser.NormalizeErpIndex(input));
 }
+
+public class StatusBitmapTests
+{
+    [Fact]
+    public void Statusbitmaps_ab_950_und_uebersteuerbar()
+    {
+        Assert.Equal("950", StatusCode.DefaultBitmap(StatusCode.Erfasst));
+        Assert.Equal("964", StatusCode.DefaultBitmap(StatusCode.Verworfen));
+        Assert.Equal("bw000955.png", StatusCode.BitmapFile(StatusCode.DefaultBitmap(StatusCode.VersendetOutlook)));
+        var o = new PdfRechnung.ErpOptions { Codes = { new PdfRechnung.ErpStatusCode { Code = StatusCode.Versendet, Bitmap = "1234" } } };
+        Assert.Equal("1234", ErpFieldBuilder.Bitmap(o, StatusCode.Versendet));
+        Assert.Equal("955", ErpFieldBuilder.Bitmap(o, StatusCode.VersendetOutlook));
+        var m = new PdfRechnung.ErpFieldMapping { Field = "BEL_9_6", Value = "statusbitmap" };
+        Assert.Equal("1234", ErpFieldBuilder.Value(o, m, new ErpValueContext(new Vorgang(), StatusCode.Versendet, DateTimeOffset.Now, null, null)));
+    }
+}

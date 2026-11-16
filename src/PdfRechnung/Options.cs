@@ -105,6 +105,8 @@ public sealed class ErpStatusCode
     public string Code { get; set; } = "";
     /// <summary>Wert im ERP (3-stellig); leer = wie Code.</summary>
     public string ErpValue { get; set; } = "";
+    /// <summary>Statusbitmap: Bildnummer im ERP (Datei bw000&lt;Nummer&gt;.png); leer = Standard ab 950.</summary>
+    public string Bitmap { get; set; } = "";
     public bool Write { get; set; } = true;
 }
 

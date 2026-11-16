@@ -18,6 +18,18 @@ public static class StatusCode
     public static readonly string[] All = { Erfasst, WartetFreigabe, Freigegeben, AnOutlook, Versendet, VersendetOutlook, ErneutVersendet,
         AnGotomaxx, OhneVersand, FehlerBeleg, Versandfehler, OutlookFehler, OutlookUnbestaetigt, GotomaxxFehler, Verworfen };
 
+    /// <summary>
+    /// Statusbitmap (Bildnummer im ERP, Datei bw000&lt;Nummer&gt;.png): ab 950 in Reihenfolge von <see cref="All"/>,
+    /// weil die Nummern darunter im ERP schon belegt sind.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string> DefaultBitmaps =
+        All.Select((c, i) => (c, i)).ToDictionary(x => x.c, x => (950 + x.i).ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    public static string DefaultBitmap(string? code) => code is not null && DefaultBitmaps.TryGetValue(code, out var b) ? b : "";
+
+    /// <summary>Dateiname des Bildes, z. B. 950 → bw000950.png.</summary>
+    public static string BitmapFile(string number) => $"bw{number.PadLeft(6, '0')}.png";
+
     public static bool IsStatus(string? code) => code is not null && code != ErpBestaetigt;
 
     public static readonly IReadOnlyDictionary<string, string> Texts = new Dictionary<string, string>

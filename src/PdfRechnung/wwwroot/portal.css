@@ -166,3 +166,6 @@ ul.erp-jobs small { display: block; color: var(--muted); font-size: 12px; word-b
 .vd-id { display: flex; align-items: center; gap: 6px; padding-bottom: 0; }
 .vd-id code { user-select: all; font-size: 12px; background: var(--surface-2); padding: 1px 6px; border-radius: 4px; color: var(--text); }
 .vd-id .icon-btn { width: 26px; height: 26px; font-size: 13px; }
+
+img.st-bmp { width: 16px; height: 16px; vertical-align: middle; margin-right: 6px; image-rendering: pixelated; }
+.list.mini input.erp-no { width: 64px; font-family: Consolas, monospace; text-align: center; }

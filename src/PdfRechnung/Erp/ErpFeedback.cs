@@ -18,6 +18,7 @@ public static class ErpValues
     {
         new("statuscode", "Statuscode (3-stellig)", "110", 3, NeverTruncate: true),
         new("statustext", "Statustext", "versendet über Outlook"),
+        new("statusbitmap", "Statusbitmap (Bildnummer)", "955", NeverTruncate: true),
         new("datum", "Datum des Status", "15.11.2026", Date: true),
         new("uhrzeit", "Uhrzeit des Status", "10:34", Time: true),
         new("zeitstempel", "Zeitstempel des Status", "15.11.2026 10:34", Date: true),
@@ -78,6 +79,9 @@ public static class ErpValues
         foreach (var c in o.Codes)
             if (c.ErpValue.Length > 0 && !(c.ErpValue.Length == 3 && c.ErpValue.All(char.IsAsciiDigit)))
                 errors.Add($"Statuscode {c.Code}: ERP-Wert „{c.ErpValue}“ muss 3-stellig numerisch sein.");
+        foreach (var c in o.Codes)
+            if (c.Bitmap.Trim() is { Length: > 0 } b && !(b.Length <= 6 && b.All(char.IsAsciiDigit)))
+                errors.Add($"Statuscode {c.Code}: Statusbitmap „{b}“ muss eine Zahl sein (z. B. 950 für bw000950.png).");
         return (errors, warnings);
     }
 
@@ -101,6 +105,10 @@ public static class ErpFieldBuilder
 
     public static string ErpCode(ErpOptions o, string code) =>
         o.Codes.FirstOrDefault(c => c.Code == code) is { ErpValue.Length: 3 } c ? c.ErpValue : code;
+
+    /// <summary>Bildnummer des Status (eingestellt oder Standard ab 950).</summary>
+    public static string Bitmap(ErpOptions o, string code) =>
+        o.Codes.FirstOrDefault(c => c.Code == code) is { Bitmap.Length: > 0 } c ? c.Bitmap.Trim() : StatusCode.DefaultBitmap(code);
 
     public static bool ShouldWrite(ErpOptions o, string code) =>
         StatusCode.IsStatus(code) && (o.Codes.FirstOrDefault(c => c.Code == code)?.Write ?? DefaultWrite(code));
@@ -131,6 +139,7 @@ public static class ErpFieldBuilder
         {
             "statuscode" => ErpCode(o, ctx.Code),
             "statustext" => StatusCode.Text(ctx.Code),
+            "statusbitmap" => Bitmap(o, ctx.Code),
             "datum" => Date(ctx.At, "dd.MM.yyyy"),
             "uhrzeit" => Date(ctx.At, "HH:mm"),
             "zeitstempel" => Date(ctx.At, "dd.MM.yyyy HH:mm"),
@@ -156,7 +165,7 @@ public static class ErpFieldBuilder
         string D(DateTimeOffset? t, string f) => t is { } x ? x.ToLocalTime().ToString(f, De) : "";
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Statuscode"] = ErpCode(o, ctx.Code), ["Statustext"] = StatusCode.Text(ctx.Code),
+            ["Statuscode"] = ErpCode(o, ctx.Code), ["Statustext"] = StatusCode.Text(ctx.Code), ["Statusbitmap"] = Bitmap(o, ctx.Code),
             ["Datum"] = D(ctx.At, "dd.MM.yyyy"), ["Zeit"] = D(ctx.At, "HH:mm"), ["Uhrzeit"] = D(ctx.At, "HH:mm"),
             ["Versanddatum"] = D(v.SentAt ?? v.OutlookConfirmedAt, "dd.MM.yyyy"), ["Versandzeit"] = D(v.SentAt ?? v.OutlookConfirmedAt, "HH:mm"),
             ["Kanal"] = ctx.Channel ?? v.SendChannel ?? "", ["Empfaenger"] = string.Join(", ", v.Mail.To), ["Empfänger"] = string.Join(", ", v.Mail.To),

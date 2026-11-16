@@ -60,8 +60,13 @@ public static class AdminApi
             s.Auth.Firmenportal.Secret = null;
             var hasErpPassword = !string.IsNullOrEmpty(s.Erp.Password);
             s.Erp.Password = null;
-            if (s.Erp.Codes.Count == 0)
-                s.Erp.Codes = PdfRechnung.Documents.StatusCode.All.Select(c => new ErpStatusCode { Code = c, ErpValue = c, Write = PdfRechnung.Erp.ErpFieldBuilder.DefaultWrite(c) }).ToList();
+            // Fehlende Statuscodes ergänzen und leere Statusbitmaps mit dem Standard (ab 950) füllen
+            foreach (var c in PdfRechnung.Documents.StatusCode.All)
+                if (s.Erp.Codes.All(x => x.Code != c))
+                    s.Erp.Codes.Add(new ErpStatusCode { Code = c, ErpValue = c, Write = PdfRechnung.Erp.ErpFieldBuilder.DefaultWrite(c) });
+            s.Erp.Codes = s.Erp.Codes.OrderBy(x => Array.IndexOf(PdfRechnung.Documents.StatusCode.All, x.Code) is var i && i < 0 ? 999 : i).ToList();
+            foreach (var c in s.Erp.Codes)
+                if (string.IsNullOrWhiteSpace(c.Bitmap)) c.Bitmap = PdfRechnung.Documents.StatusCode.DefaultBitmap(c.Code);
             return Results.Ok(new
             {
                 settings = s,
@@ -70,7 +75,7 @@ public static class AdminApi
                 hasGraphSecret,
                 hasFirmenportalSecret,
                 hasErpPassword,
-                statusCodes = PdfRechnung.Documents.StatusCode.All.Select(c => new { code = c, text = PdfRechnung.Documents.StatusCode.Text(c) }),
+                statusCodes = PdfRechnung.Documents.StatusCode.All.Select(c => new { code = c, text = PdfRechnung.Documents.StatusCode.Text(c), bitmap = PdfRechnung.Documents.StatusCode.DefaultBitmap(c) }),
                 erpValues = PdfRechnung.Erp.ErpValues.All.Select(d => new { key = d.Key, label = d.Label, example = d.Example, date = d.Date, time = d.Time }),
                 mapiModes = MapiMode.All.Select(m => new { key = m, text = MapiMode.Text(m) }),
                 printers = gotomaxx.Printers(),

@@ -1247,7 +1247,7 @@ function onErpInput(el, e) {
   }
   if (el.dataset.erpc !== undefined) {
     const [i, k] = el.dataset.erpc.split("|"), c = ST.s.erp.codes[+i];
-    if (k === "write") c.write = el.checked; else c.erpValue = el.value.trim();
+    if (k === "write") c.write = el.checked; else if (k === "bitmap") c.bitmap = el.value.trim(); else c.erpValue = el.value.trim();
     markDirty(); return true;
   }
   return false;
@@ -1287,10 +1287,14 @@ function tabErp() {
      <div id="erpStatus"><p class="meta">Lade Status …</p></div>`) +
     section("Statuscodes",
       `<p class="help">Der Status wird als 3-stellige Zahl geschrieben. Gruppen: 0xx in Arbeit · 1xx versendet · 2xx ohne Versand · 8xx Fehler · 9xx abgebrochen.
-        Den Wert im ERP kannst du anpassen und einzelne Stati abschalten.</p>
-       <table class="list mini"><thead><tr><th>Code</th><th>Status</th><th>Wert im ERP</th><th>Schreiben</th></tr></thead><tbody>
+        Den Wert im ERP kannst du anpassen und einzelne Stati abschalten.
+        Die <b>Statusbitmap</b> ist die Bildnummer im ERP (Datei <code>bw000950.png</code> usw., 16×16) – als Wert „Statusbitmap“ in ein Rückgabefeld schreibbar.
+        <a href="img/status/statusbitmaps.zip" download>Alle Bilder herunterladen (ZIP)</a></p>
+       <table class="list mini"><thead><tr><th>Code</th><th>Status</th><th>Wert im ERP</th><th title="Bildnummer im ERP – Datei bw000…png">Statusbitmap</th><th>Schreiben</th></tr></thead><tbody>
        ${E.codes.map((c, i) => `<tr><td><code>${esc(c.code)}</code></td><td>${esc((ST.data.statusCodes || []).find(x => x.code === c.code)?.text || "")}</td>
          <td><input class="erp-no" data-erpc="${i}|erpValue" value="${esc(c.erpValue || c.code)}" maxlength="3" inputmode="numeric"></td>
+         <td class="nowrap">${(() => { const def = (ST.data.statusCodes || []).find(x => x.code === c.code)?.bitmap || ""; const b = c.bitmap || def;
+           return `${def ? `<img class="st-bmp" src="img/status/bw${def.padStart(6, "0")}.png" alt="" title="Standardbild bw${def.padStart(6, "0")}.png">` : ""}<input class="erp-no" data-erpc="${i}|bitmap" value="${esc(b)}" maxlength="6" inputmode="numeric" title="Bildnummer im ERP (bw000${esc(b)}.png)">`; })()}</td>
          <td><input type="checkbox" data-erpc="${i}|write" ${c.write ? "checked" : ""}></td></tr>`).join("")}</tbody></table>`) +
     section("Rückgabefelder",
       `<p class="help">Eine Zeile je Feld im Belegkopf. Die Länge ergibt sich aus der Zahl hinter dem letzten „_“ (<code>BEL_3_8</code> = 8 Zeichen); längere Werte werden gekürzt.

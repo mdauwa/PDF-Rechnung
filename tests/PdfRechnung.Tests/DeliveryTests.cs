@@ -27,6 +27,36 @@ public sealed class DeliveryTests : IDisposable
     };
 
     [Fact]
+    public void Eingangsbuch_vermerkt_Datei_mit_Kopie_und_Vorgang()
+    {
+        var book = new InboundLog(PdfRechnung.Data.BelegpostDb.For(_dir), _dir);
+        var target = Path.Combine(_dir, "eingang");
+        Directory.CreateDirectory(target);
+        var path = Path.Combine(target, "ORDERS_1.edi");
+        File.WriteAllText(path, "UNA:+.? 'UNB+UNOC:3");
+        var nr = book.Add(ChannelType.Sftp, "Noris: EDI", "k1", "00123 – Noris", path, File.ReadAllBytes(path));
+        Assert.True(nr > 0);
+        Assert.Equal(1, book.Unread());
+
+        File.Delete(path); // Eingangsordner hat die Datei verarbeitet – die Kopie bleibt
+        var x = book.Download(nr)!.Value;
+        Assert.NotNull(x.Path);
+        Assert.Equal("UNA:+.? 'UNB+UNOC:3", File.ReadAllText(x.Path!));
+        Assert.False(x.Entry.InTarget);
+        Assert.True(x.Entry.HasCopy);
+
+        book.LinkVorgang(path.ToUpperInvariant().Replace(_dir.ToUpperInvariant(), _dir), "v42");
+        var e = Assert.Single(book.List("noris", null, null, ChannelType.Sftp, unreadOnly: true));
+        Assert.Equal("v42", e.VorgangId);
+        Assert.Equal("00123 – Noris", e.Customer);
+        Assert.Empty(book.List("gibtsnicht", null, null, null, false));
+
+        Assert.Equal(1, book.MarkRead(new[] { nr }));
+        Assert.Equal(0, book.Unread());
+        Assert.Empty(book.List(null, null, null, null, unreadOnly: true));
+    }
+
+    [Fact]
     public void Kunde_ueber_Nummer_oder_Mail_und_Regel_waehlt_Versandwege()
     {
         var store = new CustomerStore(_dir);

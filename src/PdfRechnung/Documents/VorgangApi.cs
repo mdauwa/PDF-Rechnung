@@ -33,7 +33,7 @@ public static class VorgangApi
             return await next(ctx);
         });
 
-        g.MapGet("", (string? status, string? q, string? from, string? to, string? mine, DocumentStore store, PortalAccess access, HttpContext ctx) =>
+        g.MapGet("", (string? status, string? q, string? from, string? to, string? mine, DocumentStore store, PortalAccess access, HttpContext ctx, Delivery.InboundLog book) =>
         {
             var acc = access.For(ctx);
             var me = acc.UserId;
@@ -59,7 +59,8 @@ public static class VorgangApi
                 items = store.Query(filter).Select(v => v.Summary()),
                 counts = store.CountByStatus(vis),
                 mine = mineOpen,
-                sentToday = store.CountSentBetween(vis, today, today.AddDays(1))
+                sentToday = store.CountSentBetween(vis, today, today.AddDays(1)),
+                inbound = acc.SeeAll || acc.IsAdmin ? book.Unread() : 0
             });
         });
 

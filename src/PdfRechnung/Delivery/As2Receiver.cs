@@ -85,6 +85,7 @@ public static class As2Receiver
                 await File.WriteAllBytesAsync(path + ".part", data.ToArray());
                 File.Move(path + ".part", path);
                 saved = path;
+                ctx.RequestServices.GetService<InboundLog>()?.Add(ChannelType.As2, channel.Value.Label, channel.Value.CustomerId, channel.Value.Customer, path, data.ToArray());
                 disposition = "automatic-action/MDN-sent-automatically; processed";
                 log.LogInformation("AS2 von {From}: {File} gespeichert ({Label})", from, path, channel.Value.Label);
             }
@@ -129,7 +130,7 @@ public static class As2Receiver
     }
 
     /// <summary>Versandweg AS2 mit Abruf, dessen Partner-ID (AS2-To beim Senden) dem Absender entspricht.</summary>
-    private static (ChannelSettings Settings, string Label)? Find(DeliveryOptions o, CustomerStore customers, string from, string to)
+    private static (ChannelSettings Settings, string Label, string? CustomerId, string? Customer)? Find(DeliveryOptions o, CustomerStore customers, string from, string to)
     {
         bool Ok(ChannelSettings s) => s.Type == ChannelType.As2 && s.InboundEnabled == "ja"
             && string.Equals(s.As2To.Trim(), from, StringComparison.OrdinalIgnoreCase)
@@ -138,10 +139,10 @@ public static class As2Receiver
             foreach (var ch in c.Channels.Where(x => x.Enabled && x.Settings.Type == ChannelType.As2))
             {
                 var s = ChannelSettings.Merge(o.Global(ChannelType.As2), ch.Settings);
-                if (Ok(s)) return (s, $"{c.Label}: {ch.Label}");
+                if (Ok(s)) return (s, $"{c.Label}: {ch.Label}", c.Id, c.Label);
             }
         var g = o.Global(ChannelType.As2) is { } gl ? ChannelSettings.Merge(null, gl) : null;
-        return g is not null && Ok(g) ? (g, "AS2 (global)") : null;
+        return g is not null && Ok(g) ? (g, "AS2 (global)", null, null) : null;
     }
 
     private static string Unquote(string s) => s.Trim().Trim('"');

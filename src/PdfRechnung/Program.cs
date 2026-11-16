@@ -107,6 +107,7 @@ builder.Services.AddSingleton<EventHub>();
 builder.Services.AddSingleton<DocumentStore>();
 builder.Services.AddSingleton(new PdfRechnung.Delivery.CustomerStore(store.DataDirectory));
 builder.Services.AddSingleton<PdfRechnung.Delivery.DeliveryService>();
+builder.Services.AddSingleton(new PdfRechnung.Delivery.InboundLog(database, store.DataDirectory));
 builder.Services.AddSingleton<PdfRechnung.Delivery.InboundService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PdfRechnung.Delivery.InboundService>());
 builder.Services.AddSingleton<DocumentProcessor>();
@@ -291,6 +292,7 @@ app.MapGet("/api/portal", (IOptionsSnapshot<PortalOptions> portal, HttpContext c
         user = a.Authenticated ? a.Name : null,
         login = a.Login,
         isAdmin = a.IsAdmin,
+        seeInbound = a.Authenticated && (a.SeeAll || a.IsAdmin),
         isLocalAdmin = a.IsLocalAdmin,
         canSend = a.CanSend,
         userId = a.UserId,
@@ -314,6 +316,7 @@ AuthApi.Map(app);
 AdminApi.Map(app);
 PdfRechnung.Delivery.DeliveryApi.Map(app);
 PdfRechnung.Delivery.As2Receiver.Map(app);
+PdfRechnung.Delivery.InboundApi.Map(app);
 
 // ---------------- Start ----------------
 

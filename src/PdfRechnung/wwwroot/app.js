@@ -16,6 +16,7 @@ const ICONS = {
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   back: '<path d="M15 6l-6 6 6 6"/>',
   doc: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
+  download: '<path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>',
   bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/>'
 };
 const icon = name => `<svg viewBox="0 0 24 24">${ICONS[name] || ICONS.doc}</svg>`;
@@ -66,10 +67,12 @@ function renderMenu() {
   if (!portal.authenticated) { $("#menu").innerHTML = ""; return; }
   let html = `<div class="menu-group">Vorgänge</div>`;
   html += MENU.filter(m => !m.needsUser || portal.userId).map(m => `<a href="#/${m.key}?f=${m.filter}" data-key="${m.key}:${m.filter}">${icon(m.icon)}<span>${esc(m.title)}</span><span class="menu-count" data-count="${m.filter}"></span></a>`).join("");
+  if (portal.seeInbound) html += `<a href="#/eingang" data-key="eingang">${icon("download")}<span>Eingang</span><span class="menu-count" data-count="eingang"></span></a>`;
   if (portal.userId) html += `<div class="menu-group">Persönlich</div><a href="#/melder" data-key="melder">${icon("bell")}<span>Melder &amp; Hinweise</span><span class="menu-dot" id="liveDot" title="Live-Verbindung"></span></a>`
     + `<a href="#/regeln" data-key="regeln">${icon("send")}<span>Meine Mail-Regeln</span></a>`;
   if (portal.isAdmin) html += `<div class="menu-group">System</div><a href="#/einstellungen" data-key="einstellungen">${icon("settings")}<span>Einstellungen</span></a>`;
   $("#menu").innerHTML = html;
+  if (portal.seeInbound) api("GET", "api/eingang?anzahl=1").then(r => setInboundCount(r.unread)).catch(() => { });
 }
 
 /** Zähler im Menü (wird von der Vorgangsliste aktualisiert). */
@@ -79,6 +82,7 @@ function updateMenuCounts(counts, extra) {
   if (mine) mine.textContent = counts.mine || "";
   const el = document.querySelector('[data-count="offen"]');
   if (el) { el.textContent = open || ""; el.classList.toggle("alert", (counts.fehler || 0) + (counts.versandfehler || 0) > 0); }
+  if (extra && typeof extra.inbound === "number" && portal.seeInbound) setInboundCount(extra.inbound);
 }
 
 function toggleSidebar(open) {
@@ -92,7 +96,8 @@ const VIEWS = {
   vorgang: { title: "Vorgang", render: v => renderVorgang(v) },
   einstellungen: { title: "Einstellungen", render: v => renderSettings(v) },
   melder: { title: "Melder & Hinweise", render: v => renderMelder(v) },
-  regeln: { title: "Meine Mail-Regeln", render: v => renderMyRules(v) }
+  regeln: { title: "Meine Mail-Regeln", render: v => renderMyRules(v) },
+  eingang: { title: "Eingang", render: v => renderEingang(v) }
 };
 
 function route() {
@@ -114,6 +119,7 @@ function route() {
     if (key === "anmeldung") key = "vorgaenge";
   }
   if (key === "einstellungen" && !portal.isAdmin) key = "vorgaenge";
+  if (key === "eingang" && !portal.seeInbound) key = "vorgaenge";
   const v = VIEWS[key] || VIEWS.vorgaenge;
   $("#viewTitle").textContent = v.title;
   v.render(view);

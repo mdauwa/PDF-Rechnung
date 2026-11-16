@@ -245,11 +245,12 @@ public sealed class InboxWatcher : BackgroundService
     private readonly DocumentProcessor _processor;
     private readonly ILogger<InboxWatcher> _log;
     private readonly Dictionary<string, long> _seen = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Delivery.InboundLog? _book;
 
     public InboxWatcher(IOptionsMonitor<InboxOptions> opt, SettingsStore settings, DocumentProcessor processor, ILogger<InboxWatcher> log,
-        IOptionsMonitor<MandantOptions>? mandanten = null)
+        IOptionsMonitor<MandantOptions>? mandanten = null, Delivery.InboundLog? book = null)
     {
-        _mandanten = mandanten;
+        _mandanten = mandanten; _book = book;
         _opt = opt; _settings = settings; _processor = processor; _log = log;
     }
 
@@ -296,8 +297,9 @@ public sealed class InboxWatcher : BackgroundService
             _seen.Remove(file);
             try
             {
-                _processor.Process(data, "Eingang", info.Name,
+                var v = _processor.Process(data, "Eingang", info.Name,
                     originMandant: mandant?.Number, originMandantReason: mandant is null ? null : $"Eingangsordner des Mandanten {mandant.Label}");
+                _book?.LinkVorgang(file, v.Id);
                 File.Delete(file);
             }
             catch (Exception ex)

@@ -180,3 +180,8 @@ details.fold:not([open]) > summary { border-bottom: 0; }
 .fold-info { color: var(--muted); font-size: 12px; display: inline-flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .fold-tools { margin-top: 0; margin-bottom: 8px; }
 .fold-all { justify-content: flex-end; }
+
+/* Eingang */
+.eglist tr.unread td { background: color-mix(in srgb, var(--accent, #2563eb) 6%, transparent); }
+.eglist tr.unread td:first-child { box-shadow: inset 3px 0 0 var(--accent, #2563eb); font-weight: 600; }
+.eglist td small { display: block; color: var(--muted); }

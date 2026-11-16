@@ -12,7 +12,7 @@ using Renci.SshNet;
 namespace PdfRechnung.Delivery;
 
 /// <summary>Ein Abruf-Auftrag: globaler Versandweg oder Versandweg eines Kunden mit eingeschaltetem Abruf.</summary>
-public sealed record InboundJob(string Key, string Label, ChannelSettings Settings);
+public sealed record InboundJob(string Key, string Label, ChannelSettings Settings, string? CustomerId = null, string? Customer = null);
 
 /// <summary>Ergebnis des letzten Abrufs (für die Anzeige).</summary>
 public sealed record InboundRun(string Key, string Label, DateTimeOffset At, bool Ok, int Files, string Message);
@@ -30,10 +30,13 @@ public sealed class InboundService : BackgroundService
     private readonly Dictionary<string, DateTimeOffset> _due = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, InboundRun> _runs = new();
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly InboundLog? _book;
+    private InboundJob? _job; // laufender Abruf (unter _gate)
 
-    public InboundService(IOptionsMonitor<DeliveryOptions> opt, CustomerStore customers, Settings.SettingsStore settings, ILogger<InboundService> log)
+    public InboundService(IOptionsMonitor<DeliveryOptions> opt, CustomerStore customers, Settings.SettingsStore settings, ILogger<InboundService> log,
+        InboundLog? book = null)
     {
-        _opt = opt; _customers = customers; _settings = settings; _log = log;
+        _opt = opt; _customers = customers; _settings = settings; _log = log; _book = book;
     }
 
     public IReadOnlyList<InboundRun> Runs() => _runs.Values.OrderBy(r => r.Label).ToList();
@@ -52,7 +55,7 @@ public sealed class InboundService : BackgroundService
             foreach (var ch in c.Channels.Where(x => x.Enabled))
             {
                 var s = ChannelSettings.Merge(o.Global(ch.Settings.Type), ch.Settings);
-                if (Active(s)) list.Add(new InboundJob($"kunde-{c.Id}-{ch.Id}", $"{c.Label}: {ch.Label}", s));
+                if (Active(s)) list.Add(new InboundJob($"kunde-{c.Id}-{ch.Id}", $"{c.Label}: {ch.Label}", s, c.Id, c.Label));
             }
         return list.GroupBy(j => Identity(j.Settings)).Select(g => g.First()).ToList();
     }
@@ -93,6 +96,7 @@ public sealed class InboundService : BackgroundService
         await _gate.WaitAsync(ct);
         try
         {
+            _job = job;
             var s = job.Settings;
             var password = _settings.Secrets.Unprotect(s.Password);
             var sent = !string.IsNullOrWhiteSpace(s.OutboxFolder) && OutboxSupported(s.Type) ? await OutboxAsync(s, password, ct) : new List<string>();
@@ -167,13 +171,14 @@ public sealed class InboundService : BackgroundService
     }
 
     /// <summary>Datei im Zielordner ablegen, ohne Vorhandenes zu überschreiben. Erst als .part, dann umbenennen (der Eingangsordner sieht nie halbe Dateien).</summary>
-    private static string Save(string target, string name, byte[] data)
+    private string Save(string target, string name, byte[] data)
     {
         name = Documents.MailTemplate.SafeFileName(Path.GetFileNameWithoutExtension(name)) + Path.GetExtension(name);
         var path = Path.Combine(target, name);
         for (var i = 1; File.Exists(path); i++) path = Path.Combine(target, $"{Path.GetFileNameWithoutExtension(name)}_{i}{Path.GetExtension(name)}");
         File.WriteAllBytes(path + ".part", data);
         File.Move(path + ".part", path);
+        _book?.Add(_job?.Settings.Type ?? "", _job?.Label, _job?.CustomerId, _job?.Customer, path, data);
         return Path.GetFileName(path);
     }
 
@@ -272,7 +277,7 @@ public sealed class InboundService : BackgroundService
     }
 
     // ---------------- eXite: Befehlsdatei ser(H) so(1), Ergebnis in R… ----------------
-    private static async Task<List<string>> ExiteAsync(ChannelSettings s, string? password, string target, CancellationToken ct)
+    private async Task<List<string>> ExiteAsync(ChannelSettings s, string? password, string target, CancellationToken ct)
     {
         var got = new List<string>();
         foreach (var (name, data) in await ExiteTransport.ReceiveAsync(s, password, 50, ct)) got.Add(Save(target, name, data));

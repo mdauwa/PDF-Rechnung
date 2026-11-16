@@ -156,6 +156,24 @@ public sealed class BelegpostDb
             ziel TEXT,
             text TEXT);
         CREATE INDEX ix_audit_zeit ON audit(zeit);
+        """,
+        // 2: Eingang (abgerufene und per AS2 empfangene Dateien)
+        """
+        CREATE TABLE eingang(
+            nr INTEGER PRIMARY KEY AUTOINCREMENT,
+            zeit INTEGER NOT NULL,
+            kanal TEXT NOT NULL,
+            quelle TEXT,
+            kunde_id TEXT,
+            kunde TEXT,
+            datei TEXT NOT NULL,
+            groesse INTEGER NOT NULL,
+            ziel TEXT NOT NULL COLLATE NOCASE,
+            kopie TEXT,
+            vorgang_id TEXT,
+            gelesen INTEGER);
+        CREATE INDEX ix_eingang_zeit ON eingang(zeit);
+        CREATE INDEX ix_eingang_ziel ON eingang(ziel);
         """
     };
 

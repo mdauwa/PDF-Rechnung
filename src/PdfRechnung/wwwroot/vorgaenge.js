@@ -79,7 +79,7 @@ async function renderVorgaenge(view) {
       VL.items = r.items;
       drawKpis(r);
       drawTable();
-      updateMenuCounts(r.counts);
+      updateMenuCounts(r.counts, r);
     } catch (e) { showMsg(e.message); }
   };
   const showMsg = (t, ok) => { const n = $("#vlMsg"); n.hidden = !t; n.className = "notice" + (ok ? " ok" : ""); n.textContent = t || ""; };

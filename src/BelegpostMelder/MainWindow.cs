@@ -8,7 +8,7 @@ internal sealed class MainWindow : Form
 {
     private readonly TrayContext _tray;
     private readonly MelderConfig _cfg;
-    private readonly float _s;
+    private float _s;
 
     private readonly Card _statusCard = new(), _optionsCard = new(), _connectCard = new();
     private readonly Pill _pill = new();
@@ -94,7 +94,10 @@ internal sealed class MainWindow : Form
         RefreshView();
     }
 
-    protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); Dwm.RoundCorners(this); }
+    protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); Dwm.RoundCorners(this); RefreshView(); }
+    protected override void OnShown(EventArgs e) { base.OnShown(e); RefreshView(); }
+    protected override void OnDpiChanged(DpiChangedEventArgs e) { base.OnDpiChanged(e); RefreshView(); }
+    protected override void OnResizeEnd(EventArgs e) { base.OnResizeEnd(e); RefreshView(); }
 
     /// <summary>Schließen = ins Infobereich zurück (der Melder läuft weiter).</summary>
     protected override void OnFormClosing(FormClosingEventArgs e)
@@ -144,8 +147,12 @@ internal sealed class MainWindow : Form
     public void RefreshView()
     {
         if (IsDisposed) return;
+        // Breite immer aus der aktuellen Skalierung – nicht aus der momentanen Fenstergröße (die kann Windows z. B. nach
+        // einem DPI-Wechsel, über Remotedesktop oder beim Wiederherstellen schmal vorgeben, dann wurde alles zusammengequetscht).
+        _s = Math.Max(1f, DeviceDpi / 96f);
         var s = _s;
-        int pad = (int)(16 * s), inner = (int)(18 * s), w = ClientSize.Width - 2 * pad, iw = w - 2 * inner;
+        int width = (int)(440 * s);
+        int pad = (int)(16 * s), inner = (int)(18 * s), w = width - 2 * pad, iw = w - 2 * inner;
         int y = (int)(88 * s) + pad;
 
         // ---- Status ----
@@ -235,7 +242,7 @@ internal sealed class MainWindow : Form
         _connectCard.SetBounds(pad, y, w, cy + (int)(36 * s) + inner);
         y = _connectCard.Bottom + pad;
 
-        ClientSize = new Size(ClientSize.Width, y);
+        ClientSize = new Size(width, y);
         Invalidate();
     }
 }

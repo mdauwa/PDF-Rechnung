@@ -172,6 +172,9 @@ public sealed class MapiIntake
             hint = "Der Beleg liegt im Belegpost-Portal: Für dich ist kein Belegpost Melder gekoppelt, der Outlook öffnen könnte.";
         else if (mode == MapiMode.Outlook && v.Status == VorgangStatus.Error)
             hint = "Der Beleg hat Fehler und liegt deshalb im Belegpost-Portal:\n" + (v.Messages.FirstOrDefault(x => x.Level == DocumentChecker.Error)?.Text ?? "");
+        else if (mode == MapiMode.Direct && v.Status is not (VorgangStatus.Ready or VorgangStatus.Warning))
+            hint = "Direktversand nicht möglich, der Beleg liegt im Belegpost-Portal: "
+                + (v.Messages.FirstOrDefault(x => x.Level == DocumentChecker.Error)?.Text ?? $"Status {v.Status}");
         var title = string.Join(" ", new[] { v.DocumentType, v.VoucherId }.Where(x => !string.IsNullOrWhiteSpace(x)));
         if (title.Length == 0) title = v.Mail.Subject;
         var modeText = mode == MapiMode.Outlook && v.Status != VorgangStatus.Error && device is not null ? "in Outlook geöffnet"
@@ -188,11 +191,11 @@ public sealed class MapiIntake
             case MapiMode.Direct when v.Status is VorgangStatus.Ready or VorgangStatus.Warning:
                 var (ok, msg) = await _send.SendAsync(v.Id, user.Name + " (MAPI)", force: v.Status == VorgangStatus.Warning, ct);
                 if (ok) return new MapiResult(true, "Versendet.", v.Id, mode);
-                _hub.Publish(userId, "neu", v.Id, title, VorgangStatus.SendError, msg, true);
+                _hub.Publish(userId, "neu", v.Id, title, VorgangStatus.SendError, msg, v.Mail.MelderMayOpenOutlook);
                 return new MapiResult(true, "Versand fehlgeschlagen – im Portal.", v.Id, mode);
             default:
                 var first = v.Messages.FirstOrDefault(x => x.Level == DocumentChecker.Error)?.Text ?? v.Messages.FirstOrDefault(x => x.Level == DocumentChecker.Warning)?.Text;
-                _hub.Publish(userId, "neu", v.Id, title, v.Status, first, true);
+                _hub.Publish(userId, "neu", v.Id, title, v.Status, first, v.Mail.MelderMayOpenOutlook);
                 return new MapiResult(true, "Im Portal zur Prüfung.", v.Id, MapiMode.Portal, hint);
         }
     }

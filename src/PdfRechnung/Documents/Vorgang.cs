@@ -59,6 +59,13 @@ public sealed class MailData
     public List<string> AppliedRules { get; set; } = new();
     /// <summary>Was tatsächlich mit der Mail passiert (Versandweg mit Grund) – Anzeige im Vorgang.</summary>
     public string? RouteEffective { get; set; }
+
+    /// <summary>
+    /// Darf der Melder die Mail von sich aus in Outlook öffnen (Einstellung „Wenn ein Beleg eintrifft → Outlook“)?
+    /// Nein, wenn Regel bzw. @@pw@@ einen anderen Versandweg festlegen (direkt, Freigabe, gotomaxx, keine Mail).
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool MelderMayOpenOutlook => Enabled && (string.IsNullOrEmpty(Route) || Route == MailRoute.Outlook);
     /// <summary>Platzhalterwerte (eingebaute + @@pv@@) für Vorlage, Signatur und Fußzeile.</summary>
     public Dictionary<string, string> Variables { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>Automatische Textkorrekturen (Umlaute, Sonderzeichen).</summary>

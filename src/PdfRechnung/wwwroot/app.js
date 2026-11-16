@@ -72,8 +72,9 @@ function renderMenu() {
   if (portal.userId) html += `<div class="menu-group">Persönlich</div><a href="#/melder" data-key="melder">${icon("bell")}<span>Melder &amp; Hinweise</span><span class="menu-dot" id="liveDot" title="Live-Verbindung"></span></a>`
     + `<a href="#/regeln" data-key="regeln">${icon("send")}<span>Meine Mail-Regeln</span></a>`;
   if (portal.connect) html += `<div class="menu-group">ERP Suite Connect</div><a href="#/connect?b=eingang" data-key="connect:eingang">${icon("download")}<span>Eingang</span></a><a href="#/connect?b=ausgang" data-key="connect:ausgang">${icon("upload")}<span>Ausgang</span></a>`;
-  html += `<div class="menu-group">Tools</div><a href="#/pruefen" data-key="pruefen">${icon("check")}<span>Datei prüfen (EDI / E-Rechnung)</span></a>`;
-  if (portal.isAdmin) html += `<div class="menu-group">System</div><a href="#/einstellungen" data-key="einstellungen">${icon("settings")}<span>Einstellungen</span></a>`;
+  html += `<div class="menu-group">Tools</div><a href="#/pruefen" data-key="pruefen">${icon("check")}<span>Dokument validieren</span></a>`;
+  if (portal.isAdmin) html += `<div class="menu-group">Einstellungen</div>` +
+    ST_GROUPS.map(([g, title, ic]) => `<a href="#/einstellungen?g=${g}" data-key="einstellungen:${g}">${icon(ic)}<span>${esc(title)}</span></a>`).join("");
   $("#menu").innerHTML = html;
   if (portal.seeInbound) api("GET", "api/eingang?anzahl=1").then(r => setInboundCount(r.unread)).catch(() => { });
 }
@@ -101,7 +102,7 @@ const VIEWS = {
   melder: { title: "Melder & Hinweise", render: v => renderMelder(v) },
   regeln: { title: "Meine Mail-Regeln", render: v => renderMyRules(v) },
   eingang: { title: "Eingang", render: v => renderEingang(v) },
-  pruefen: { title: "Datei prüfen", render: v => renderPruefen(v) },
+  pruefen: { title: "Dokument validieren", render: v => renderPruefen(v) },
   connect: { title: "ERP Suite Connect", render: v => renderConnect(v) }
 };
 
@@ -131,7 +132,7 @@ function route() {
   v.render(view);
 
   const q = new URLSearchParams(hash.split("?")[1] || "");
-  const active = key === "vorgaenge" ? `vorgaenge:${q.get("f") || "offen"}` : key === "connect" ? `connect:${q.get("b") || "eingang"}` : key;
+  const active = key === "vorgaenge" ? `vorgaenge:${q.get("f") || "offen"}` : key === "connect" ? `connect:${q.get("b") || "eingang"}` : key === "einstellungen" ? `einstellungen:${q.get("g") || "system"}` : key;
   document.querySelectorAll("#menu a").forEach(a => a.classList.toggle("active", a.dataset.key === active));
 }
 

@@ -474,8 +474,8 @@ function rulesCard(v, mandant) {
   const route = { direkt: "direkt versenden", wennok: "automatisch, wenn alles ok", freigabe: "nach Freigabe im Portal", outlook: "über Outlook", gotomaxx: "an gotomaxx", keine: "keine Mail" };
   const mdRow = v.mandant ? [["Mandant", `${esc(mandant?.name ? `${mandant.number} – ${mandant.name}` : v.mandant)} <span class="meta-inline">(${esc(v.mandantReason || "")}${mandant && !mandant.configured ? " · nicht eingerichtet – es gelten die allgemeinen Einstellungen" : ""})</span>`]] : [];
   const stIcon = { ok: '<span class="badge ok">ok</span>', fehler: '<span class="badge missing">Fehler</span>', offen: '<span class="badge">offen</span>' };
-  const cuRows = v.customerName ? [["Kunde", `${esc(v.customerName)} <span class="meta-inline">(${esc(v.customerReason || "")})</span>`],
-    ["Versandwege des Kunden", (v.deliveries || []).length ? v.deliveries.map(d => `${stIcon[d.status] || esc(d.status)} ${esc(d.label)}${d.target ? ` <span class="meta-inline">→ ${esc(d.target)}</span>` : ""}${d.message ? ` <span class="bad">${esc(d.message)}</span>` : ""}`).join("<br>")
+  const cuRows = v.customerName ? [["Kommunikationspartner", `${esc(v.customerName)} <span class="meta-inline">(${esc(v.customerReason || "")})</span>`],
+    ["Versandwege des Partners", (v.deliveries || []).length ? v.deliveries.map(d => `${stIcon[d.status] || esc(d.status)} ${esc(d.label)}${d.target ? ` <span class="meta-inline">→ ${esc(d.target)}</span>` : ""}${d.message ? ` <span class="bad">${esc(d.message)}</span>` : ""}`).join("<br>")
       : '<span class="meta-inline">keine (laut Regel bzw. kein aktiver Versandweg)</span>']] : [];
   const rows = [
     idRow, ...mdRow, ...cuRows,

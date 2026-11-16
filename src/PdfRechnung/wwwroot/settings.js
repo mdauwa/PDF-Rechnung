@@ -20,7 +20,7 @@ const TABS = [
   ["ablage", "Ablage"],
   ["mandanten", "Mandanten"],
   ["versandwege", "Versandwege"],
-  ["kunden", "Kunden"],
+  ["kunden", "Kommunikationspartner"],
   ["connect", "ERP Suite Connect"],
   ["erp", "ERP-Rückmeldung"],
   ["mapi", "MAPI-Mails"],
@@ -28,6 +28,24 @@ const TABS = [
   ["benutzer", "Benutzer"],
   ["anmeldung", "Anmeldung"]
 ];
+
+/** Einstellungen im Menü links: Gruppen mit ihren Reitern. */
+const ST_GROUPS = [
+  ["system", "Dienst & Zugang", "settings", ["dienst", "server", "anmeldung", "benutzer"]],
+  ["belege", "Drucker & Belege", "doc", ["eingang", "briefpapier", "erechnung", "ablage"]],
+  ["email", "E-Mail", "send", ["mail", "mailvorlagen", "regeln", "mapi", "statuslink"]],
+  ["versand", "Versand & Partner", "upload", ["versandwege", "kunden", "connect"]],
+  ["erp", "ERP & Mandanten", "inbox", ["erp", "mandanten"]]
+];
+const stGroupOf = tab => ST_GROUPS.find(g => g[3].includes(tab)) || ST_GROUPS[0];
+const stGroupTabs = () => TABS.filter(([k]) => stGroupOf(k)[0] === ST.group);
+
+/** Zu einem Reiter springen (ggf. in eine andere Gruppe). */
+function stGoto(tab) {
+  const g = stGroupOf(tab)[0];
+  if (g !== ST.group) { store.set("st.tab." + g, tab); location.hash = `#/einstellungen?g=${g}`; return; }
+  ST.tab = tab; store.set("st.tab." + g, tab); drawTab();
+}
 
 const get = (obj, path) => path.split(".").reduce((o, k) => o?.[k], obj);
 function set(obj, path, val) {
@@ -38,10 +56,16 @@ function set(obj, path, val) {
 /* ---------------- Rahmen ---------------- */
 
 async function renderSettings(view) {
+  const q = new URLSearchParams(location.hash.split("?")[1] || "");
+  const grp = ST_GROUPS.find(g => g[0] === q.get("g")) || ST_GROUPS[0];
+  ST.group = grp[0];
+  ST.tab = q.get("t") && grp[3].includes(q.get("t")) ? q.get("t") : store.get("st.tab." + grp[0], grp[3][0]);
+  if (!grp[3].includes(ST.tab)) ST.tab = grp[3][0];
+  $("#viewTitle").textContent = `Einstellungen – ${grp[1]}`;
   view.innerHTML = `<div class="settings">
     <div class="notice info" id="stSetup" hidden></div>
     <div class="notice" id="stMsg" hidden></div>
-    <nav class="tabs" id="stTabs">${TABS.map(([k, t]) => `<button data-tab="${k}">${t}</button>`).join("")}</nav>
+    <nav class="tabs" id="stTabs">${stGroupTabs().map(([k, t]) => `<button data-tab="${k}">${t}</button>`).join("")}</nav>
     <div id="stBody" class="st-body"><p class="meta">Lade Einstellungen …</p></div>
     <div class="savebar" id="stSave" hidden>
       <span id="stSaveText">Ungespeicherte Änderungen</span>
@@ -52,7 +76,7 @@ async function renderSettings(view) {
 
   view.querySelector("#stTabs").onclick = e => {
     const t = e.target.closest("[data-tab]")?.dataset.tab;
-    if (t) { ST.tab = t; ST.mtEdit = null; ST.userEdit = null; ST.mdEdit = null; store.set("st.tab", t); drawTab(); }
+    if (t) { ST.tab = t; ST.mtEdit = null; ST.userEdit = null; ST.mdEdit = null; store.set("st.tab." + ST.group, t); drawTab(); }
   };
   rteInstall(view);
   view.addEventListener("click", onAction);
@@ -60,6 +84,8 @@ async function renderSettings(view) {
   view.addEventListener("input", onInput);
   view.addEventListener("change", onInput);
 
+  // Ungespeicherte Änderungen bleiben beim Wechsel zwischen den Einstellungsseiten erhalten
+  if (ST.s && ST.dirty) { drawTab(); updateSaveBar(); const s = $("#stSetup"); if (s) s.hidden = true; return; }
   try { await loadSettings(); }
   catch (e) { msg("Einstellungen konnten nicht geladen werden: " + e.message); $("#stBody").innerHTML = ""; }
 }
@@ -73,7 +99,7 @@ async function loadSettings() {
   setup.hidden = !ST.data.setupMode;
   setup.innerHTML = "<b>Einrichtungsmodus.</b> Das Programm wurde per Doppelklick gestartet und ist nur an diesem Rechner erreichbar. " +
     "Nach dem Einrichten unter <span class=\"linkish\" data-goto=\"dienst\">Dienst</span> als Windows-Dienst installieren.";
-  if (!TABS.some(([k]) => k === ST.tab)) ST.tab = "dienst";
+  if (!stGroupTabs().some(([k]) => k === ST.tab)) ST.tab = stGroupTabs()[0][0];
   drawTab();
   updateSaveBar();
 }
@@ -190,7 +216,7 @@ function onInput(e) {
 async function onAction(e) {
   if (await ruleEditorClick(e)) return;
   const goto = e.target.closest("[data-goto]")?.dataset.goto;
-  if (goto) { ST.tab = goto; drawTab(); return; }
+  if (goto) { stGoto(goto); return; }
   const a = e.target.closest("[data-st]")?.dataset.st;
   if (!a) return;
   const btn = e.target.closest("button") || e.target.closest("input");

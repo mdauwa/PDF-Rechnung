@@ -156,8 +156,8 @@ function tabDelivery() {
   const D = (ST.s.delivery ||= { channels: [] });
   const bind = (path, type = "", redraw = false) => `data-path="${path.replace(/^/, "")}"${type ? ` data-type="${type}"` : ""}${redraw ? ' data-redraw="1"' : ""}`;
   return section("Versandwege",
-    `<p class="help">Hier stehen die <b>globalen</b> Einstellungen je Versandweg. Beim Kunden (Einstellungen → Kunden) wählst du die Versandwege aus
-       und übersteuerst nur, was für ihn anders ist – leere Felder gelten wie hier. Ohne Kunden-Eintrag wird wie bisher per E-Mail versendet.</p>
+    `<p class="help">Hier stehen die <b>globalen</b> Einstellungen je Versandweg. Beim Kommunikationspartner (Einstellungen → Versand &amp; Partner → Kommunikationspartner) wählst du die Versandwege aus
+       und übersteuerst nur, was für ihn anders ist – leere Felder gelten wie hier. Ohne Partner-Eintrag wird wie bisher per E-Mail versendet.</p>
      <div id="dlRuns"><p class="meta">Lade Abrufe …</p></div>`) +
     `<div class="actions fold-all"><button class="btn ghost small" data-st="fold-all" data-open="1">alle aufklappen</button><button class="btn ghost small" data-st="fold-all" data-open="0">alle zuklappen</button></div>` +
     D.channels.map((c, i) => foldCard("g-" + c.type, esc(CH_TEXT[c.type] || c.type), channelInfo(c, false),
@@ -192,13 +192,13 @@ async function loadCustomers() {
 
 function tabCustomers() {
   const C = ST.cust;
-  if (!C) { loadCustomers(); return `<p class="meta">Lade Kunden …</p>`; }
+  if (!C) { loadCustomers(); return `<p class="meta">Lade Kommunikationspartner …</p>`; }
   if (C.error) return `<div class="notice">${esc(C.error)}</div>`;
   if (ST.custEdit) return customerMask();
   const or = v => v ? esc(v) : '<span class="meta-inline">–</span>';
-  return section("Kunden",
-    `<p class="help">Belegpost erkennt den Kunden an der <b>Kundennummer</b> aus dem Druck (<code>@@xi BUYER_ID=…@@</code>) oder an einer seiner <b>E-Mail-Adressen</b>
-       (auch <code>*@kunde.at</code>). Für erkannte Kunden gelten ihre eigenen Versandwege – mehrere gleichzeitig möglich – und ihre Regeln.</p>
+  return section("Kommunikationspartner",
+    `<p class="help">Belegpost erkennt den Kommunikationspartner (Kunde, Webshop, Clearingstelle …) an der <b>Kundennummer</b> aus dem Druck (<code>@@xi BUYER_ID=…@@</code>) oder an einer seiner <b>E-Mail-Adressen</b>
+       (auch <code>*@kunde.at</code>). Für erkannte Partner gelten ihre eigenen Versandwege – mehrere gleichzeitig möglich – und ihre Regeln.</p>
      ${C.items.length ? `<div class="table-wrap"><table class="list users-compact"><thead><tr><th>Nummer</th><th>Name</th><th>Mandant</th><th>E-Mail-Erkennung</th><th>Versandwege</th><th>Regeln</th><th></th></tr></thead><tbody>
        ${C.items.map(c => `<tr class="clickable ${c.active ? "" : "inactive"}" data-st="cu-open" data-id="${esc(c.id)}">
          <td class="mono"><b>${or(c.number)}</b></td><td>${or(c.name)}${c.active ? "" : ' <span class="badge">inaktiv</span>'}</td><td>${or(c.mandant)}</td>
@@ -206,8 +206,8 @@ function tabCustomers() {
          <td>${(c.channels || []).map(ch => `<span class="badge${ch.enabled ? "" : " partial"}">${esc(ch.name || CH_TEXT[ch.settings.type])}</span>`).join(" ") || '<span class="meta-inline">–</span>'}</td>
          <td>${(c.rules || []).length || "–"}</td>
          <td class="nowrap"><button class="btn ghost small" data-st="cu-open" data-id="${esc(c.id)}">Bearbeiten</button></td></tr>`).join("")}
-       </tbody></table></div>` : `<p class="meta">Noch keine Kunden – alle Belege werden wie eingestellt per E-Mail versendet.</p>`}`,
-    `<button class="btn ghost" data-st="cu-add">+ Kunde</button>`);
+       </tbody></table></div>` : `<p class="meta">Noch keine Kommunikationspartner – alle Belege werden wie eingestellt per E-Mail versendet.</p>`}`,
+    `<button class="btn ghost" data-st="cu-add">+ Kommunikationspartner</button>`);
 }
 
 function customerMask() {
@@ -240,12 +240,12 @@ function customerMask() {
       <td><input type="checkbox" ${bind(`rules.${k}.noDelivery`, "", true)} ${r.noDelivery ? "checked" : ""}></td>
       <td><input type="checkbox" ${bind(`rules.${k}.enabled`)} ${r.enabled ? "checked" : ""}></td>
       <td><button class="icon-btn" data-st="cu-rule-del" data-k="${k}">✕</button></td></tr>`;
-  return `<div class="user-mask-head"><button class="btn ghost" data-st="cu-back">← Alle Kunden</button>
-      <h2>${esc(c.name || c.number || "Neuer Kunde")}</h2>${c.active ? "" : '<span class="badge">inaktiv</span>'}
+  return `<div class="user-mask-head"><button class="btn ghost" data-st="cu-back">← Alle Kommunikationspartner</button>
+      <h2>${esc(c.name || c.number || "Neuer Kommunikationspartner")}</h2>${c.active ? "" : '<span class="badge">inaktiv</span>'}
       <span class="spacer"></span>
       ${c.id ? `<button class="btn ghost danger" data-st="cu-del">Löschen</button>` : ""}
-      <button class="btn" data-st="cu-save" ${ST.custDirty ? "" : "disabled"}>Kunde speichern</button></div>` +
-    section("Kunde",
+      <button class="btn" data-st="cu-save" ${ST.custDirty ? "" : "disabled"}>Speichern</button></div>` +
+    section("Kommunikationspartner",
       `<div class="grid3">
         ${t("number", "Kundennummer", "z. B. 10023", "Wie im ERP (@@xi BUYER_ID=…@@); Vornullen zählen nicht.")}
         ${t("name", "Name", "Firma GmbH")}
@@ -257,7 +257,7 @@ function customerMask() {
       </div>
       <label class="check"><input type="checkbox" ${bind("active")} ${c.active ? "checked" : ""}> aktiv</label>`) +
     section("Versandwege", c.channels.length ? `<p class="help">Alle aktiven Versandwege werden ausgeführt – der Beleg gilt als versendet, wenn alle erfolgreich waren.
-        Leere Felder gelten wie unter Einstellungen → Versandwege.</p>` : `<p class="meta">Noch keine Versandwege – Belege dieses Kunden gehen wie bisher per E-Mail.</p>`,
+        Leere Felder gelten wie unter Einstellungen → Versandwege.</p>` : `<p class="meta">Noch keine Versandwege – Belege dieses Partners gehen wie bisher per E-Mail.</p>`,
       `<button class="btn ghost small" data-st="cu-ch-add">+ Versandweg</button>`) + channels +
     section("Regeln",
       `<p class="help">Die erste passende Regel bestimmt, welche Versandwege für einen Beleg gelten (* und ? als Platzhalter, mehrere Werte mit Komma).
@@ -292,17 +292,17 @@ async function deliveryClick(a, btn, e) {
       ST.custEdit = structuredClone(ST.cust.items.find(x => x.id === id)); ST.custDirty = false; drawTab(); window.scrollTo(0, 0); return true;
     }
     case "cu-back":
-      if (ST.custDirty && !await confirmDialog("Ungespeicherte Änderungen", "Die Änderungen an diesem Kunden sind noch nicht gespeichert. Trotzdem zurück?", "Zurück")) return true;
+      if (ST.custDirty && !await confirmDialog("Ungespeicherte Änderungen", "Die Änderungen an diesem Kommunikationspartner sind noch nicht gespeichert. Trotzdem zurück?", "Zurück")) return true;
       ST.custEdit = null; ST.custDirty = false; drawTab(); return true;
     case "cu-save": {
       const r = await api("PUT", "api/admin/kunden", c);
       ST.custEdit = r.customer; ST.custDirty = false;
       const i = ST.cust.items.findIndex(x => x.id === r.customer.id);
       if (i >= 0) ST.cust.items[i] = structuredClone(r.customer); else ST.cust.items.push(structuredClone(r.customer));
-      msg("Kunde gespeichert.", true); drawTab(); return true;
+      msg("Kommunikationspartner gespeichert.", true); drawTab(); return true;
     }
     case "cu-del":
-      if (!await confirmDialog("Kunde löschen", `Kunde „${esc(c.name || c.number)}“ mit seinen Versandwegen und Regeln löschen?`, "Löschen", true)) return true;
+      if (!await confirmDialog("Kommunikationspartner löschen", `„${esc(c.name || c.number)}“ mit seinen Versandwegen und Regeln löschen?`, "Löschen", true)) return true;
       await api("DELETE", "api/admin/kunden/" + encodeURIComponent(c.id));
       ST.cust.items = ST.cust.items.filter(x => x.id !== c.id); ST.custEdit = null; ST.custDirty = false; drawTab(); return true;
     case "cu-ch-add": c.channels.push(newChannel()); (ST.dlOpen ||= new Set()).add(`c-${c.id || "neu"}-${c.channels.length - 1}`); ST.custDirty = true; drawTab(); return true;
@@ -315,7 +315,7 @@ async function deliveryClick(a, btn, e) {
     case "cu-rule-add": (c.rules ||= []).push({ name: "", enabled: true, documentTypes: [], formats: [], sources: [], stationeries: [], recipients: [], textContains: "", channels: [], noDelivery: false }); ST.custDirty = true; drawTab(); return true;
     case "cu-rule-del": c.rules.splice(+btn.dataset.k, 1); ST.custDirty = true; drawTab(); return true;
     case "cu-test": {
-      if (ST.custDirty) throw new Error("Bitte zuerst den Kunden speichern.");
+      if (ST.custDirty) throw new Error("Bitte zuerst den Kommunikationspartner speichern.");
       const r = await api("POST", "api/admin/versandwege/test", { customerId: c.id, channelId: btn.dataset.ch });
       msg(r.message, r.ok); return true;
     }

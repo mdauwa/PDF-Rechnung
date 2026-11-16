@@ -17,11 +17,14 @@ public static class DocumentChecker
         // ---------- Versand ----------
         if (v.Mail.Enabled)
         {
-            if (v.Mail.To.Count == 0) E("Kein E-Mail-Empfänger (@@to@@) – bitte im Versand eintragen.", "to");
+            var viaCustomer = v.Deliveries.Count > 0;
+            var customerMail = v.Deliveries.Any(d => d.Type == PdfRechnung.Delivery.ChannelType.Mail);
+            if (v.Mail.To.Count == 0 && !viaCustomer) E("Kein E-Mail-Empfänger (@@to@@) – bitte im Versand eintragen.", "to");
+            if (viaCustomer) I($"Versand über die Versandwege von {v.CustomerName}: {string.Join(", ", v.Deliveries.Select(d => d.Label))}.");
             foreach (var a in v.Mail.To.Concat(v.Mail.Cc).Concat(v.Mail.Bcc))
                 if (!IsMail(a)) E($"Ungültige E-Mail-Adresse: {a}", "to");
             if (string.IsNullOrWhiteSpace(v.Mail.Subject)) W("Kein Betreff.", "subject");
-            if (!settings.Mail.Enabled) W("Der E-Mail-Versand ist in den Einstellungen noch nicht eingerichtet.");
+            if (!settings.Mail.Enabled && (!viaCustomer || customerMail)) W("Der E-Mail-Versand ist in den Einstellungen noch nicht eingerichtet.");
         }
         else I("Für diesen Beleg ist kein Versand vorgesehen (@@ml0@@).");
 

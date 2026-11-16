@@ -222,6 +222,23 @@ public sealed class GotomaxxService : BackgroundService
         finally { _gate.Release(); }
     }
 
+    /// <summary>Versandweg „gotomaxx-Drucker“ eines Kunden: drucken, ohne den Status des Vorgangs zu ändern.</summary>
+    public async Task<string> PrintForDeliveryAsync(Vorgang v, string? printer, CancellationToken ct)
+    {
+        var o = Options;
+        var target = string.IsNullOrWhiteSpace(printer) ? o.Printer.Trim() : printer.Trim();
+        if (target.Length == 0) throw new InvalidOperationException("Kein gotomaxx-Drucker eingestellt.");
+        await _gate.WaitAsync(ct);
+        try
+        {
+            var path = _store.FilePath(v.Id, DocumentStore.PdfFile) ?? throw new FileNotFoundException("Das Original-PDF fehlt.");
+            var pdf = PdfComposer.StripCodes(await File.ReadAllBytesAsync(path, ct));
+            var how = await _printer.PrintAsync(GotomaxxCodes.Job(v, target, o), pdf, WindowsUsers(v), v.PrintMachine, o, ct);
+            return $"gotomaxx-Drucker „{target}“ ({how})";
+        }
+        finally { _gate.Release(); }
+    }
+
     /// <summary>Windows-Anmeldenamen für die Sitzungssuche: Benutzer des Druckauftrags/MAPI und die Druck-Namen des Portal-Benutzers.</summary>
     private List<string> WindowsUsers(Vorgang v)
     {

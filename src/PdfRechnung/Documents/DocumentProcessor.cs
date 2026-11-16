@@ -152,9 +152,9 @@ public sealed class DocumentProcessor
         IOptionsMonitor<InboxOptions>? inbox = null, IOptionsMonitor<StationeryOptions>? stationery = null, Settings.SettingsStore? settings = null,
         IOptionsMonitor<MailTemplateOptions>? templates = null, Settings.UserStore? users = null, Services.EventHub? events = null,
         GotomaxxService? gotomaxx = null, IOptionsMonitor<MailRuleOptions>? rules = null, MailRuleStore? ruleStore = null,
-        Services.MelderTasks? melderTasks = null, IOptionsMonitor<MandantOptions>? mandanten = null)
+        Services.MelderTasks? melderTasks = null, IOptionsMonitor<MandantOptions>? mandanten = null, PdfRechnung.Delivery.CustomerStore? customers = null)
     {
-        _mandanten = mandanten;
+        _mandanten = mandanten; _customers = customers;
         _users = users; _events = events; _gotomaxx = gotomaxx; _rules = rules; _ruleStore = ruleStore; _melderTasks = melderTasks;
         _store = store; _mail = mail; _invoice = invoice; _log = log; _inbox = inbox; _stationery = stationery; _templates = templates;
         _stationeryDir = PdfComposer.StationeryDirectory(settings?.DataDirectory ?? Path.GetDirectoryName(store.Root)!);
@@ -193,6 +193,20 @@ public sealed class DocumentProcessor
 
     private readonly IOptionsMonitor<InboxOptions>? _inbox;
     private readonly IOptionsMonitor<MandantOptions>? _mandanten;
+    private readonly PdfRechnung.Delivery.CustomerStore? _customers;
+
+    /// <summary>Kunde und seine Versandwege ermitteln (für Prüfung und Anzeige).</summary>
+    private void PlanDelivery(Vorgang v)
+    {
+        if (_customers is null) return;
+        var plan = PdfRechnung.Delivery.DeliveryPlanner.Plan(_customers, v);
+        PdfRechnung.Delivery.DeliveryPlanner.Apply(v, plan);
+        if (plan.NoDelivery && v.Mail.Enabled)
+        {
+            v.Mail.Enabled = false;
+            v.Mail.RouteEffective = $"kein Versand ({plan.Customer!.Label}, {plan.Rule})";
+        }
+    }
 
     /// <summary>Eingestellter Mandant eines Vorgangs (null = keiner bzw. nicht eingerichtet).</summary>
     public Mandant? MandantOf(Vorgang v) => _mandanten?.CurrentValue.Find(v.Mandant);
@@ -272,6 +286,7 @@ public sealed class DocumentProcessor
         Fill(v, p, overwriteMail: true);
         var sendPdf = v.Messages.Count == 0 ? Compose(v, pdf, p) : null;
         var readOk = v.Messages.Count == 0;
+        PlanDelivery(v);
         if (readOk) v.Messages = DocumentChecker.Check(v, p, CurrentSettings());
         v.UpdateStatus();
         v.History.Add(new HistoryEntry(now, user ?? source, "eingang",
@@ -280,7 +295,8 @@ public sealed class DocumentProcessor
         {
             beforeSave(v);
             if (v.Mail.Plain) v.Messages = v.Messages.Where(m => m.Field == "mapi").ToList();
-            else if (readOk) v.Messages = DocumentChecker.Check(v, p, CurrentSettings()).Concat(v.Messages.Where(m => m.Field == "mapi")).ToList();
+            PlanDelivery(v);
+            if (!v.Mail.Plain && readOk) v.Messages = DocumentChecker.Check(v, p, CurrentSettings()).Concat(v.Messages.Where(m => m.Field == "mapi")).ToList();
             v.UpdateStatus();
         }
         var forward = readOk && !v.Mail.Plain && Forward(v, p, user ?? source);
@@ -395,6 +411,7 @@ public sealed class DocumentProcessor
             AssignOwner(v, p, v.Source == "Upload" ? v.OwnerUserId : null);
             Fill(v, p, overwriteMail: !v.Mail.Edited);
             _store.WriteFile(id, DocumentStore.SendFile, Compose(v, original, p));
+            if (v.Deliveries.All(d => d.Status != "ok")) { v.Deliveries.Clear(); PlanDelivery(v); }
             v.Messages = DocumentChecker.Check(v, p, CurrentSettings());
             if (v.Status is VorgangStatus.SendError) v.Status = VorgangStatus.Warning;
             v.UpdateStatus();

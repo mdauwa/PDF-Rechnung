@@ -98,12 +98,17 @@ builder.Services.Configure<StationeryOptions>(builder.Configuration.GetSection("
 builder.Services.Configure<MailTemplateOptions>(builder.Configuration.GetSection("MailTemplates"));
 builder.Services.Configure<MailRuleOptions>(builder.Configuration.GetSection("MailRules"));
 builder.Services.Configure<MandantOptions>(builder.Configuration.GetSection("Mandanten"));
+builder.Services.Configure<PdfRechnung.Delivery.DeliveryOptions>(builder.Configuration.GetSection("Delivery"));
 builder.Services.AddSingleton<MailRuleStore>();
 builder.Services.AddSingleton(sp => new RuntimeControl(sp.GetRequiredService<IHostApplicationLifetime>(), isService));
 
 // ---- Vorgänge ----
 builder.Services.AddSingleton<EventHub>();
 builder.Services.AddSingleton<DocumentStore>();
+builder.Services.AddSingleton(new PdfRechnung.Delivery.CustomerStore(store.DataDirectory));
+builder.Services.AddSingleton<PdfRechnung.Delivery.DeliveryService>();
+builder.Services.AddSingleton<PdfRechnung.Delivery.InboundService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<PdfRechnung.Delivery.InboundService>());
 builder.Services.AddSingleton<DocumentProcessor>();
 builder.Services.AddSingleton<SendService>();
 if (OperatingSystem.IsWindows()) builder.Services.AddSingleton<IGotomaxxPrinter, PdfRechnung.Printing.WindowsGotomaxxPrinter>();
@@ -307,6 +312,8 @@ StatusLinkService.Map(app);
 PdfRechnung.Erp.ErpApi.Map(app);
 AuthApi.Map(app);
 AdminApi.Map(app);
+PdfRechnung.Delivery.DeliveryApi.Map(app);
+PdfRechnung.Delivery.As2Receiver.Map(app);
 
 // ---------------- Start ----------------
 

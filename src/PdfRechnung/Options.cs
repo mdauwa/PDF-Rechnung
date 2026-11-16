@@ -20,6 +20,8 @@ public sealed class AppSettings
     public PdfRechnung.Documents.MailRuleOptions MailRules { get; set; } = new();
     /// <summary>Mandanten (WebWARE /M:) mit eigener ERP-Rückmeldung, Eingang und Ablage.</summary>
     public MandantOptions Mandanten { get; set; } = new();
+    /// <summary>Globale Einstellungen der Versandwege (Kunden-Versand und Abruf).</summary>
+    public PdfRechnung.Delivery.DeliveryOptions Delivery { get; set; } = new();
 }
 
 /// <summary>

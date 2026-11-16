@@ -60,6 +60,10 @@ public static class AdminApi
             s.Auth.Firmenportal.Secret = null;
             var hasErpPassword = !string.IsNullOrEmpty(s.Erp.Password);
             s.Erp.Password = null;
+            foreach (var t in PdfRechnung.Delivery.ChannelType.All)
+                if (s.Delivery.Channels.All(c => c.Type != t)) s.Delivery.Channels.Add(new PdfRechnung.Delivery.ChannelSettings { Type = t });
+            s.Delivery.Channels = s.Delivery.Channels.OrderBy(c => Array.IndexOf(PdfRechnung.Delivery.ChannelType.All, c.Type)).ToList();
+            foreach (var c in s.Delivery.Channels) c.Redact();
             foreach (var m in s.Mandanten.Items) { m.ErpHasPassword = !string.IsNullOrEmpty(m.ErpPassword); m.ErpPassword = null; m.ErpNewPassword = null; m.ErpClearPassword = false; }
             // Fehlende Statuscodes ergänzen und leere Statusbitmaps mit dem Standard (ab 950) füllen
             foreach (var c in PdfRechnung.Documents.StatusCode.All)
@@ -112,6 +116,10 @@ public static class AdminApi
             s.Erp.Password = req.ClearErpPassword ? null
                 : !string.IsNullOrEmpty(req.ErpPassword) ? store.Secrets.Protect(req.ErpPassword)
                 : old.Erp.Password;
+            // Versandwege: Kennwörter verschlüsseln bzw. behalten
+            s.Delivery ??= new();
+            s.Delivery.Channels = s.Delivery.Channels.Where(c => PdfRechnung.Delivery.ChannelType.All.Contains(c.Type)).GroupBy(c => c.Type).Select(g => g.First()).ToList();
+            foreach (var c in s.Delivery.Channels) c.TakeSecrets(old.Delivery.Global(c.Type), x => store.Secrets.Protect(x));
             // Zusätzliche Drucker: feste Kennung vergeben
             s.Inbox.Printers = s.Inbox.Printers.Where(x => !string.IsNullOrWhiteSpace(x.Name)).ToList();
             foreach (var x in s.Inbox.Printers)

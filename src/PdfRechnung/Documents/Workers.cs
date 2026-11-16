@@ -15,11 +15,13 @@ public sealed class SendService
 
     private readonly IOptionsMonitor<MailTemplateOptions> _templates;
     private readonly IOptionsMonitor<MandantOptions>? _mandanten;
+    private readonly IServiceProvider? _sp;
 
     public SendService(DocumentStore store, SettingsStore settings, IOptionsMonitor<MailOptions> mail, IOptionsMonitor<StorageOptions> storage,
-        IOptionsMonitor<MailTemplateOptions> templates, ILogger<SendService> log, IOptionsMonitor<MandantOptions>? mandanten = null)
+        IOptionsMonitor<MailTemplateOptions> templates, ILogger<SendService> log, IOptionsMonitor<MandantOptions>? mandanten = null,
+        IServiceProvider? sp = null)
     {
-        _mandanten = mandanten;
+        _mandanten = mandanten; _sp = sp;
         _store = store; _settings = settings; _mail = mail; _storage = storage; _templates = templates; _log = log;
     }
 
@@ -35,7 +37,10 @@ public sealed class SendService
 
     public RenderedMail Render(Vorgang v) => Render(v, _templates.CurrentValue, _settings.DataDirectory);
 
-    /// <summary>Versendet den Vorgang. force = auch bei Fehlern (nur manuell, mit Bestätigung).</summary>
+    /// <summary>
+    /// Versendet den Vorgang. force = auch bei Fehlern (nur manuell, mit Bestätigung).
+    /// Hat der Kunde eigene Versandwege (Kunden-Verwaltung), werden diese ausgeführt – sonst per E-Mail wie eingestellt.
+    /// </summary>
     public async Task<(bool Ok, string Message)> SendAsync(string id, string by, bool force, CancellationToken ct)
     {
         await _gate.WaitAsync(ct);
@@ -44,9 +49,26 @@ public sealed class SendService
             var o = _mail.CurrentValue;
             var v = _store.Get(id);
             if (v is null) return (false, "Vorgang nicht gefunden.");
-            if (!o.Enabled) return (false, "Der E-Mail-Versand ist nicht eingerichtet (Einstellungen → E-Mail).");
             if (v.Status == VorgangStatus.Discarded) return (false, "Der Vorgang ist verworfen.");
             if (v.Status == VorgangStatus.Error && !force) return (false, "Der Vorgang hat Fehler. Bitte zuerst beheben oder „Trotzdem senden“ wählen.");
+
+            // Versandwege des Kunden (neu planen, solange noch nichts erfolgreich war; „erneut senden“ = alle noch einmal)
+            var delivery = _sp?.GetService<PdfRechnung.Delivery.DeliveryService>();
+            if (delivery is not null)
+            {
+                var resend = v.Status == VorgangStatus.Sent;
+                if (resend || v.Deliveries.All(d => d.Status != "ok"))
+                {
+                    var plan = delivery.Plan(v);
+                    if (resend) v.Deliveries.Clear();
+                    PdfRechnung.Delivery.DeliveryPlanner.Apply(v, plan);
+                    if (plan.NoDelivery) return (false, $"Für {plan.Customer!.Label} ist laut {plan.Rule} kein Versand vorgesehen.");
+                    _store.Update(id, x => { x.CustomerId = v.CustomerId; x.CustomerName = v.CustomerName; x.CustomerReason = v.CustomerReason; x.Deliveries = v.Deliveries; return true; });
+                }
+                if (v.Deliveries.Count > 0) return await SendDeliveriesAsync(v, delivery, by, ct);
+            }
+
+            if (!o.Enabled) return (false, "Der E-Mail-Versand ist nicht eingerichtet (Einstellungen → E-Mail).");
             if (v.Mail.To.Count == 0) return (false, "Kein Empfänger eingetragen.");
 
             var (mail, buildError) = await BuildMail(v, ct);
@@ -83,7 +105,73 @@ public sealed class SendService
         finally { _gate.Release(); }
     }
 
-    /// <summary>Fertige Mail eines Vorgangs (HTML, Logo, Beleg und Anlagen) – für den Versand und für Outlook über den Melder.</summary>
+    /// <summary>Alle noch offenen bzw. fehlgeschlagenen Versandwege des Kunden ausführen.</summary>
+    private async Task<(bool Ok, string Message)> SendDeliveriesAsync(Vorgang v, PdfRechnung.Delivery.DeliveryService delivery, string by, CancellationToken ct)
+    {
+        var customer = v.CustomerId is null ? null : delivery.Customers.Get(v.CustomerId);
+        if (customer is null) return (false, "Der Kunde dieses Belegs ist nicht mehr angelegt – bitte „Neu prüfen“.");
+        _store.Update(v.Id, x => { x.Status = VorgangStatus.Sending; x.SendAttempts++; return true; });
+        var o = _mail.CurrentValue;
+        var results = new List<string>();
+        foreach (var d in v.Deliveries.Where(d => d.Status != "ok"))
+        {
+            var ch = customer.Channels.FirstOrDefault(c => c.Id == d.ChannelId);
+            d.Attempts++; d.At = DateTimeOffset.Now;
+            try
+            {
+                if (ch is null) throw new InvalidOperationException("Versandweg beim Kunden nicht mehr vorhanden.");
+                if (ch.Settings.Type == PdfRechnung.Delivery.ChannelType.Mail)
+                {
+                    var s = delivery.Effective(ch.Settings);
+                    if (!o.Enabled) throw new InvalidOperationException("Der E-Mail-Versand ist nicht eingerichtet (Einstellungen → E-Mail).");
+                    var template = v.Mail.Template;
+                    if (!string.IsNullOrWhiteSpace(s.Template)) v.Mail.Template = s.Template;
+                    var (mail, err) = await BuildMail(v, ct);
+                    v.Mail.Template = template;
+                    if (mail is null) throw new InvalidOperationException(err);
+                    if (s.To.Count > 0) { mail.To.Clear(); mail.To.AddRange(s.To); }
+                    if (s.Cc.Count > 0) { mail.Cc.Clear(); mail.Cc.AddRange(s.Cc); }
+                    if (s.Bcc.Count > 0) { mail.Bcc.Clear(); mail.Bcc.AddRange(s.Bcc); }
+                    if (mail.To.Count == 0) throw new InvalidOperationException("Kein Empfänger – weder im Beleg noch beim Kunden.");
+                    // Inhalt „PDF“ = wie im Beleg (PDF + Anlagen); sonst genau die gewählten Dateien
+                    if (!string.IsNullOrEmpty(s.Content) && s.Content != PdfRechnung.Delivery.ChannelContent.Pdf)
+                    {
+                        var files = await delivery.FilesAsync(v, s, ct);
+                        mail.Attachments.Clear();
+                        foreach (var f in files) mail.Attachments.Add((f.Name, f.Data, f.ContentType));
+                    }
+                    await MailSender.SendAsync(o, new MailSecrets(_settings.Secrets.Unprotect(o.Password), _settings.Secrets.Unprotect(o.GraphClientSecret)), mail, ct);
+                    d.Target = string.Join(", ", mail.To);
+                }
+                else d.Target = await delivery.DeliverAsync(v, ch, ct);
+                d.Status = "ok"; d.Message = null;
+                results.Add($"{d.Label}: ok");
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                _log.LogWarning(ex, "Versandweg {Channel} für {Id} fehlgeschlagen", d.Label, v.Id);
+                d.Status = "fehler"; d.Message = ex.Message;
+                results.Add($"{d.Label}: {ex.Message}");
+            }
+        }
+        var now = DateTimeOffset.Now;
+        var allOk = v.Deliveries.All(d => d.Status == "ok");
+        _store.Update(v.Id, x =>
+        {
+            x.Deliveries = v.Deliveries;
+            x.SendChannel = string.Join(", ", v.Deliveries.Select(d => d.Label));
+            foreach (var d in v.Deliveries.Where(d => d.At >= now.AddMinutes(-10)))
+                x.History.Add(new HistoryEntry(d.At ?? now, by, d.Status == "ok" ? "versendet" : "versandfehler",
+                    d.Status == "ok" ? $"{d.Label} → {d.Target}" : $"{d.Label}: {d.Message}"));
+            if (allOk) { x.Status = VorgangStatus.Sent; x.SentAt = now; x.SentBy = by; x.SendError = null; }
+            else { x.Status = VorgangStatus.SendError; x.SendError = string.Join("; ", v.Deliveries.Where(d => d.Status != "ok").Select(d => $"{d.Label}: {d.Message}")); }
+            return true;
+        });
+        if (allOk) Export(v.Id, v);
+        return allOk ? (true, "Versendet – " + string.Join(", ", v.Deliveries.Select(d => d.Label)) + ".")
+            : (false, "Nicht alle Versandwege erfolgreich: " + string.Join("; ", results));
+    }
+
     public async Task<(OutgoingMail? Mail, string? Error)> BuildMail(Vorgang v, CancellationToken ct)
     {
         var rendered = Render(v);
@@ -255,7 +343,7 @@ public sealed class AutoSendWorker : BackgroundService
         var statuses = o.AutoSendWithWarnings ? new[] { VorgangStatus.Ready, VorgangStatus.Warning } : new[] { VorgangStatus.Ready };
         var candidates = _store.Query(new VorgangFilter { SeeAll = true, Statuses = statuses, Before = due.AddSeconds(1), Limit = 500 }).Where(v =>
             (v.Status == VorgangStatus.Ready || (o.AutoSendWithWarnings && v.Status == VorgangStatus.Warning))
-            && v.SendAttempts == 0 && v.CreatedAt <= due && v.Mail.To.Count > 0 && !v.Mail.Plain // normale E-Mails nie automatisch
+            && v.SendAttempts == 0 && v.CreatedAt <= due && (v.Mail.To.Count > 0 || v.Deliveries.Count > 0) && !v.Mail.Plain // normale E-Mails nie automatisch
             && IsAutomatic(v, o)).ToList();
         foreach (var v in candidates)
         {

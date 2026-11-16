@@ -104,6 +104,13 @@ public sealed class Vorgang
     public string? PrintProcess { get; set; }
     /// <summary>Zusätzlicher Belegpost-Drucker, über den gedruckt wurde (Kennung); null = Hauptdrucker bzw. andere Quelle.</summary>
     public string? PrinterId { get; set; }
+    /// <summary>Kunde mit eigenen Versandwegen (Kunden-Verwaltung), falls erkannt.</summary>
+    public string? CustomerId { get; set; }
+    public string? CustomerName { get; set; }
+    /// <summary>Woran der Kunde erkannt wurde, ggf. mit Regel.</summary>
+    public string? CustomerReason { get; set; }
+    /// <summary>Versandwege des Kunden und ihr Ergebnis. Leer = Versand wie bisher per Mail.</summary>
+    public List<PdfRechnung.Delivery.VorgangDelivery> Deliveries { get; set; } = new();
     /// <summary>ERP-Belegindex (BELNDX) aus @@pi@@ – nur dann wird der Status ins ERP zurückgeschrieben.</summary>
     public string? ErpIndex { get; set; }
     /// <summary>Aktueller Belegstatus als 3-stelliger Code (siehe <see cref="StatusCode"/>).</summary>

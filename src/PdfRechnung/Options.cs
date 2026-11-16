@@ -18,6 +18,94 @@ public sealed class AppSettings
     public GotomaxxOptions Gotomaxx { get; set; } = new();
     /// <summary>Globale Mail-Regeln und Signaturen.</summary>
     public PdfRechnung.Documents.MailRuleOptions MailRules { get; set; } = new();
+    /// <summary>Mandanten (WebWARE /M:) mit eigener ERP-Rückmeldung, Eingang und Ablage.</summary>
+    public MandantOptions Mandanten { get; set; } = new();
+}
+
+/// <summary>
+/// Mandanten. Erkannt am Druck: @@pm…@@ im Beleg → Parameter /M: des druckenden Prozesses (WebWARE wwa.exe) → Eingangsordner des Mandanten.
+/// Alles, was hier leer ist, gilt wie in den allgemeinen Einstellungen (Mail, Versand, Benutzer, Regeln sind für alle gleich).
+/// </summary>
+public sealed class MandantOptions
+{
+    public List<Mandant> Items { get; set; } = new();
+
+    public Mandant? Find(string? number) =>
+        string.IsNullOrWhiteSpace(number) ? null : Items.FirstOrDefault(m => string.Equals(m.Number.Trim(), number.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Mandantennummer: Buchstaben/Ziffern, 1–20 Zeichen; sonst null.</summary>
+    public static string? Normalize(string? s)
+    {
+        var t = s?.Trim();
+        return t is { Length: >= 1 and <= 20 } && t.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_') ? t : null;
+    }
+
+    /// <summary>Mandant aus der Befehlszeile, z. B. <c>WWA.EXE 000 /M:10000 …</c> → 10000.</summary>
+    public static string? FromCommandLine(string? commandLine)
+    {
+        if (string.IsNullOrWhiteSpace(commandLine)) return null;
+        foreach (var a in PdfRechnung.Printing.PrintOriginMatcher.SplitArgs(commandLine))
+            if (a.Length > 3 && (a[0] is '/' or '-') && (a[1] is 'M' or 'm') && a[2] == ':') return Normalize(a[3..]);
+        return null;
+    }
+}
+
+public sealed class Mandant
+{
+    /// <summary>Mandantennummer wie im ERP (WebWARE: Wert von /M:), z. B. 10000.</summary>
+    public string Number { get; set; } = "";
+    public string Name { get; set; } = "";
+
+    // ---- ERP-Rückmeldung: eigene Verbindung (Feldzuordnung und Statuscodes wie allgemein) ----
+    public bool OwnErp { get; set; }
+    /// <summary>Für diesen Mandanten nichts ins ERP schreiben.</summary>
+    public bool ErpOff { get; set; }
+    public string ErpEndpoint { get; set; } = "";
+    public string ErpVendor { get; set; } = "";
+    public string ErpApplication { get; set; } = "";
+    public string ErpSecureAppId { get; set; } = "";
+    public int ErpRevision { get; set; }
+    public string ErpUsername { get; set; } = "";
+    /// <summary>Kennwort (verschlüsselt gespeichert).</summary>
+    public string? ErpPassword { get; set; }
+    /// <summary>Nur zur Oberfläche: Kennwort vorhanden / neues Kennwort / löschen. Wird nie gespeichert.</summary>
+    public bool ErpHasPassword { get; set; }
+    public string? ErpNewPassword { get; set; }
+    public bool ErpClearPassword { get; set; }
+
+    // ---- Drucker & Eingang ----
+    /// <summary>Eigener Eingangsordner: PDFs von hier gehören zu diesem Mandanten. Leer = keiner.</summary>
+    public string InboxFolder { get; set; } = "";
+    /// <summary>Zusätzliche Pfadumsetzungen (vor den allgemeinen), z. B. "K:\=\\server\Mandant2\".</summary>
+    public List<string> PathMappings { get; set; } = new();
+    /// <summary>gotomaxx-Standarddrucker dieses Mandanten. Leer = allgemeiner.</summary>
+    public string GotomaxxPrinter { get; set; } = "";
+
+    // ---- Ablage ----
+    /// <summary>Exportordner (Archiv/DMS) dieses Mandanten. Leer = allgemeiner.</summary>
+    public string ExportFolder { get; set; } = "";
+
+    public string Label => string.IsNullOrWhiteSpace(Name) ? Number : $"{Number} – {Name}";
+
+    /// <summary>ERP-Einstellungen für diesen Mandanten: allgemeine Feldzuordnung und Statuscodes, eigene Verbindung.</summary>
+    public ErpOptions ErpFor(ErpOptions global)
+    {
+        if (ErpOff) return new ErpOptions { Enabled = false, Fields = global.Fields, Codes = global.Codes };
+        if (!OwnErp) return global;
+        // WEBWARE: ein Servicepass greift immer nur auf einen Mandanten zu → je Mandant eine eigene SecuredApp.
+        // Leere Felder gelten wie in der allgemeinen ERP-Anbindung (meist ändert sich nur die SecuredApp-Zugriffs-ID).
+        static string Or(string own, string fallback) => string.IsNullOrWhiteSpace(own) ? fallback : own.Trim();
+        var ownUser = !string.IsNullOrWhiteSpace(ErpUsername);
+        return new ErpOptions
+        {
+            Enabled = global.Enabled, Endpoint = Or(ErpEndpoint, global.Endpoint), Vendor = Or(ErpVendor, global.Vendor),
+            Application = Or(ErpApplication, global.Application), SecureAppId = Or(ErpSecureAppId, global.SecureAppId),
+            Revision = ErpRevision > 0 ? ErpRevision : global.Revision,
+            Username = ownUser ? ErpUsername.Trim() : global.Username, Password = ownUser ? ErpPassword : global.Password,
+            AllowRegistration = global.AllowRegistration, CheckBeforeWrite = global.CheckBeforeWrite, GiveUpDays = global.GiveUpDays,
+            Fields = global.Fields, Codes = global.Codes
+        };
+    }
 }
 
 /// <summary>

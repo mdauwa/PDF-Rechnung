@@ -63,6 +63,10 @@ public sealed class ParsedCodes
     /// <summary>@@pi…@@ mit ungültigem Wert (nicht numerisch).</summary>
     public string? InvalidErpIndex { get; set; }
 
+    /// <summary>@@pm10000@@ – Mandant (übersteuert die Erkennung aus dem druckenden Prozess).</summary>
+    public string? Mandant { get; set; }
+    public string? InvalidMandant { get; set; }
+
     /// <summary>@@pg@@ / @@pgDrucker@@ / @@pg0@@ – Weiterleitung an gotomaxx (Standarddrucker / dieser Drucker / nicht weiterleiten).</summary>
     public bool GotomaxxSet { get; set; }
     /// <summary>Druckername aus @@pg…@@; null = Standarddrucker, "0" = nicht weiterleiten.</summary>
@@ -191,6 +195,10 @@ public static partial class ControlCodeParser
             case "pi":
                 if (NormalizeErpIndex(t) is { } bel) r.ErpIndex = bel;
                 else r.InvalidErpIndex = t;
+                break;
+            case "pm":
+                if (MandantOptions.Normalize(t) is { } mn) r.Mandant = mn;
+                else if (t.Length > 0) r.InvalidMandant = t;
                 break;
             case "pg": r.GotomaxxSet = true; r.GotomaxxPrinter = t.Length > 0 ? t : null; break;
 

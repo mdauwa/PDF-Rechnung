@@ -106,7 +106,9 @@ public sealed class MapiIntake
         var bcc = Addresses(m, "bcc");
         var owner = _users.FindByWindowsAccount(windowsAccount);
 
-        var v = _proc.Process(pdf, "MAPI", fileName ?? "E-Mail", windowsAccount, m.ClientName, owner?.Id, mapiSubject: m.Subject, mapiTo: to, beforeSave: x =>
+        var bodyMandant = m.Body is not null && System.Text.RegularExpressions.Regex.Match(m.Body, @"@@pm\s*([0-9A-Za-z_-]{1,20})\s*@@") is { Success: true } pm ? pm.Groups[1].Value : null;
+        var v = _proc.Process(pdf, "MAPI", fileName ?? "E-Mail", windowsAccount, m.ClientName, owner?.Id, mapiSubject: m.Subject, mapiTo: to,
+            originMandant: bodyMandant, originMandantReason: bodyMandant is null ? null : "Steuerzeichen @@pm@@ im MAPI-Mailtext", beforeSave: x =>
         {
             // Was das ERP über MAPI übergibt, hat Vorrang (Empfänger, Betreff, Text); Steuerzeichen im PDF (z. B. @@pi@@, @@pb@@) gelten weiter.
             if (to.Count > 0) x.Mail.To = to;

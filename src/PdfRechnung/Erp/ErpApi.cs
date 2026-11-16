@@ -17,9 +17,9 @@ public static class ErpApi
         var g = app.MapGroup("/api/admin/erp").AddEndpointFilter(async (ctx, next) =>
             AdminApi.IsAdmin(ctx.HttpContext) ? await next(ctx) : Results.Json(new { error = "Keine Berechtigung." }, statusCode: 403));
 
-        g.MapGet("/status", (ErpFeedbackService erp, IOptionsMonitor<ErpOptions> opt) =>
+        g.MapGet("/status", (string? mandant, ErpFeedbackService erp) =>
         {
-            var o = opt.CurrentValue;
+            var o = erp.OptionsFor(mandant);
             ErpServicePass? pass = null;
             string? problem = null;
             try { if (o.IsConfigured) pass = erp.Manager(o).StoredPass(); }
@@ -46,22 +46,22 @@ public static class ErpApi
             });
         });
 
-        g.MapPost("/pruefen", async (ErpFeedbackService erp, IOptionsMonitor<ErpOptions> opt, CancellationToken ct) =>
+        g.MapPost("/pruefen", async (string? mandant, ErpFeedbackService erp, CancellationToken ct) =>
         {
             try
             {
-                await erp.Manager(opt.CurrentValue).CheckAsync(ct);
+                await erp.Manager(erp.OptionsFor(mandant)).CheckAsync(ct);
                 erp.RetryNow();
                 return Results.Ok(new { ok = true, message = "Verbindung zum ERP in Ordnung, Servicepass gültig." });
             }
             catch (ErpException ex) { return Results.Ok(new { ok = false, message = ex.Message }); }
         });
 
-        g.MapPost("/registrierung-bestaetigen", (ErpFeedbackService erp, IOptionsMonitor<ErpOptions> opt, PortalAccess access, HttpContext ctx) =>
+        g.MapPost("/registrierung-bestaetigen", (string? mandant, ErpFeedbackService erp, PortalAccess access, HttpContext ctx) =>
         {
             try
             {
-                erp.Manager(opt.CurrentValue).ResetUnknownRegistration();
+                erp.Manager(erp.OptionsFor(mandant)).ResetUnknownRegistration();
                 ctx.RequestServices.GetRequiredService<PdfRechnung.Data.BelegpostDb>().Audit(access.For(ctx).Name, "ERP-Registrierung zurückgesetzt");
                 return Results.Ok(new { ok = true });
             }
@@ -107,10 +107,10 @@ public static class ErpApi
             if (!req.Confirm) return Results.BadRequest(new { error = "Bitte das Testschreiben bestätigen." });
             var belndx = ControlCodeParser.NormalizeErpIndex(req.ErpIndex);
             if (belndx is null) return Results.BadRequest(new { error = "Der Belegindex hat 11 Zeichen: Zeitraum, Archiv (A/N), Belegart und 8-stellige Belegnummer, z. B. 0NR41261010." });
-            var o = opt.CurrentValue;
             var v = (req.VorgangId is { Length: > 0 } id ? store.Get(id) : null) ?? store.ByErpIndex(belndx).FirstOrDefault()
                 ?? store.Query(new VorgangFilter { SeeAll = true, Limit = 1 }).FirstOrDefault();
             if (v is null) return Results.BadRequest(new { error = "Es gibt noch keinen Vorgang als Datenquelle." });
+            var o = erp.OptionsFor(v); // Verbindung des Mandanten dieses Vorgangs
             var code = string.IsNullOrWhiteSpace(req.Code) ? v.StatusCode ?? StatusCode.Erfasst : req.Code;
             var fields = ErpFieldBuilder.Build(o, new ErpValueContext(v, code, DateTimeOffset.Now, v.SendChannel, links.UrlFor(v)));
             if (fields.Count == 0) return Results.BadRequest(new { error = "Keine Felder zugeordnet." });

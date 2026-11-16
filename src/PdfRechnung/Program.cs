@@ -97,6 +97,7 @@ builder.Services.Configure<GotomaxxOptions>(builder.Configuration.GetSection("Go
 builder.Services.Configure<StationeryOptions>(builder.Configuration.GetSection("Stationery"));
 builder.Services.Configure<MailTemplateOptions>(builder.Configuration.GetSection("MailTemplates"));
 builder.Services.Configure<MailRuleOptions>(builder.Configuration.GetSection("MailRules"));
+builder.Services.Configure<MandantOptions>(builder.Configuration.GetSection("Mandanten"));
 builder.Services.AddSingleton<MailRuleStore>();
 builder.Services.AddSingleton(sp => new RuntimeControl(sp.GetRequiredService<IHostApplicationLifetime>(), isService));
 

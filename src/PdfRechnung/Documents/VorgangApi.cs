@@ -72,6 +72,8 @@ public static class VorgangApi
             {
                 vorgang = v,
                 hasSendPdf = store.FilePath(id, DocumentStore.SendFile) is not null,
+                mandant = cfg.GetSection("Mandanten").Get<MandantOptions>()?.Find(v.Mandant) is { } md
+                    ? new { number = md.Number, name = md.Name, configured = true } : v.Mandant is null ? null : new { number = v.Mandant, name = "", configured = false },
                 mailEnabled = mail.Enabled,
                 autoSend = mail.Enabled && mail.AutoSend,
                 autoSendAt = mail.Enabled && mail.AutoSend && v.SendAttempts == 0 && (v.Status == VorgangStatus.Ready || (mail.AutoSendWithWarnings && v.Status == VorgangStatus.Warning))

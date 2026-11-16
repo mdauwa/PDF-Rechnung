@@ -132,8 +132,9 @@ public sealed class DocumentProcessor
         IOptionsMonitor<InboxOptions>? inbox = null, IOptionsMonitor<StationeryOptions>? stationery = null, Settings.SettingsStore? settings = null,
         IOptionsMonitor<MailTemplateOptions>? templates = null, Settings.UserStore? users = null, Services.EventHub? events = null,
         GotomaxxService? gotomaxx = null, IOptionsMonitor<MailRuleOptions>? rules = null, MailRuleStore? ruleStore = null,
-        Services.MelderTasks? melderTasks = null)
+        Services.MelderTasks? melderTasks = null, IOptionsMonitor<MandantOptions>? mandanten = null)
     {
+        _mandanten = mandanten;
         _users = users; _events = events; _gotomaxx = gotomaxx; _rules = rules; _ruleStore = ruleStore; _melderTasks = melderTasks;
         _store = store; _mail = mail; _invoice = invoice; _log = log; _inbox = inbox; _stationery = stationery; _templates = templates;
         _stationeryDir = PdfComposer.StationeryDirectory(settings?.DataDirectory ?? Path.GetDirectoryName(store.Root)!);
@@ -171,6 +172,17 @@ public sealed class DocumentProcessor
     }
 
     private readonly IOptionsMonitor<InboxOptions>? _inbox;
+    private readonly IOptionsMonitor<MandantOptions>? _mandanten;
+
+    /// <summary>Eingestellter Mandant eines Vorgangs (null = keiner bzw. nicht eingerichtet).</summary>
+    public Mandant? MandantOf(Vorgang v) => _mandanten?.CurrentValue.Find(v.Mandant);
+
+    /// <summary>Mandant setzen: @@pm@@ im Beleg → Herkunft (Prozess /M:, Eingangsordner).</summary>
+    private void SetMandant(Vorgang v, ParsedCodes p)
+    {
+        v.Mandant = p.Mandant ?? v.OriginMandant;
+        v.MandantReason = p.Mandant is not null ? "Steuerzeichen @@pm@@" : v.OriginMandant is not null ? v.MandantReason ?? "Herkunft" : null;
+    }
 
     /// <summary>Pfade aus den Steuerzeichen über die Pfadzuordnung (Einstellungen → Drucker &amp; Eingang) umsetzen.</summary>
     public static string MapPath(string path, IEnumerable<string> mappings)
@@ -185,9 +197,11 @@ public sealed class DocumentProcessor
         return path;
     }
 
-    private ParsedCodes Map(ParsedCodes p)
+    private ParsedCodes Map(ParsedCodes p, string? originMandant = null)
     {
-        var maps = _inbox?.CurrentValue.PathMappings ?? new List<string>();
+        var mandant = _mandanten?.CurrentValue.Find(p.Mandant ?? originMandant);
+        var maps = (mandant?.PathMappings ?? new List<string>()).Concat(_inbox?.CurrentValue.PathMappings ?? new List<string>())
+            .Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
         if (maps.Count == 0) return p;
         if (p.BodyFile is not null) p.BodyFile = MapPath(p.BodyFile, maps);
         for (var i = 0; i < p.Attachments.Count; i++) p.Attachments[i] = MapPath(p.Attachments[i], maps);
@@ -198,11 +212,13 @@ public sealed class DocumentProcessor
     }
 
     public Vorgang Process(byte[] pdf, string source, string? fileName, string? user = null, string? machine = null, string? ownerUserId = null,
-        Action<Vorgang>? beforeSave = null, bool publish = true, string? processOperator = null, string? mapiSubject = null, List<string>? mapiTo = null)
+        Action<Vorgang>? beforeSave = null, bool publish = true, string? processOperator = null, string? mapiSubject = null, List<string>? mapiTo = null,
+        string? originMandant = null, string? originMandantReason = null)
     {
         var now = DateTimeOffset.Now;
         var v = new Vorgang { Id = DocumentStore.NewId(now), CreatedAt = now, Source = source, OriginalFileName = fileName, PrintUser = user, PrintMachine = machine,
-            ProcessOperator = processOperator, MapiSubject = string.IsNullOrWhiteSpace(mapiSubject) ? null : mapiSubject.Trim(), MapiTo = mapiTo ?? new() };
+            ProcessOperator = processOperator, MapiSubject = string.IsNullOrWhiteSpace(mapiSubject) ? null : mapiSubject.Trim(), MapiTo = mapiTo ?? new(),
+            OriginMandant = MandantOptions.Normalize(originMandant), MandantReason = originMandantReason };
         string text;
         ParsedCodes p;
         try
@@ -210,7 +226,7 @@ public sealed class DocumentProcessor
             var (pages, lines) = PdfText.Extract(pdf);
             v.Pages = pages;
             text = string.Join("\n", lines.Select(l => $"[{l.Page}] {l.Line}"));
-            p = Map(ControlCodeParser.Parse(lines));
+            p = Map(ControlCodeParser.Parse(lines), v.OriginMandant);
         }
         catch (Exception ex)
         {
@@ -220,6 +236,7 @@ public sealed class DocumentProcessor
             v.Messages.Add(new CheckMessage(DocumentChecker.Error, "Das PDF konnte nicht gelesen werden: " + ex.Message));
         }
 
+        SetMandant(v, p);
         AssignOwner(v, p, ownerUserId);
 
         Fill(v, p, overwriteMail: true);
@@ -278,6 +295,7 @@ public sealed class DocumentProcessor
                 return false;
             }
         }
+        if (target is "" && MandantOf(v) is { GotomaxxPrinter.Length: > 0 } gm) target = gm.GotomaxxPrinter.Trim(); // Standarddrucker des Mandanten
         if (target is { } printer)
         {
             v.Messages = v.Messages.Where(m => m.Field == "mapi").ToList();
@@ -337,11 +355,13 @@ public sealed class DocumentProcessor
         if (_store.Get(id) is { Mail.Plain: true } plain) return plain; // normale E-Mail: nichts zu prüfen
         ParsedCodes p;
         var original = File.ReadAllBytes(path);
-        try { p = Map(ControlCodeParser.Parse(PdfText.Extract(original).Lines)); }
+        var originMandant = _store.Get(id)?.OriginMandant;
+        try { p = Map(ControlCodeParser.Parse(PdfText.Extract(original).Lines), originMandant); }
         catch { p = new ParsedCodes(); }
         return _store.Update(id, v =>
         {
             // Zuordnung neu (z. B. Bedienernummer inzwischen einem Benutzer zugewiesen); Upload-Besitzer bleibt als Rückfall
+            SetMandant(v, p);
             AssignOwner(v, p, v.Source == "Upload" ? v.OwnerUserId : null);
             Fill(v, p, overwriteMail: !v.Mail.Edited);
             _store.WriteFile(id, DocumentStore.SendFile, Compose(v, original, p));
@@ -359,7 +379,7 @@ public sealed class DocumentProcessor
         if (v.Mail.Plain) { v.Messages = v.Messages.Where(m => m.Field == "mapi").ToList(); v.UpdateStatus(); return; }
         var path = _store.FilePath(v.Id, DocumentStore.PdfFile);
         ParsedCodes p;
-        try { p = path is null ? new ParsedCodes() : Map(ControlCodeParser.Parse(PdfText.Extract(File.ReadAllBytes(path)).Lines)); }
+        try { p = path is null ? new ParsedCodes() : Map(ControlCodeParser.Parse(PdfText.Extract(File.ReadAllBytes(path)).Lines), v.OriginMandant); }
         catch { p = new ParsedCodes(); }
         v.Messages = DocumentChecker.Check(v, p, CurrentSettings());
         v.UpdateStatus();

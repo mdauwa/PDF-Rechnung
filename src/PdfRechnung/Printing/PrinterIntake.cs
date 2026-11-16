@@ -260,7 +260,9 @@ public sealed class PrinterIntake : BackgroundService
 
         try
         {
-            var v = _processor.Process(data, "Drucker", name, job?.UserName, job?.MachineName, processOperator: origin?.Operator, beforeSave: x =>
+            var originMandant = MandantOptions.FromCommandLine(origin?.CommandLine);
+            var v = _processor.Process(data, "Drucker", name, job?.UserName, job?.MachineName, processOperator: origin?.Operator,
+                originMandant: originMandant, originMandantReason: originMandant is null ? null : $"Parameter /M: des druckenden Prozesses ({origin!.Exe})", beforeSave: x =>
             {
                 x.PrintProcess = origin?.Pid is not null ? $"{origin.Explanation}{(string.IsNullOrEmpty(origin.CommandLine) ? "" : " – " + origin.CommandLine)}" : null;
                 if (origin?.Warning is { } w) x.Messages.Add(new CheckMessage(DocumentChecker.Warning, w, "druck"));

@@ -60,6 +60,7 @@ public static class AdminApi
             s.Auth.Firmenportal.Secret = null;
             var hasErpPassword = !string.IsNullOrEmpty(s.Erp.Password);
             s.Erp.Password = null;
+            foreach (var m in s.Mandanten.Items) { m.ErpHasPassword = !string.IsNullOrEmpty(m.ErpPassword); m.ErpPassword = null; m.ErpNewPassword = null; m.ErpClearPassword = false; }
             // Fehlende Statuscodes ergänzen und leere Statusbitmaps mit dem Standard (ab 950) füllen
             foreach (var c in PdfRechnung.Documents.StatusCode.All)
                 if (s.Erp.Codes.All(x => x.Code != c))
@@ -111,6 +112,18 @@ public static class AdminApi
             s.Erp.Password = req.ClearErpPassword ? null
                 : !string.IsNullOrEmpty(req.ErpPassword) ? store.Secrets.Protect(req.ErpPassword)
                 : old.Erp.Password;
+            // Mandanten: Kennwörter verschlüsseln bzw. behalten, nur-Anzeige-Felder nicht speichern
+            s.Mandanten.Items = s.Mandanten.Items.Where(m => !string.IsNullOrWhiteSpace(m.Number)).ToList();
+            foreach (var m in s.Mandanten.Items)
+            {
+                m.Number = m.Number.Trim(); m.Name = m.Name.Trim();
+                var prev = old.Mandanten.Find(m.Number);
+                m.ErpPassword = m.ErpClearPassword ? null
+                    : !string.IsNullOrEmpty(m.ErpNewPassword) ? store.Secrets.Protect(m.ErpNewPassword)
+                    : prev?.ErpPassword;
+                m.ErpNewPassword = null; m.ErpClearPassword = false; m.ErpHasPassword = false;
+                m.PathMappings = m.PathMappings.Select(x => x.Trim()).Where(x => x.Length > 0).ToList();
+            }
             s.Erp.Fields = s.Erp.Fields.Where(f => !string.IsNullOrWhiteSpace(f.Field)).Select(f => { f.Field = f.Field.Trim().ToUpperInvariant(); return f; }).ToList();
             s.StatusLink.AllowedNetworks = s.StatusLink.AllowedNetworks.Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToList();
             s.StatusLink.TrustedProxies = s.StatusLink.TrustedProxies.Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToList();
@@ -432,6 +445,15 @@ public static class AdminApi
     {
         var e = new List<string>();
         bool PortOk(int p) => p is > 0 and <= 65535;
+        s.Mandanten ??= new();
+        foreach (var m in s.Mandanten.Items.Where(m => !string.IsNullOrWhiteSpace(m.Number)))
+        {
+            if (MandantOptions.Normalize(m.Number) is null) e.Add($"Mandant „{m.Number}“: Nummer nur aus Buchstaben/Ziffern (höchstens 20 Zeichen).");
+            if (m.OwnErp && string.IsNullOrWhiteSpace(m.ErpSecureAppId)) e.Add($"Mandant {m.Number}: für die eigene ERP-Anbindung die SecuredApp-Zugriffs-ID angeben.");
+            if (m.OwnErp && m.ErpSecureAppId.Trim() is { Length: > 0 } sa && !(sa.Length <= 25 && sa.All(char.IsAsciiDigit))) e.Add($"Mandant {m.Number}: SecuredApp-Zugriffs-ID prüfen (1–25 Ziffern).");
+        }
+        foreach (var d in s.Mandanten.Items.Where(m => !string.IsNullOrWhiteSpace(m.Number)).GroupBy(m => m.Number.Trim(), StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
+            e.Add($"Mandant {d.Key} ist mehrfach eingetragen.");
         if (!PortOk(s.Server.HttpsPort)) e.Add("HTTPS-Port ist ungültig.");
         if (s.Server.EnableHttp && !PortOk(s.Server.HttpPort)) e.Add("HTTP-Port ist ungültig.");
         if (s.Server.BindAddresses is null) s.Server.BindAddresses = new();

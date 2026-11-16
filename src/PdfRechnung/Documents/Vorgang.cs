@@ -94,6 +94,12 @@ public sealed class Vorgang
     public List<string> MapiTo { get; set; } = new();
     /// <summary>ERP-Benutzernummer aus dem druckenden Prozess (z. B. wwa.exe 000 …), falls erkannt.</summary>
     public string? ProcessOperator { get; set; }
+    /// <summary>Mandant (@@pm@@, /M: des druckenden Prozesses oder Eingangsordner des Mandanten).</summary>
+    public string? Mandant { get; set; }
+    /// <summary>Mandant aus der Herkunft (Prozess /M: bzw. Eingangsordner); @@pm@@ im Beleg übersteuert ihn.</summary>
+    public string? OriginMandant { get; set; }
+    /// <summary>Woher der Mandant stammt (Anzeige).</summary>
+    public string? MandantReason { get; set; }
     /// <summary>Druckender Prozess mit Befehlszeile (Anzeige).</summary>
     public string? PrintProcess { get; set; }
     /// <summary>ERP-Belegindex (BELNDX) aus @@pi@@ – nur dann wird der Status ins ERP zurückgeschrieben.</summary>
@@ -157,7 +163,7 @@ public sealed class Vorgang
     public object Summary() => new
     {
         Id, CreatedAt, Source, Status, DocumentType, VoucherId, VoucherDate, BuyerId, BuyerName, GrossAmount, Currency,
-        FormatName, To = Mail.To, Mail.Subject, MailEnabled = Mail.Enabled, ErrorCount, WarningCount, SentAt, SentBy, PrintUser, OperatorNumber, OwnerUserId, OwnerName, ErpIndex, StatusCode, SendChannel, OutlookConfirmedAt, GotomaxxPrinter,
+        FormatName, To = Mail.To, Mail.Subject, MailEnabled = Mail.Enabled, ErrorCount, WarningCount, SentAt, SentBy, PrintUser, OperatorNumber, OwnerUserId, OwnerName, ErpIndex, Mandant, StatusCode, SendChannel, OutlookConfirmedAt, GotomaxxPrinter,
         FirstMessage = Messages.FirstOrDefault(m => m.Level == DocumentChecker.Error)?.Text ?? Messages.FirstOrDefault(m => m.Level == DocumentChecker.Warning)?.Text
     };
 }

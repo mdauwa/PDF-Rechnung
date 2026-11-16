@@ -186,3 +186,11 @@ Danach kommt ZUGFeRD: `@@xt@@`/`@@xi@@`/`@@xr@@` werden zu CII/UBL, dazu **PDF/A
 - **Lokaler Ordner:** Nach jeder Änderung auf GitHub pushen; der Benutzer holt den Stand in `Y:\Dev\eRechnung` mit `git pull`. Fertige Programme nach `Y:\Dev\eRechnung\Ausgabe`. Aus Claude heraus kann nicht in `.git` geschrieben und nichts verschoben/gelöscht werden – solche Schritte gibt der Benutzer per PowerShell aus.
 - **Bauen unter Linux (Claude):** .NET 9 SDK per `dotnet-install.sh`, MAPI-DLLs mit mingw-w64 (`gcc-mingw-w64`), Melder mit `-p:EnableWindowsTargeting=true`. Der Mac-Melder kann nur auf dem Mac gebaut werden.
 - **Sprache:** Antworten auf Deutsch, Ansprache mit „du“.
+
+## Mandanten (16.11.2026)
+
+- Erkennung je Vorgang (`Vorgang.Mandant`, `OriginMandant`, `MandantReason`): `@@pm…@@` → `/M:` aus der Befehlszeile des druckenden Prozesses (`MandantOptions.FromCommandLine`, PrinterIntake) → Eingangsordner des Mandanten (InboxWatcher) → bei MAPI `@@pm…@@` im Mailtext.
+- Einstellungen → Mandanten (`AppSettings.Mandanten.Items`): je Mandant ERP-Anbindung „wie allgemein / eigene SecuredApp / aus“ (`Mandant.ErpFor`: leere Felder = allgemein, Feldzuordnung und Statuscodes immer allgemein), Eingangsordner, gotomaxx-Standarddrucker, zusätzliche Pfadumsetzungen, Ablageordner. Kennwort verschlüsselt wie das allgemeine.
+- WEBWARE: Ein Servicepass greift nur auf einen Mandanten zu → je weiterem Mandanten eine eigene SecuredApp im ERP anlegen. `ErpFeedbackService` hält je Verbindung einen eigenen `ErpServicePassManager`; `/api/admin/erp/pruefen?mandant=…`.
+- Mail, Versand, Benutzer, Regeln, Vorlagen, MAPI: für alle Mandanten gleich.
+

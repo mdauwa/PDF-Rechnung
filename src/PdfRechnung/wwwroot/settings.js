@@ -18,6 +18,7 @@ const TABS = [
   ["regeln", "Regeln & Signaturen"],
   ["erechnung", "E-Rechnung"],
   ["ablage", "Ablage"],
+  ["mandanten", "Mandanten"],
   ["erp", "ERP-Rückmeldung"],
   ["mapi", "MAPI-Mails"],
   ["statuslink", "Status-Link"],
@@ -78,7 +79,7 @@ function drawTab() {
   const body = $("#stBody");
   if (!ST.s) return;
   const fn = { dienst: tabService, server: tabServer, eingang: tabInbox, briefpapier: tabStationery, mail: tabMail, mailvorlagen: tabTemplates, erechnung: tabInvoice, ablage: tabStorage, benutzer: tabUsers, anmeldung: tabAuth,
-    erp: tabErp, mapi: tabMapi, statuslink: tabStatusLink, regeln: tabRules }[ST.tab] || tabService;
+    erp: tabErp, mapi: tabMapi, statuslink: tabStatusLink, regeln: tabRules, mandanten: tabMandanten }[ST.tab] || tabService;
   body.innerHTML = fn();
   if (ST.tab === "benutzer" && !ST.users) loadUsers();
   if (ST.tab === "benutzer" && !ST.devices) loadDevices();
@@ -116,6 +117,11 @@ const section = (title, inner, extra = "") => `<section class="st-card"><div cla
 
 function onInput(e) {
   const el = e.target;
+  if (el.dataset?.mdErp !== undefined) {
+    const m = ST.s.mandanten.items[+el.dataset.mdErp];
+    m.ownErp = el.value === "eigen"; m.erpOff = el.value === "aus";
+    markDirty(); if (e.type === "change") drawTab(); return;
+  }
   if (el.dataset?.rteCmd) return; // Werkzeugleiste des Editors
   if (ruleEditorInput(el, e)) return;
   if (el.dataset?.rte === "1" && el.dataset.path) { set(ST.s, el.dataset.path, fieldValue(el)); markDirty(); return; }
@@ -270,6 +276,19 @@ async function onAction(e) {
       case "erp-field-add": (ST.s.erp.fields ||= []).push({ field: "", value: "statuscode", format: "", length: 0, onlyCodes: [], onlyIfEmpty: false }); markDirty(); drawTab(); break;
       case "erp-field-del": ST.s.erp.fields.splice(+btn.dataset.i, 1); markDirty(); drawTab(); break;
       case "erp-check": await erpCall("api/admin/erp/pruefen", "Verbindung wird geprüft …"); break;
+      case "md-add": (ST.s.mandanten ||= { items: [] }).items.push({ number: "", name: "", ownErp: false, erpOff: false, erpEndpoint: "", erpVendor: "", erpApplication: "",
+          erpSecureAppId: "", erpRevision: 0, erpUsername: "", inboxFolder: "", pathMappings: [], gotomaxxPrinter: "", exportFolder: "" }); markDirty(); drawTab(); break;
+      case "md-del": {
+        const m = ST.s.mandanten.items[+btn.dataset.i];
+        if (!await confirmDialog("Mandant entfernen", `Mandant ${esc(m.number || "(ohne Nummer)")} aus den Einstellungen entfernen? Belege dieses Mandanten gelten danach wie ohne Mandant.`, "Entfernen", true)) break;
+        ST.s.mandanten.items.splice(+btn.dataset.i, 1); markDirty(); drawTab(); break;
+      }
+      case "md-pw-clear": { const m = ST.s.mandanten.items[+btn.dataset.i]; m.erpClearPassword = !m.erpClearPassword; markDirty(); drawTab(); break; }
+      case "md-erp-check": {
+        if (ST.dirty) { msg("Bitte zuerst speichern – geprüft wird die gespeicherte Einstellung."); break; }
+        const r = await api("POST", "api/admin/erp/pruefen?mandant=" + encodeURIComponent(btn.dataset.m));
+        msg(`Mandant ${btn.dataset.m}: ${r.message || "Erledigt."}`, r.ok !== false); break;
+      }
       case "erp-confirm-reg":
         if (await confirmDialog("Registrierung zurücksetzen", "Bitte vorher im ERP prüfen, ob für Belegpost bereits ein Servicepass angelegt wurde (ggf. dort entfernen). Danach registriert Belegpost beim nächsten Zugriff neu.", "Zurücksetzen", true))
           await erpCall("api/admin/erp/registrierung-bestaetigen", "…");
@@ -1422,4 +1441,59 @@ function tabStatusLink() {
        ${field("Portal-Adresse für Links", inText("portal.publicUrl", `https://${(ST.data.hostNames || ["server"])[0]}:${ST.s.server.httpsPort}`), "Leer = erster Servername.")}
      </div>
      ${inCheck("statusLink.showVoucherNumber", "Belegart und Belegnummer anzeigen")}`);
+}
+
+/* ---------------- Tab: Mandanten ---------------- */
+
+function tabMandanten() {
+  const M = (ST.s.mandanten ||= { items: [] });
+  M.items ||= [];
+  const erpMode = m => m.erpOff ? "aus" : m.ownErp ? "eigen" : "";
+  const card = (m, i) => {
+    const P = `mandanten.items.${i}`;
+    const mode = erpMode(m);
+    return `<section class="st-card"><div class="st-card-head"><h3>Mandant ${esc(m.number || "(neu)")}${m.name ? ` – ${esc(m.name)}` : ""}</h3>
+        <button class="icon-btn" data-st="md-del" data-i="${i}" title="Mandant entfernen">✕</button></div>
+      <div class="st-card-body">
+        <div class="grid2">
+          ${field("Mandantennummer", inText(`${P}.number`, "10000"), "Wie im ERP – bei der WebWARE der Wert von <code>/M:</code> (z. B. <code>WWA.EXE 000 /M:10000</code>).")}
+          ${field("Bezeichnung", inText(`${P}.name`, "Firma GmbH"))}
+        </div>
+        <h4>ERP-Rückmeldung</h4>
+        <div class="grid2">
+          ${field("Anbindung", `<select data-md-erp="${i}">
+              <option value="" ${mode === "" ? "selected" : ""}>wie allgemein eingestellt</option>
+              <option value="eigen" ${mode === "eigen" ? "selected" : ""}>eigene SecuredApp für diesen Mandanten</option>
+              <option value="aus" ${mode === "aus" ? "selected" : ""}>für diesen Mandanten nicht zurückschreiben</option></select>`,
+            "Ein WEBWARE-Servicepass greift immer nur auf <b>einen</b> Mandanten zu – für jeden weiteren Mandanten braucht es im ERP eine eigene SecuredApp. Feldzuordnung und Statuscodes gelten für alle Mandanten.")}
+        </div>
+        ${mode === "eigen" ? `<div class="grid3">
+          ${field("SecuredApp-Zugriffs-ID", inText(`${P}.erpSecureAppId`, ST.s.erp?.secureAppId || ""), "Pflicht – die SecuredApp dieses Mandanten.")}
+          ${field("Webservice-Adresse", inText(`${P}.erpEndpoint`, ST.s.erp?.endpoint || "wie allgemein"), "Leer = wie allgemein.")}
+          ${field("Revision", inNum(`${P}.erpRevision`, 0, 9999), "0 = wie allgemein.")}
+          ${field("Hersteller-Hash", inText(`${P}.erpVendor`, "wie allgemein"))}
+          ${field("Anwendungs-Hash", inText(`${P}.erpApplication`, "wie allgemein"))}
+          ${field("Technischer ERP-Benutzer", inText(`${P}.erpUsername`, ST.s.erp?.username || "wie allgemein"), "Leer = Benutzer und Kennwort wie allgemein.")}
+          ${field("Kennwort", `<input type="password" data-path="${P}.erpNewPassword" autocomplete="new-password" placeholder="${m.erpHasPassword ? "gespeichert – leer lassen" : ""}" ${m.erpClearPassword ? "disabled" : ""}>`)}
+        </div>
+        <div class="actions">${m.erpHasPassword ? `<label class="check"><input type="checkbox" data-st="md-pw-clear" data-i="${i}" ${m.erpClearPassword ? "checked" : ""}> gespeichertes Kennwort entfernen</label>` : ""}
+          ${m.number ? `<button class="btn ghost small" data-st="md-erp-check" data-m="${esc(m.number)}">Verbindung prüfen</button>` : ""}</div>` : ""}
+        <h4>Drucker &amp; Eingang</h4>
+        <div class="grid2">
+          ${field("Eigener Eingangsordner (optional)", inText(`${P}.inboxFolder`, "\\\\server\\belegpost\\mandant2"), "PDFs aus diesem Ordner gehören zu diesem Mandanten. Leer = keiner.")}
+          ${field("gotomaxx-Standarddrucker", inText(`${P}.gotomaxxPrinter`, ST.s.gotomaxx?.printer || "wie allgemein"), "Für <code>@@pg@@</code> ohne Druckernamen. Leer = wie allgemein.")}
+          ${field("Pfade aus den Steuerzeichen umsetzen (zusätzlich)", inLines(`${P}.pathMappings`, "K:\\=\\\\server\\WebWARE5\\M2\\"), "Werden vor den allgemeinen Umsetzungen angewendet.")}
+        </div>
+        <h4>Ablage</h4>
+        <div class="grid2">
+          ${field("Versendete Belege ablegen in", inText(`${P}.exportFolder`, ST.s.storage?.exportFolder || "wie allgemein"), "Leer = wie allgemein (Einstellungen → Ablage).")}
+        </div>
+      </div></section>`;
+  };
+  return section("Mandanten",
+    `<p class="help">Belegpost erkennt den Mandanten am Beleg – in dieser Reihenfolge: Steuerzeichen <code>@@pm10000@@</code> im Druck
+      (bei MAPI auch im Mailtext) → Parameter <code>/M:</code> des druckenden Programms (WebWARE <code>wwa.exe</code>, Prozesserkennung unter Drucker &amp; Eingang)
+      → eigener Eingangsordner des Mandanten. Hier stellst du nur ein, was je Mandant anders ist; alles andere (E-Mail, Versand, Benutzer, Regeln, Vorlagen, MAPI) gilt für alle.</p>
+     ${M.items.length ? "" : `<p class="meta">Noch keine Mandanten – ohne Eintrag gelten für alle Belege die allgemeinen Einstellungen. Der erkannte Mandant wird trotzdem beim Vorgang angezeigt.</p>`}`,
+    `<button class="btn ghost small" data-st="md-add">+ Mandant</button>`) + M.items.map(card).join("");
 }

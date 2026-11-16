@@ -204,11 +204,13 @@ public sealed class ErpFeedbackService : BackgroundService
     private readonly ILogger<ErpFeedbackService> _log;
     private readonly SemaphoreSlim _wake = new(0);
     private readonly object _managerLock = new();
-    private (string Key, ErpServicePassManager Manager)? _manager;
+    private readonly Dictionary<string, ErpServicePassManager> _managers = new();
+    private readonly IOptionsMonitor<MandantOptions>? _mandanten;
 
     public ErpFeedbackService(BelegpostDb db, DocumentStore store, SettingsStore settings, IOptionsMonitor<ErpOptions> opt, IServiceProvider sp,
-        ILogger<ErpFeedbackService> log)
+        ILogger<ErpFeedbackService> log, IOptionsMonitor<MandantOptions>? mandanten = null)
     {
+        _mandanten = mandanten;
         _db = db; _store = store; _settings = settings; _opt = opt; _sp = sp; _log = log;
         _store.StatusChanged += OnStatusChanged;
     }
@@ -216,6 +218,15 @@ public sealed class ErpFeedbackService : BackgroundService
     /// <summary>Letzter Zustand der Verbindung für die Oberfläche.</summary>
     public string? LastError { get; private set; }
     public DateTimeOffset? LastSuccess { get; private set; }
+
+    /// <summary>ERP-Einstellungen für einen Vorgang: eigene Verbindung seines Mandanten, sonst die allgemeine.</summary>
+    public ErpOptions OptionsFor(Vorgang? v) => OptionsFor(v?.Mandant);
+
+    public ErpOptions OptionsFor(string? mandant)
+    {
+        var global = _opt.CurrentValue;
+        return _mandanten?.CurrentValue.Find(mandant) is { } m ? m.ErpFor(global) : global;
+    }
 
     private string PassDirectory => Path.Combine(_settings.DataDirectory, "erp");
 
@@ -225,7 +236,7 @@ public sealed class ErpFeedbackService : BackgroundService
     {
         try
         {
-            var o = _opt.CurrentValue;
+            var o = OptionsFor(v);
             if (!o.Enabled || v.ErpIndex is null || !ErpFieldBuilder.ShouldWrite(o, e.Code) || o.Fields.Count == 0) return;
             Enqueue(v.ErpIndex, v.Id, e.Code, e.At);
         }
@@ -276,14 +287,16 @@ public sealed class ErpFeedbackService : BackgroundService
         using (var c = _db.Open())
             job = ReadJobs(c, "WHERE status='offen' AND naechster_versuch <= @n ORDER BY naechster_versuch, id LIMIT 1", ("@n", BelegpostDb.Ms(DateTimeOffset.Now))).FirstOrDefault();
         if (job is null) return false;
-        await ProcessAsync(job, o, ct);
+        await ProcessAsync(job, ct);
         return true;
     }
 
-    private async Task ProcessAsync(ErpJob job, ErpOptions o, CancellationToken ct)
+    private async Task ProcessAsync(ErpJob job, CancellationToken ct)
     {
         var v = _store.Get(job.VorgangId);
         if (v is null) { Finish(job.Id, ErpJobStatus.Discarded, "Vorgang gelöscht.", null); return; }
+        var o = OptionsFor(v);
+        if (!o.Enabled) { Finish(job.Id, ErpJobStatus.Discarded, $"ERP-Rückmeldung für Mandant {v.Mandant} ist aus.", null); return; }
         try
         {
             var manager = Manager(o);
@@ -376,9 +389,11 @@ public sealed class ErpFeedbackService : BackgroundService
         var key = JsonSerializer.Serialize(s);
         lock (_managerLock)
         {
-            if (_manager is { } m && m.Key == key) return m.Manager;
+            // eine Verbindung je ERP-Einstellung (z. B. je Mandant mit eigener Anbindung)
+            if (_managers.TryGetValue(key, out var m)) return m;
+            if (_managers.Count > 20) _managers.Clear();
             var mgr = new ErpServicePassManager(s, new WwsServiceClient(Http, s), LoadPass, SavePass);
-            _manager = (key, mgr);
+            _managers[key] = mgr;
             return mgr;
         }
     }

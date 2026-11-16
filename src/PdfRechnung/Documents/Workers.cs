@@ -14,10 +14,12 @@ public sealed class SendService
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     private readonly IOptionsMonitor<MailTemplateOptions> _templates;
+    private readonly IOptionsMonitor<MandantOptions>? _mandanten;
 
     public SendService(DocumentStore store, SettingsStore settings, IOptionsMonitor<MailOptions> mail, IOptionsMonitor<StorageOptions> storage,
-        IOptionsMonitor<MailTemplateOptions> templates, ILogger<SendService> log)
+        IOptionsMonitor<MailTemplateOptions> templates, ILogger<SendService> log, IOptionsMonitor<MandantOptions>? mandanten = null)
     {
+        _mandanten = mandanten;
         _store = store; _settings = settings; _mail = mail; _storage = storage; _templates = templates; _log = log;
     }
 
@@ -125,7 +127,7 @@ public sealed class SendService
     /// <summary>Kopie in den Exportordner (Archiv/DMS), falls eingestellt.</summary>
     private void Export(string id, Vorgang v)
     {
-        var folder = _storage.CurrentValue.ExportFolder;
+        var folder = _mandanten?.CurrentValue.Find(v.Mandant) is { ExportFolder.Length: > 0 } m ? m.ExportFolder.Trim() : _storage.CurrentValue.ExportFolder;
         if (string.IsNullOrWhiteSpace(folder)) return;
         try
         {
@@ -150,13 +152,16 @@ public sealed class SendService
 public sealed class InboxWatcher : BackgroundService
 {
     private readonly IOptionsMonitor<InboxOptions> _opt;
+    private readonly IOptionsMonitor<MandantOptions>? _mandanten;
     private readonly SettingsStore _settings;
     private readonly DocumentProcessor _processor;
     private readonly ILogger<InboxWatcher> _log;
     private readonly Dictionary<string, long> _seen = new(StringComparer.OrdinalIgnoreCase);
 
-    public InboxWatcher(IOptionsMonitor<InboxOptions> opt, SettingsStore settings, DocumentProcessor processor, ILogger<InboxWatcher> log)
+    public InboxWatcher(IOptionsMonitor<InboxOptions> opt, SettingsStore settings, DocumentProcessor processor, ILogger<InboxWatcher> log,
+        IOptionsMonitor<MandantOptions>? mandanten = null)
     {
+        _mandanten = mandanten;
         _opt = opt; _settings = settings; _processor = processor; _log = log;
     }
 
@@ -175,7 +180,16 @@ public sealed class InboxWatcher : BackgroundService
 
     private void Scan()
     {
-        var folder = ResolveFolder(_opt.CurrentValue, _settings);
+        Scan(ResolveFolder(_opt.CurrentValue, _settings), null);
+        // Eingangsordner der Mandanten: PDFs von dort gehören zum jeweiligen Mandanten
+        foreach (var m in _mandanten?.CurrentValue.Items ?? new())
+            if (!string.IsNullOrWhiteSpace(m.InboxFolder) && MandantOptions.Normalize(m.Number) is not null)
+                try { Scan(m.InboxFolder.Trim(), m); }
+                catch (Exception ex) { _log.LogWarning(ex, "Eingangsordner von Mandant {Mandant} konnte nicht gelesen werden", m.Number); }
+    }
+
+    private void Scan(string folder, Mandant? mandant)
+    {
         Directory.CreateDirectory(folder);
         foreach (var file in Directory.EnumerateFiles(folder, "*.pdf"))
         {
@@ -194,7 +208,8 @@ public sealed class InboxWatcher : BackgroundService
             _seen.Remove(file);
             try
             {
-                _processor.Process(data, "Eingang", info.Name);
+                _processor.Process(data, "Eingang", info.Name,
+                    originMandant: mandant?.Number, originMandantReason: mandant is null ? null : $"Eingangsordner des Mandanten {mandant.Label}");
                 File.Delete(file);
             }
             catch (Exception ex)

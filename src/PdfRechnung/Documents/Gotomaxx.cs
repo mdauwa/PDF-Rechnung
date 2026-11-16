@@ -22,6 +22,7 @@ public static class GotomaxxCodes
         "pf", // Absender
         "pg", // Weiterleitung an gotomaxx (dieses Steuerzeichen)
         "ps", // Signatur
+        "pm", // Mandant
         "pw"  // Versandweg
     };
 

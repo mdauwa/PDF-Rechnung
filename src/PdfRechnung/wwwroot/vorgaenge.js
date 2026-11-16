@@ -154,13 +154,14 @@ function drawTable() {
   const rows = VL.items;
   const canSel = portal.canSend;
   if (!rows.length) { $("#vlTable").innerHTML = `<tbody><tr><td class="empty">Keine Vorgänge.</td></tr></tbody>`; updateSel(); return; }
+  const showMd = rows.some(v => v.mandant);
   const allSel = rows.filter(selectable).length > 0 && rows.filter(selectable).every(v => VL.selected.has(v.id));
   $("#vlTable").innerHTML = `<thead><tr>
       ${canSel ? `<th class="cb"><input type="checkbox" data-all ${allSel ? "checked" : ""} title="Alle versendbaren auswählen"></th>` : ""}
-      <th>Mitarbeiter</th><th>Eingang</th><th>Beleg</th><th>Kunde</th><th class="num">Betrag</th><th>Empfänger</th><th>E-Rechnung</th><th>Status</th></tr></thead>
+      ${showMd ? "<th>Mandant</th>" : ""}<th>Mitarbeiter</th><th>Eingang</th><th>Beleg</th><th>Kunde</th><th class="num">Betrag</th><th>Empfänger</th><th>E-Rechnung</th><th>Status</th></tr></thead>
     <tbody>${rows.map(v => `<tr data-id="${esc(v.id)}" class="st-${esc(v.status)}">
       ${canSel ? `<td class="cb">${selectable(v) ? `<input type="checkbox" data-id="${esc(v.id)}" ${VL.selected.has(v.id) ? "checked" : ""}>` : ""}</td>` : ""}
-      <td class="nowrap who" title="${esc(v.printUser || v.source || "")}">${esc(v.ownerName || v.printUser || v.source)}</td>
+      ${showMd ? `<td class="nowrap">${esc(v.mandant || "")}</td>` : ""}<td class="nowrap who" title="${esc(v.printUser || v.source || "")}">${esc(v.ownerName || v.printUser || v.source)}</td>
       <td class="nowrap">${fmtDT(v.createdAt)}</td>
       <td><b>${esc(v.documentType)} ${esc(v.voucherId || "")}</b><small>${esc(v.voucherDate || "")}</small></td>
       <td>${esc(v.buyerName || "")}<small>${esc(v.buyerId || "")}</small></td>
@@ -327,7 +328,7 @@ function drawVorgang(view, data) {
           </details>
         </div>
 
-        ${rulesCard(v)}
+        ${rulesCard(v, data.mandant)}
       </div>
     </div>`;
 
@@ -461,7 +462,7 @@ async function loadTimeline(v) {
 }
 
 /** Karte „Regeln und Versandweg“: welche Mail-Regeln gegriffen haben und was mit der Mail passiert. */
-function rulesCard(v) {
+function rulesCard(v, mandant) {
   const m = v.mail || {};
   const idRow = ["Vorgangsnummer", `<span class="vd-id"><code id="vdId">${esc(v.id)}</code>
       <button class="icon-btn" id="vdIdCopy" title="Vorgangsnummer kopieren (z. B. für den ERP-Test unter Einstellungen → ERP-Rückmeldung)">⧉</button></span>`];
@@ -471,8 +472,9 @@ function rulesCard(v) {
   const notes = (m.ruleNotes || []);
   const note = re => notes.find(n => re.test(n));
   const route = { direkt: "direkt versenden", wennok: "automatisch, wenn alles ok", freigabe: "nach Freigabe im Portal", outlook: "über Outlook", gotomaxx: "an gotomaxx", keine: "keine Mail" };
+  const mdRow = v.mandant ? [["Mandant", `${esc(mandant?.name ? `${mandant.number} – ${mandant.name}` : v.mandant)} <span class="meta-inline">(${esc(v.mandantReason || "")}${mandant && !mandant.configured ? " · nicht eingerichtet – es gelten die allgemeinen Einstellungen" : ""})</span>`]] : [];
   const rows = [
-    idRow,
+    idRow, ...mdRow,
     ["Angewendete Regeln", (m.appliedRules || []).length ? (m.appliedRules).map(esc).join("<br>") : '<span class="meta-inline">keine Regel hat gegriffen</span>'],
     ["Versandweg", m.routeEffective ? esc(m.routeEffective) : m.route ? `${esc(route[m.route] || m.route)}${why(m.routeReason)}` : "wie eingestellt"],
     ["Mail-Vorlage", m.template ? `${esc(m.template)}${why(m.templateReason)}` : "ohne Vorlage (schlichte Mail)"],

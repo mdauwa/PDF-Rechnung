@@ -209,15 +209,24 @@ function drawVorgang(view, data) {
 
   const actions = [];
   if (portal.canSend) {
-    const canOutlook = portal.sendViaOutlook && portal.userId && v.mail.enabled && !["verworfen", "inVersand", "fehler"].includes(v.status);
-    if (canOutlook) actions.push(`<button class="btn" data-a="outlook" title="Öffnet die fertige E-Mail mit Text und Anhängen in deinem Outlook (über den Belegpost Melder) – dort nur noch auf Senden klicken">${icon("send")} Freigeben &amp; in Outlook senden</button>`);
-    if (["bereit", "warnung", "versandfehler", "outlook"].includes(v.status) && v.mail.enabled)
-      actions.push(`<button class="btn${canOutlook ? " ghost" : ""}" data-a="senden">${canOutlook ? "Über Server senden" : `${icon("send")} Jetzt senden`}</button>`);
+    // Versandweg aus Regel bzw. @@pw@@ übersteuert die Einstellung des Mitarbeiters (Senden über Outlook)
+    const route = v.mail.route || "";
+    const routeWhy = route ? ` – Versandweg laut ${v.mail.routeReason || "Regel"}` : "";
+    const canOutlook = portal.sendViaOutlook && portal.userId && v.mail.enabled && !["verworfen", "inVersand", "fehler"].includes(v.status)
+      && (route === "" || route === "outlook");
+    const canServer = ["bereit", "warnung", "versandfehler", "outlook"].includes(v.status) && v.mail.enabled;
+    if (route === "gotomaxx" && portal.gotomaxx && !["inVersand", "verworfen", "gotomaxx", "versendet"].includes(v.status))
+      actions.push(`<button class="btn" data-a="gotomaxx" title="Druckt den Beleg auf den gotomaxx-PDFMAILER-Drucker${esc(routeWhy)}">${icon("send")} An gotomaxx übergeben</button>`);
+    else {
+      if (canOutlook) actions.push(`<button class="btn" data-a="outlook" title="Öffnet die fertige E-Mail mit Text und Anhängen in deinem Outlook (über den Belegpost Melder) – dort nur noch auf Senden klicken${esc(routeWhy)}">${icon("send")} Freigeben &amp; in Outlook senden</button>`);
+      if (canServer && !(route === "outlook" && canOutlook))
+        actions.push(`<button class="btn${canOutlook ? " ghost" : ""}" data-a="senden" title="Versand über den Belegpost-Server${esc(routeWhy)}">${canOutlook ? "Über Server senden" : `${icon("send")} Jetzt senden`}</button>`);
+    }
     if (v.status === "fehler" && v.mail.enabled) actions.push(`<button class="btn danger-ghost" data-a="senden-force">Trotz Fehler senden …</button>`);
     if (v.status === "versendet") actions.push(`<button class="btn ghost" data-a="erneut">Erneut senden …</button>`);
     if (!["versendet", "inVersand", "verworfen"].includes(v.status)) actions.push(`<button class="btn ghost" data-a="pruefen">Neu prüfen</button>`, `<button class="btn ghost" data-a="verwerfen">Verwerfen</button>`);
     if (v.status === "verworfen") actions.push(`<button class="btn ghost" data-a="wiederherstellen">Wiederherstellen</button>`);
-    if (portal.gotomaxx && !["inVersand", "verworfen"].includes(v.status))
+    if (portal.gotomaxx && !["inVersand", "verworfen"].includes(v.status) && !(route === "gotomaxx" && !["gotomaxx", "versendet"].includes(v.status)))
       actions.push(`<button class="btn ghost" data-a="gotomaxx" title="Druckt den Beleg auf den gotomaxx-PDFMAILER-Drucker – gotomaxx übernimmt dann den Versand">${["gotomaxx", "versendet"].includes(v.status) ? "Erneut an gotomaxx …" : "An gotomaxx übergeben"}</button>`);
   }
   actions.push(`<a class="btn ghost" href="api/vorgaenge/${encodeURIComponent(v.id)}/pdf?download=true">PDF herunterladen</a>`);
@@ -279,7 +288,7 @@ function drawVorgang(view, data) {
             ${v.mail.noDocument ? `<p class="meta">Ohne Beleg als Anhang (@@md@@).</p>` : ""}
             <p class="meta">${v.mail.template ? `Mail-Vorlage <b>${esc(v.mail.template)}</b> (${esc(v.mail.templateReason || "")})` : "Ohne Mail-Vorlage (schlichte Mail)"}${v.mail.fromAddress ? ` · Absender ${esc(v.mail.fromName ? v.mail.fromName + " <" + v.mail.fromAddress + ">" : v.mail.fromAddress)}` : ""}
               · <a href="#" id="mPreviewBtn">So sieht die Mail aus</a>
-              ${portal.sendViaOutlook && portal.userId && v.mail.enabled && v.status !== "fehler" ? ` · <a href="#" data-a="outlook">In Outlook öffnen</a>` : ""}</p>
+              ${portal.sendViaOutlook && portal.userId && v.mail.enabled && v.status !== "fehler" && (!v.mail.route || v.mail.route === "outlook") ? ` · <a href="#" data-a="outlook">In Outlook öffnen</a>` : ""}</p>
             <div id="mPreview"></div>
             ${editable ? `<div class="actions"><button class="btn" data-a="mail-save" disabled>Versanddaten speichern</button><span class="meta-inline">Änderungen werden geprüft und bleiben bei „Neu prüfen“ erhalten.</span></div>` : ""}
           </div>

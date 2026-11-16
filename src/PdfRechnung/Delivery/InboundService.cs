@@ -27,7 +27,30 @@ public sealed class InboundService : BackgroundService
     private readonly CustomerStore _customers;
     private readonly Settings.SettingsStore _settings;
     private readonly ILogger<InboundService> _log;
-    private readonly Dictionary<string, DateTimeOffset> _due = new();
+    private Dictionary<string, DateTime>? _last; // letzter Lauf je „Schlüssel|in“ bzw. „Schlüssel|out“ (gespeichert in abruf\zeitplan.json)
+    private string LastFile => Path.Combine(_settings.DataDirectory, "abruf", "zeitplan.json");
+
+    private Dictionary<string, DateTime> Last()
+    {
+        if (_last is not null) return _last;
+        try { _last = File.Exists(LastFile) ? System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, DateTime>>(File.ReadAllText(LastFile)) : null; } catch { }
+        return _last ??= new();
+    }
+
+    private void SaveLast()
+    {
+        try { Directory.CreateDirectory(Path.GetDirectoryName(LastFile)!); File.WriteAllText(LastFile, System.Text.Json.JsonSerializer.Serialize(Last())); } catch { }
+    }
+
+    /// <summary>Nächster geplanter Abruf / Ausgang (für die Anzeige).</summary>
+    public (DateTime? Inbound, DateTime? Outbox) NextRuns(InboundJob job)
+    {
+        var last = Last(); var now = DateTime.Now; var s = job.Settings;
+        return (s.InboundEnabled == "ja" && Supported(s.Type) ? ScheduleEngine.Next(s.InboundSchedule, last.TryGetValue(job.Key + "|in", out var a) ? a : null, now) : null,
+                HasOutbox(s) ? ScheduleEngine.Next(s.OutboxSchedule, last.TryGetValue(job.Key + "|out", out var b) ? b : null, now) : null);
+    }
+
+    private static bool HasOutbox(ChannelSettings s) => !string.IsNullOrWhiteSpace(s.OutboxFolder) && OutboxSupported(s.Type);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, InboundRun> _runs = new();
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly InboundLog? _book;
@@ -92,21 +115,30 @@ public sealed class InboundService : BackgroundService
         {
             try
             {
+                var last = Last();
                 foreach (var job in Jobs())
                 {
                     if (ct.IsCancellationRequested) break;
-                    if (_due.TryGetValue(job.Key, out var due) && due > DateTimeOffset.Now) continue;
-                    _due[job.Key] = DateTimeOffset.Now.AddMinutes(Math.Max(1, job.Settings.InboundInterval));
-                    await RunAsync(job, ct);
+                    var now = DateTime.Now; var s = job.Settings;
+                    var doIn = s.InboundEnabled == "ja" && Supported(s.Type) && ScheduleEngine.Due(s.InboundSchedule, last.TryGetValue(job.Key + "|in", out var li) ? li : null, now);
+                    var doOut = HasOutbox(s) && ScheduleEngine.Due(s.OutboxSchedule, last.TryGetValue(job.Key + "|out", out var lo) ? lo : null, now);
+                    // „zeiten“ beim allerersten Start: nicht sofort nachholen, ab jetzt zählen
+                    if (s.InboundSchedule.Mode == ScheduleEngine.Times && !last.ContainsKey(job.Key + "|in")) { last[job.Key + "|in"] = now; SaveLast(); }
+                    if (s.OutboxSchedule.Mode == ScheduleEngine.Times && !last.ContainsKey(job.Key + "|out")) { last[job.Key + "|out"] = now; SaveLast(); }
+                    if (!doIn && !doOut) continue;
+                    if (doIn) last[job.Key + "|in"] = now;
+                    if (doOut) last[job.Key + "|out"] = now;
+                    SaveLast();
+                    await RunAsync(job, ct, doOut, doIn);
                 }
             }
             catch (Exception ex) when (!ct.IsCancellationRequested) { _log.LogWarning(ex, "Abruf"); }
-            try { await Task.Delay(TimeSpan.FromSeconds(30), ct); } catch (OperationCanceledException) { break; }
+            try { await Task.Delay(TimeSpan.FromSeconds(15), ct); } catch (OperationCanceledException) { break; }
         }
     }
 
     /// <summary>Einen Abruf ausführen (auch „Jetzt abrufen“ aus den Einstellungen).</summary>
-    public async Task<InboundRun> RunAsync(InboundJob job, CancellationToken ct)
+    public async Task<InboundRun> RunAsync(InboundJob job, CancellationToken ct, bool outbox = true, bool inbound = true)
     {
         await _gate.WaitAsync(ct);
         try
@@ -115,11 +147,15 @@ public sealed class InboundService : BackgroundService
             var s = job.Settings;
             var password = _settings.Secrets.Unprotect(s.Password);
             _held = new();
-            var sent = !string.IsNullOrWhiteSpace(s.OutboxFolder) && OutboxSupported(s.Type) ? await OutboxAsync(s, password, ct) : new List<string>();
+            var sent = outbox && HasOutbox(s) ? await OutboxAsync(s, password, ct) : new List<string>();
             var heldText = _held.Count == 0 ? "" : $" · {_held.Count} zurückgehalten (Prüffehler, Ordner „fehlerhaft“): {string.Join(", ", _held.Take(3))}{(_held.Count > 3 ? " …" : "")}";
-            if (s.InboundEnabled != "ja" || !Supported(s.Type))
+            if (!inbound || s.InboundEnabled != "ja" || !Supported(s.Type))
+            {
+                // reiner Ausgangslauf ohne Ergebnis: letzte Meldung nicht überschreiben (bei „sofort“ alle 15 s)
+                if (!inbound && sent.Count == 0 && _held.Count == 0 && _runs.ContainsKey(job.Key)) return _runs[job.Key];
                 return _runs[job.Key] = new InboundRun(job.Key, job.Label, DateTimeOffset.Now, _held.Count == 0, sent.Count,
                     (sent.Count == 0 ? "Ausgangsordner leer" : $"{sent.Count} Datei(en) gesendet: {string.Join(", ", sent.Take(5))}{(sent.Count > 5 ? " …" : "")}") + heldText);
+            }
             var target = Target(s);
             Directory.CreateDirectory(target);
             var files = s.Type switch

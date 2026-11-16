@@ -231,3 +231,9 @@ Danach kommt ZUGFeRD: `@@xt@@`/`@@xi@@`/`@@xr@@` werden zu CII/UBL, dazu **PDF/A
   Typen nur im Code (CATEGORIES, REPAIRREQUEST, PRODUCTREGISTRATION, CHARGEN), Lieferadresse ohne ShopID erlaubt.
 - `Connect/ConnectValidator.cs`: Typ am Dateinamen wie FWebshop (GetFileType), Aufbau/Pflicht/Typ/Länge, Plausibilität (Status, Steuerberechnung, Land, E-Mail, ShopID, Netto/Brutto/Steuersatz).
 - Einstellungen → ERP Suite Connect (aktiv, Ein-/Ausgangsordner, Archive). Menü „ERP Suite Connect → Eingang/Ausgang“ nur wenn aktiv. Abgerufene Connect-Dateien: im allgemeinen Eingang nur ORDER, alle anderen nur unter ERP Suite Connect (Spalte connect_typ).
+
+## Zeitpläne für Abruf und Ausgangsordner (16.11.2026)
+- `Delivery/Schedule.cs`: je Versandweg `InboundSchedule` und `OutboxSchedule` (global und je Kunde übersteuerbar):
+  sofort (nur Ausgang, ca. alle 15 s) · alle n Minuten mit Zeitfenster von/bis (auch über Mitternacht) · feste Uhrzeiten · aus; Wochentage („Mo-Fr“, „Sa,So“).
+  Leer = Abruf alle `InboundInterval` Minuten, Ausgang wie der Abruf. Letzte Läufe in `daten\abruf\zeitplan.json` (verpasste feste Uhrzeiten werden nachgeholt).
+- Übersicht „Abrufe und Ausgangsordner“ zeigt Zeitplan und nächsten Lauf; „Jetzt abrufen“ läuft immer sofort (Abruf + Ausgang).

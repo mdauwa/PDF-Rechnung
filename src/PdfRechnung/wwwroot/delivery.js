@@ -28,6 +28,21 @@ function channelFields(c, P, bind, own) {
   const pw = (hasKey, newKey, label) => field(label,
     `<input type="password" autocomplete="new-password" ${bind(`${P}.${newKey}`)} placeholder="${c[hasKey] ? "gespeichert – leer lassen" : own ? "leer = wie global" : ""}">`);
   const ownPh = own ? "wie global" : "";
+  /** Zeitplan (Abruf bzw. Ausgang): sofort, alle n Minuten (mit Zeitfenster), feste Uhrzeiten; Wochentage. */
+  const plan = (k, label, outbox) => {
+    const p = c[k] || {};
+    const m = p.mode || "";
+    const sv = (f, ph = "", help = "") => field(f[1], `<input type="text" ${bind(`${P}.${k}.${f[0]}`)} value="${esc(p[f[0]] ?? "")}" placeholder="${esc(ph)}">`, help);
+    const opts = [["", own ? "wie global" : outbox ? "wie der Abruf" : "Standard (alle … Minuten)"], ...(outbox ? [["sofort", "sofort (laufend)"]] : []),
+      ["intervall", "alle … Minuten"], ["zeiten", "zu festen Uhrzeiten"], ["aus", "aus (nur von Hand)"]];
+    return `<div class="grid3">
+      ${field(label, `<select ${bind(`${P}.${k}.mode`, "", true)}>${opts.map(([val, tx]) => `<option value="${val}" ${m === val ? "selected" : ""}>${esc(tx)}</option>`).join("")}</select>`)}
+      ${m === "intervall" ? field("alle … Minuten", `<input type="number" min="1" max="1440" ${bind(`${P}.${k}.minutes`, "int")} value="${p.minutes || ""}" placeholder="5">`)
+        + sv(["from", "von (Uhrzeit)"], "07:00", "Leer = ganztägig.") + sv(["to", "bis (Uhrzeit)"], "18:00") : ""}
+      ${m === "zeiten" ? sv(["times", "Uhrzeiten"], "07:00; 12:00; 17:00", "Mehrere mit ; getrennt.") : ""}
+      ${m === "intervall" || m === "zeiten" ? sv(["days", "Wochentage"], "Mo-Fr", "z. B. Mo-Fr, Mo,Mi,Fr oder Sa,So. Leer = täglich.") : ""}
+    </div>`;
+  };
 
   let out = "";
   // ---- Inhalt ----
@@ -89,6 +104,7 @@ function channelFields(c, P, bind, own) {
       ${txt("outboxArchive", "Danach verschieben nach", ownPh || "Unterordner „gesendet“")}
       ${sel("outboxValidate", "Vor dem Senden prüfen", [...(own ? [["", "wie global"]] : []), ["fehler", "ja – bei Fehlern zurückhalten"], ["warnung", "ja – auch bei Warnungen zurückhalten"], ["nein", "nicht prüfen"]], "EDIFACT/EANCOM, E-Rechnungs-XML und ZUGFeRD-PDF. Zurückgehaltene Dateien kommen mit Prüfbericht in den Unterordner „fehlerhaft“.")}
     </div>`;
+    out += plan("outboxSchedule", "Senden aus dem Ausgangsordner", true);
   }
   // ---- Abruf ----
   if (t !== "gotomaxx") {
@@ -105,8 +121,9 @@ function channelFields(c, P, bind, own) {
         ${txt("inboundTarget", "Zielordner bei dir", ownPh || "C:\\ProgramData\\Belegpost\\eingang", "Der Belegpost-Eingangsordner macht aus PDFs Vorgänge. Leer = daten\\abruf\\" + t)}
         ${t !== "as2" && t !== "exite" ? sel("inboundAfter", "Danach am Server", [...(own ? [["", "wie global"]] : []), ["loeschen", "löschen"], ...(c.mailProtocol?.startsWith("pop3") ? [] : [["verschieben", "in Archivordner verschieben"]]), ["behalten", t === "mail" ? "als gelesen markieren" : "behalten (merken)"]], "", true) : ""}
         ${c.inboundAfter === "verschieben" ? txt("inboundArchive", t === "mail" ? "Archiv-Ordner im Postfach" : "Archivordner am Server", "/archiv") : ""}
-        ${num("inboundInterval", "alle … Minuten", own ? "wie global" : "5", "Gilt auch für den Ausgangsordner.")}
       </div>`;
+      out += plan("inboundSchedule", "Zeitplan Abruf", false);
+      if (!(c.inboundSchedule?.mode)) out += `<div class="grid3">${num("inboundInterval", "Standard: alle … Minuten", own ? "wie global" : "5")}</div>`;
     }
   }
   return out;
@@ -155,8 +172,10 @@ async function loadDeliveryRuns() {
     const r = await api("GET", "api/admin/abruf");
     const dt = d => d ? new Date(d).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–";
     const runs = Object.fromEntries((r.runs || []).map(x => [x.key, x]));
-    box.innerHTML = (r.jobs || []).length ? `<h4>Abrufe</h4><div class="table-wrap"><table class="list mini"><thead><tr><th>Abruf</th><th>Art</th><th>Ziel</th><th>Intervall</th><th>Zuletzt</th><th>Ergebnis</th><th></th></tr></thead><tbody>
-      ${r.jobs.map(j => { const x = runs[j.key]; return `<tr><td>${esc(j.label)}</td><td>${esc(j.type)}</td><td><small>${esc(j.target)}</small></td><td>${j.interval} Min.</td>
+    box.innerHTML = (r.jobs || []).length ? `<h4>Abrufe und Ausgangsordner</h4><div class="table-wrap"><table class="list mini"><thead><tr><th>Abruf</th><th>Art</th><th>Ziel</th><th>Zeitplan</th><th>Nächster Lauf</th><th>Zuletzt</th><th>Ergebnis</th><th></th></tr></thead><tbody>
+      ${r.jobs.map(j => { const x = runs[j.key]; return `<tr><td>${esc(j.label)}</td><td>${esc(j.type)}</td><td><small>${esc(j.target)}</small></td>
+        <td>${j.inboundPlan ? `Abruf: ${esc(j.inboundPlan)}` : ""}${j.outboxPlan ? `<small>Ausgang: ${esc(j.outboxPlan)}</small>` : ""}</td>
+        <td class="nowrap">${j.nextInbound ? dt(j.nextInbound) : ""}${j.nextOutbox && j.outboxPlan !== "sofort" ? `<small>Ausgang ${dt(j.nextOutbox)}</small>` : j.outboxPlan === "sofort" ? "<small>Ausgang laufend</small>" : ""}</td>
         <td class="nowrap">${dt(x?.at)}</td><td>${x ? (x.ok ? esc(x.message) : `<span class="bad">${esc(x.message)}</span>`) : '<span class="meta-inline">noch nicht gelaufen</span>'}</td>
         <td><button class="btn ghost small" data-st="dl-run" data-key="${esc(j.key)}">Jetzt abrufen</button></td></tr>`; }).join("")}</tbody></table></div>`
       : `<p class="meta">Kein Abruf eingeschaltet.</p>`;

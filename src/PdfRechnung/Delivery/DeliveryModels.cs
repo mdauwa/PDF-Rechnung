@@ -79,6 +79,10 @@ public sealed class ChannelSettings
     public string InboundArchive { get; set; } = "";
     /// <summary>Abruf alle n Minuten (0 = global bzw. 5).</summary>
     public int InboundInterval { get; set; }
+    /// <summary>Zeitplan des Abrufs (leer = alle „InboundInterval“ Minuten).</summary>
+    public Schedule InboundSchedule { get; set; } = new();
+    /// <summary>Zeitplan des Ausgangsordners (leer = wie der Abruf).</summary>
+    public Schedule OutboxSchedule { get; set; } = new();
     /// <summary>Mail-Abruf: imaps, imap, pop3s, pop3. Server, Port, Benutzer und Kennwort wie oben.</summary>
     public string MailProtocol { get; set; } = "";
 
@@ -155,7 +159,7 @@ public sealed class ChannelSettings
         static string S(string a, string b) => string.IsNullOrWhiteSpace(a) ? b : a.Trim();
         static List<string> L(List<string> a, List<string> b) => a.Any(x => !string.IsNullOrWhiteSpace(x)) ? a.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToList() : b;
         var ownLogin = !string.IsNullOrWhiteSpace(own.User);
-        return new ChannelSettings
+        var r = new ChannelSettings
         {
             Type = own.Type,
             Content = S(own.Content, S(g.Content, own.Type == ChannelType.Exite ? ChannelContent.Xml : ChannelContent.Pdf)),
@@ -183,8 +187,12 @@ public sealed class ChannelSettings
             MailProtocol = S(own.MailProtocol, S(g.MailProtocol, PdfRechnung.Delivery.MailProtocol.Imaps)),
             OutboxFolder = S(own.OutboxFolder, g.OutboxFolder), OutboxPattern = S(own.OutboxPattern, g.OutboxPattern),
             OutboxArchive = S(own.OutboxArchive, g.OutboxArchive),
-            OutboxValidate = S(own.OutboxValidate, S(g.OutboxValidate, "fehler"))
+            OutboxValidate = S(own.OutboxValidate, S(g.OutboxValidate, "fehler")),
         };
+        r.InboundSchedule = ScheduleEngine.Merge(g.InboundSchedule, own.InboundSchedule,
+            new Schedule { Mode = ScheduleEngine.Interval, Minutes = r.InboundInterval });
+        r.OutboxSchedule = ScheduleEngine.Merge(g.OutboxSchedule, own.OutboxSchedule, r.InboundSchedule.Copy());
+        return r;
     }
 
     /// <summary>Für die Oberfläche: Geheimnisse entfernen, nur „vorhanden“ melden.</summary>

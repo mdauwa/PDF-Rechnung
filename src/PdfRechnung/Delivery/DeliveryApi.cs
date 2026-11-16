@@ -55,7 +55,17 @@ public static class DeliveryApi
 
         g.MapGet("/abruf", (InboundService inbound) => Results.Ok(new
         {
-            jobs = inbound.Jobs().Select(j => new { j.Key, j.Label, type = ChannelType.Text(j.Settings.Type), target = inbound.Target(j.Settings), interval = j.Settings.InboundInterval }),
+            jobs = inbound.Jobs().Select(j =>
+            {
+                var (ni, no) = inbound.NextRuns(j);
+                return new
+                {
+                    j.Key, j.Label, type = ChannelType.Text(j.Settings.Type), target = inbound.Target(j.Settings), interval = j.Settings.InboundInterval,
+                    inboundPlan = j.Settings.InboundEnabled == "ja" ? ScheduleEngine.Describe(j.Settings.InboundSchedule) : null,
+                    outboxPlan = string.IsNullOrWhiteSpace(j.Settings.OutboxFolder) ? null : ScheduleEngine.Describe(j.Settings.OutboxSchedule),
+                    nextInbound = ni, nextOutbox = no
+                };
+            }),
             runs = inbound.Runs()
         }));
 

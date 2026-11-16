@@ -38,7 +38,7 @@ UNZ+1+REF0001'
         Assert.True(r.Valid, string.Join("\n", r.Issues.Select(i => $"{i.Level} {i.Segment} {i.Text}")));
         var m = Assert.Single(r.Messages);
         Assert.Equal("INVOIC", m.Type);
-        Assert.Equal("D.96A", m.Directory);
+        Assert.StartsWith("D.96A", m.Directory);
         Assert.Equal("9012345000004:14", r.Sender);
         Assert.Contains("D.96A", r.Title);
     }
@@ -73,6 +73,49 @@ UNZ+1+REF0001'
         Assert.Contains(r.Issues, i => i.Text.Contains("UNOA kennt keine Kleinbuchstaben"));
         var segs = EdifactValidator.Parse(Invoic.Replace("R2026-0815", "R2026?+0815"), new EdiReport(), out _);
         Assert.Equal("R2026+0815", segs.First(s => s.Tag == "BGM").El(1));
+    }
+
+    // EANCOM 2002 (D.01B, EAN011) mit Positionsrabatt (ALC/PCD/MOA) unmittelbar vor UNS
+    public const string InvoicEancom = """
+UNA:+.? '
+UNB+UNOC:3+9012345000004:14+9098765000007:14+20261116:1200+REF0002'
+UNH+1+INVOIC:D:01B:UN:EAN011'
+BGM+380+R2026-0816+9'
+DTM+137:20261116:102'
+RFF+ON:4711'
+DTM+171:20261110:102'
+NAD+BY+9098765000007::9'
+LOC+7+9098765000014::9'
+RFF+VA:ATU12345678'
+DTM+171:20260101:102'
+NAD+SU+9012345000004::9'
+CUX+2:EUR:4'
+LIN+1++4012345000009:SRV'
+QTY+47:2'
+MOA+203:90.00'
+PRI+AAA:50.00'
+TAX+7+VAT+++:::20+S'
+ALC+A++++DI'
+PCD+1:10'
+MOA+204:10.00'
+UNS+S'
+CNT+2:1'
+MOA+86:108.00'
+MOA+79:90.00'
+MOA+125:90.00'
+MOA+124:18.00'
+TAX+7+VAT+++:::20+S'
+MOA+124:18.00'
+UNT+28+1'
+UNZ+1+REF0002'
+""";
+
+    [Fact]
+    public void Eancom_Rabatt_vor_UNS_ist_gueltig()
+    {
+        var r = Check(InvoicEancom);
+        Assert.True(r.Valid, string.Join("\n", r.Issues.Select(i => $"{i.Level} #{i.Segment} {i.Text}")));
+        Assert.Contains("EANCOM", r.Messages[0].Directory);
     }
 
     [Fact]

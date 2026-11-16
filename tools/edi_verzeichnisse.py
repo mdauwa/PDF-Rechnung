@@ -17,6 +17,28 @@ def node(x):
         return [x["segmentRef"], 1 if x["mandatory"] else 0, x["maxOccurrences"]]
     return [x["id"], 1 if x["mandatory"] else 0, x["maxOccurrences"], [node(y) for y in x["structure"]]]
 
+def fix_uns(structure):
+    """EDIFlow-Daten (EANCOM 2002) haben UNS/CNT teils in die letzte Positionsgruppe geschachtelt.
+    UNS trennt Positions- und Summenteil und steht immer auf oberster Ebene: UNS samt folgender Geschwister nach oben holen."""
+    def find(nodes):
+        for i, x in enumerate(nodes):
+            if len(x) > 3:
+                r = find(x[3])
+                if r is not None: return r
+            elif x[0] == "UNS":
+                return nodes, i
+        return None
+    for top_i, top in enumerate(structure):
+        if len(top) <= 3: continue
+        r = find(top[3])
+        if r is None: continue
+        lst, i = r
+        tail = lst[i:]
+        del lst[i:]
+        structure[top_i + 1:top_i + 1] = tail
+        return True
+    return False
+
 for pkg, key in DIRS.items():
     d = src / pkg / "data"
     segs = json.load(open(d / "segments.json"))
@@ -32,7 +54,9 @@ for pkg, key in DIRS.items():
     }
     for f in sorted(os.listdir(d / "messages")):
         m = json.load(open(d / "messages" / f))
-        out["messages"][m["messageType"]] = {"n": m.get("name"), "s": [node(x) for x in m["structure"]]}
+        st = [node(x) for x in m["structure"]]
+        if fix_uns(st): print("  UNS korrigiert:", key, m["messageType"])
+        out["messages"][m["messageType"]] = {"n": m.get("name"), "s": st}
     if (d / "codes").exists():
         for f in sorted(os.listdir(d / "codes")):
             c = json.load(open(d / "codes" / f))

@@ -273,7 +273,7 @@ public static class EdifactValidator
             r.Warn($"Nachricht {refNo}: Verzeichnis {wanted} ist nicht hinterlegt (vorhanden: D.96A, D.01B, D.12A, D.20B, EANCOM 2002) – nur Syntax und Umschlag geprüft.", unh);
             return;
         }
-        info.Directory = dir.Name;
+        info.Directory = dir.Name + (unh.El(1, 4).StartsWith("EAN", StringComparison.OrdinalIgnoreCase) ? $" (EANCOM {unh.El(1, 4)})" : "");
         if (!dir.Messages.TryGetValue(type, out var def))
         {
             r.Warn($"Nachricht {refNo}: Nachrichtentyp {type} ist im Verzeichnis {dir.Name} nicht enthalten – nur Syntax und Umschlag geprüft.", unh);

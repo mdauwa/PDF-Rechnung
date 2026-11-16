@@ -47,11 +47,8 @@ public sealed class EdifactDirectory
         var wanted = $"{version}.{release}".ToUpperInvariant();
         if (!string.Equals(version, "D", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(release)) return (null, wanted);
         var key = "D" + release.ToUpperInvariant();
-        if (key == "D01B" && association?.StartsWith("EAN", StringComparison.OrdinalIgnoreCase) == true)
-        {
-            var ean = Get("EANCOM2002");
-            if (ean?.Messages.ContainsKey(type) == true) return (ean, wanted + " (EANCOM)");
-        }
+        // EANCOM (EAN0xx) ist eine Teilmenge des UN-Verzeichnisses: geprüft wird gegen das vollständige Verzeichnis,
+        // weil die EANCOM-Strukturdaten aus EDIFlow lückenhaft sind (z. B. LOC in SG2, DTM in SG3 fehlen).
         return (Available.Contains(key) ? Get(key) : null, wanted);
     }
 

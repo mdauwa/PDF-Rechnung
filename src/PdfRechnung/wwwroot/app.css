@@ -419,3 +419,8 @@ details.re-rule.off { opacity: .6; }
 .re-tools .icon-btn { width: 28px; height: 28px; }
 .re-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 10px; }
 .re-checks { display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; }
+
+/* ---- Mail-Vorlagen: Übersicht ---- */
+td.mt-thumb { width: 56px; }
+td.mt-thumb img { display: block; max-width: 48px; max-height: 28px; object-fit: contain; }
+.mt-swatch { display: inline-block; width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--border); vertical-align: middle; }

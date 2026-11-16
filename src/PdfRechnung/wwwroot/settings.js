@@ -48,7 +48,7 @@ async function renderSettings(view) {
 
   view.querySelector("#stTabs").onclick = e => {
     const t = e.target.closest("[data-tab]")?.dataset.tab;
-    if (t) { ST.tab = t; store.set("st.tab", t); drawTab(); }
+    if (t) { ST.tab = t; ST.mtEdit = null; ST.userEdit = null; store.set("st.tab", t); drawTab(); }
   };
   view.addEventListener("click", onAction);
   view.addEventListener("input", onInput);
@@ -237,18 +237,20 @@ async function onAction(e) {
           fontFamily: "Segoe UI, Arial, Helvetica, sans-serif", headerText: "", showDocumentBox: true,
           signature: "Mit freundlichen Grüßen\n{Absender}", footer: "", customHtml: "" });
         if (!T.default && T.items.length === 1) T.default = "Standard";
-        markDirty(); drawTab(); break;
+        ST.mtEdit = T.items.length - 1; markDirty(); drawTab(); window.scrollTo(0, 0); break;
       }
       case "mt-copy": {
         const T = ST.s.mailTemplates, src = T.items[+btn.dataset.i];
         T.items.push({ ...structuredClone(src), name: (src.name || "Vorlage") + " (Kopie)", stationeries: [], senders: [] });
-        markDirty(); drawTab(); break;
+        ST.mtEdit = T.items.length - 1; markDirty(); drawTab(); window.scrollTo(0, 0); break;
       }
+      case "mt-open": ST.mtEdit = +e.target.closest("[data-st]").dataset.i; drawTab(); window.scrollTo(0, 0); break;
+      case "mt-back": ST.mtEdit = null; drawTab(); break;
       case "mt-del": {
         const T = ST.s.mailTemplates, it = T.items[+btn.dataset.i];
         if (await confirmDialog("Mail-Vorlage entfernen", `„${esc(it.name || "ohne Namen")}“ entfernen?`, "Entfernen", true)) {
           if (T.default === it.name) T.default = "";
-          T.items.splice(+btn.dataset.i, 1); markDirty(); drawTab();
+          T.items.splice(+btn.dataset.i, 1); ST.mtEdit = null; markDirty(); drawTab();
         }
         break;
       }
@@ -792,73 +794,23 @@ function colorField(path, label) {
 
 function tabTemplates() {
   const T = ST.s.mailTemplates ||= { items: [], default: "" };
-  const bps = (ST.s.stationery?.items || []).map(b => b.name).filter(Boolean);
-  const ph = (ST.data.placeholders || []).map(p => `<code>${esc(p)}</code>`).join(" ");
-  const items = T.items.map((t, i) => {
-    const P = `mailTemplates.items.${i}`;
-    const logo = t.logoFile
-      ? `<img class="mt-logo" src="api/admin/mailtemplates/logo/${encodeURIComponent(t.logoFile)}" alt="Logo">`
-      : '<span class="muted">kein Logo</span>';
-    const bpChecks = bps.length
-      ? bps.map(n => `<label class="check"><input type="checkbox" data-mtbp="${i}" value="${esc(n)}" ${(t.stationeries || []).some(x => x.toLowerCase() === n.toLowerCase()) ? "checked" : ""}> ${esc(n)}</label>`).join("")
-      : '<span class="muted">Noch keine Briefpapiere angelegt.</span>';
-    const html = t.kind === "html";
-    return section(`Vorlage ${esc(t.name || "(ohne Namen)")}`,
-      `<div class="grid2">
-         ${field("Name", inText(`${P}.name`, "z. B. Firma GmbH"), `Steuerzeichen: <code>@@pt${esc(t.name || "Name")}@@</code>`)}
-         <div class="plain-field"><span class="lbl">Verwendung</span>
-           <label class="check"><input type="checkbox" data-mtdefault value="${esc(t.name)}" ${T.default && T.default === t.name ? "checked" : ""}> Standardvorlage (wenn keine andere passt)</label></div>
-       </div>
-       <h4>Wann wird diese Vorlage verwendet?</h4>
-       <div class="grid2">
-         <div class="plain-field"><span class="lbl">bei Briefpapier</span><div class="check-list">${bpChecks}</div></div>
-         ${field("bei Absender (eine Adresse pro Zeile)", inLines(`${P}.senders`, "rechnung@firma.at"), "Absender aus <code>@@pf…@@</code> oder aus „E-Mail &amp; Versand“.")}
-       </div>
-       <h4>Absender</h4>
-       <div class="grid3">
-         ${field("Absenderadresse", inText(`${P}.fromAddress`, "leer = aus „E-Mail & Versand“"))}
-         ${field("Absendername", inText(`${P}.fromName`, "Firma GmbH – Buchhaltung"))}
-         ${field("Antwort an", inText(`${P}.replyTo`, "optional"))}
-       </div>
-       ${ST.s.mail.transport === "Graph" ? '<p class="help">Bei Microsoft 365 muss die App-Registrierung auch für diese Absenderadresse senden dürfen.</p>' : ""}
-
-       <h4>Gestaltung</h4>
-       <div class="grid2">
-         ${field("Art", `<select data-path="${P}.kind" data-redraw="1">
-             <option value="simple" ${!html ? "selected" : ""}>Baukasten (Logo, Farben, Texte)</option>
-             <option value="html" ${html ? "selected" : ""}>Eigenes HTML (für Profis)</option></select>`)}
-         ${field("Schriftart", inSelect(`${P}.fontFamily`, FONTS))}
-       </div>
-       <div class="grid3">
-         <div class="field"><span class="lbl">Logo (PNG/JPG)</span><div class="bp-file">${logo}
-           <label class="btn ghost small">Logo hochladen<input type="file" accept="image/png,image/jpeg,image/gif" data-mtlogo="${i}" hidden></label>
-           ${t.logoFile ? `<button class="btn ghost small" data-st="mt-logo-del" data-i="${i}">entfernen</button>` : ""}</div></div>
-         ${field("Logobreite (Pixel)", inNum(`${P}.logoWidth`, 40, 560))}
-         ${field("Logo-Position", inSelect(`${P}.logoAlign`, [["left", "links"], ["center", "mittig"], ["right", "rechts"]]))}
-       </div>
-       <div class="grid3">${colorField(`${P}.primaryColor`, "Hauptfarbe (CI)")}${colorField(`${P}.textColor`, "Textfarbe")}${colorField(`${P}.backgroundColor`, "Hintergrund")}</div>
-       ${!html ? field("Kopfzeile (Balken in der Hauptfarbe, optional)", inText(`${P}.headerText`, "z. B. Ihre {Belegart} {Belegnummer}")) : ""}
-       ${inCheck(`${P}.showDocumentBox`, "Infokasten mit Belegnummer, Datum, Betrag und Anhang anzeigen")}
-       ${field("Signatur", inArea(`${P}.signature`, 4))}
-       ${field("Fußzeile (Impressum, klein und grau)", inArea(`${P}.footer`, 3))}
-       ${html ? `${field("Eigenes HTML", `<textarea class="mono" data-path="${P}.customHtml" rows="14">${esc(t.customHtml || "")}</textarea>`,
-            "Pflicht: <code>{Inhalt}</code>. Außerdem: <code>{Logo}</code> <code>{Belegbox}</code> <code>{Signatur}</code> <code>{Fusszeile}</code> <code>{Kopfzeile}</code> <code>{Farbe}</code> und alle Platzhalter unten. Inline-Styles und Tabellen verwenden – Outlook ignoriert &lt;style&gt; und CSS-Layouts weitgehend.")}
-          ${t.customHtml ? "" : `<div class="actions"><button class="btn ghost" data-st="mt-html" data-i="${i}">Beispiel-HTML einsetzen</button></div>`}` : ""}
-
-       <details ${t.subject || t.body ? "open" : ""}><summary>Eigener Betreff und Mailtext für diese Vorlage</summary>
-         <p class="help">Leer = Vorlagen aus „E-Mail &amp; Versand“. Was das ERP mit <code>@@ed@@</code>, <code>@@sa@@</code> oder <code>@@mb@@</code> druckt, hat immer Vorrang.</p>
-         ${field("Betreff", inText(`${P}.subject`, "z. B. {Belegart} {Belegnummer} – Firma GmbH"))}
-         ${field("Mailtext", inArea(`${P}.body`, 7))}
-       </details>
-
-       <div class="actions"><button class="btn" data-st="mt-preview" data-i="${i}">Vorschau</button>
-         <button class="btn ghost" data-st="mt-copy" data-i="${i}">Kopieren</button>
-         <span class="meta-inline">mit Beispieldaten – auch vor dem Speichern</span></div>
-       <div id="mtPreview${i}"></div>`,
-      `<button class="icon-btn" data-st="mt-del" data-i="${i}" title="Vorlage entfernen">✕</button>`);
-  }).join("");
-
-  return section("HTML-Mails im CI",
+  if (ST.mtEdit != null && T.items[ST.mtEdit]) return templateMask(ST.mtEdit);
+  ST.mtEdit = null;
+  const rules = ST.s.mailRules?.rules || [];
+  const usedBy = name => rules.filter(r => r.template && name && r.template.toLowerCase() === name.toLowerCase()).length;
+  const rows = T.items.map((t, i) => `<tr class="clickable" data-st="mt-open" data-i="${i}">
+      <td class="mt-thumb">${t.logoFile ? `<img src="api/admin/mailtemplates/logo/${encodeURIComponent(t.logoFile)}" alt="">` : `<span class="mt-swatch" style="background:${esc(t.primaryColor || "#1f5fbf")}"></span>`}</td>
+      <td><b>${esc(t.name || "(ohne Namen)")}</b>${T.default && T.default === t.name ? ' <span class="badge ok">Standard</span>' : ""}</td>
+      <td>${t.kind === "html" ? "eigenes HTML" : "Baukasten"}</td>
+      <td>${esc((t.stationeries || []).join(", ") || "–")}</td>
+      <td>${esc([...(t.senders || []), ...(t.fromAddress ? [t.fromAddress] : [])].filter((x, k, a) => a.indexOf(x) === k).join(", ") || "–")}</td>
+      <td class="nowrap">${t.subject || t.body ? '<span class="badge">eigener Text</span>' : ""}${usedBy(t.name) ? ` <span class="badge remote" title="Wird von Regeln gewählt">${usedBy(t.name)} Regel${usedBy(t.name) > 1 ? "n" : ""}</span>` : ""}</td>
+      <td class="nowrap"><button class="btn ghost small" data-st="mt-open" data-i="${i}">Bearbeiten</button></td></tr>`).join("");
+  return section("Mail-Vorlagen",
+    `${T.items.length ? `<div class="table-wrap"><table class="list users-compact"><thead><tr><th></th><th>Name</th><th>Art</th><th>Briefpapier</th><th>Absender</th><th></th><th></th></tr></thead>
+       <tbody>${rows}</tbody></table></div>` : `<p class="meta">Noch keine Vorlage – Mails gehen als schlichte Mail ohne Gestaltung hinaus.</p>`}`,
+    `<button class="btn ghost" data-st="mt-add">+ Vorlage</button>`) +
+  section("So wird die Vorlage gewählt",
     `<p class="help">Jede Mail wird als HTML-Mail mit Logo, Farben und Signatur der Firma versendet (mit Textfassung für Programme ohne HTML).
        Die Vorlage wird so gewählt: <b>1.</b> Steuerzeichen <code>@@ptName@@</code> → <b>2.</b> Vorlage, der das verwendete Briefpapier zugeordnet ist →
        <b>3.</b> Vorlage des Absenders → <b>4.</b> Standardvorlage. Ohne Vorlage geht eine schlichte Mail ohne Gestaltung hinaus.</p>
@@ -869,7 +821,80 @@ function tabTemplates() {
      <p class="help">Weitere Steuerzeichen: <code>@@ptName@@</code> wählt die Vorlage, <code>@@pfadresse@firma.at@@</code> den Absender.
        Im Text: <code>**fett**</code>, <code>*kursiv*</code>, Zeilen mit „- “ werden zur Aufzählung, Adressen und Links werden klickbar.
        Falsch kodierte Umlaute (z. B. „Ã¼“ statt „ü“) werden automatisch korrigiert und im Vorgang als Hinweis angezeigt.</p>`,
-    `<button class="btn ghost" data-st="mt-add">+ Vorlage</button>`) + items;
+    "");
+}
+
+/** Eigene Maske für eine Mail-Vorlage. */
+function templateMask(i) {
+  const T = ST.s.mailTemplates;
+  const t = T.items[i];
+  const bps = (ST.s.stationery?.items || []).map(b => b.name).filter(Boolean);
+  const ph = (ST.data.placeholders || []).map(p => `<code>${esc(p)}</code>`).join(" ");
+  const P = `mailTemplates.items.${i}`;
+  const logo = t.logoFile
+    ? `<img class="mt-logo" src="api/admin/mailtemplates/logo/${encodeURIComponent(t.logoFile)}" alt="Logo">`
+    : '<span class="muted">kein Logo</span>';
+  const bpChecks = bps.length
+    ? bps.map(n => `<label class="check"><input type="checkbox" data-mtbp="${i}" value="${esc(n)}" ${(t.stationeries || []).some(x => x.toLowerCase() === n.toLowerCase()) ? "checked" : ""}> ${esc(n)}</label>`).join("")
+    : '<span class="muted">Noch keine Briefpapiere angelegt.</span>';
+  const html = t.kind === "html";
+  return `<div class="user-mask-head"><button class="btn ghost" data-st="mt-back">← Alle Vorlagen</button>
+      <h2>${esc(t.name || "Neue Vorlage")}</h2>${T.default && T.default === t.name ? '<span class="badge ok">Standard</span>' : ""}
+      <span class="spacer"></span>
+      <button class="btn ghost" data-st="mt-copy" data-i="${i}">Kopieren</button>
+      <button class="btn ghost danger" data-st="mt-del" data-i="${i}">Entfernen</button>
+      <button class="btn" data-st="mt-preview" data-i="${i}">Vorschau</button></div>` + section("Mail-Vorlage",
+    `<div class="grid2">
+       ${field("Name", inText(`${P}.name`, "z. B. Firma GmbH"), `Steuerzeichen: <code>@@pt${esc(t.name || "Name")}@@</code>`)}
+       <div class="plain-field"><span class="lbl">Verwendung</span>
+         <label class="check"><input type="checkbox" data-mtdefault value="${esc(t.name)}" ${T.default && T.default === t.name ? "checked" : ""}> Standardvorlage (wenn keine andere passt)</label></div>
+     </div>
+     <h4>Wann wird diese Vorlage verwendet?</h4>
+     <div class="grid2">
+       <div class="plain-field"><span class="lbl">bei Briefpapier</span><div class="check-list">${bpChecks}</div></div>
+       ${field("bei Absender (eine Adresse pro Zeile)", inLines(`${P}.senders`, "rechnung@firma.at"), "Absender aus <code>@@pf…@@</code> oder aus „E-Mail &amp; Versand“.")}
+     </div>
+     <h4>Absender</h4>
+     <div class="grid3">
+       ${field("Absenderadresse", inText(`${P}.fromAddress`, "leer = aus „E-Mail & Versand“"))}
+       ${field("Absendername", inText(`${P}.fromName`, "Firma GmbH – Buchhaltung"))}
+       ${field("Antwort an", inText(`${P}.replyTo`, "optional"))}
+     </div>
+     ${ST.s.mail.transport === "Graph" ? '<p class="help">Bei Microsoft 365 muss die App-Registrierung auch für diese Absenderadresse senden dürfen.</p>' : ""}
+
+     <h4>Gestaltung</h4>
+     <div class="grid2">
+       ${field("Art", `<select data-path="${P}.kind" data-redraw="1">
+           <option value="simple" ${!html ? "selected" : ""}>Baukasten (Logo, Farben, Texte)</option>
+           <option value="html" ${html ? "selected" : ""}>Eigenes HTML (für Profis)</option></select>`)}
+       ${field("Schriftart", inSelect(`${P}.fontFamily`, FONTS))}
+     </div>
+     <div class="grid3">
+       <div class="field"><span class="lbl">Logo (PNG/JPG)</span><div class="bp-file">${logo}
+         <label class="btn ghost small">Logo hochladen<input type="file" accept="image/png,image/jpeg,image/gif" data-mtlogo="${i}" hidden></label>
+         ${t.logoFile ? `<button class="btn ghost small" data-st="mt-logo-del" data-i="${i}">entfernen</button>` : ""}</div></div>
+       ${field("Logobreite (Pixel)", inNum(`${P}.logoWidth`, 40, 560))}
+       ${field("Logo-Position", inSelect(`${P}.logoAlign`, [["left", "links"], ["center", "mittig"], ["right", "rechts"]]))}
+     </div>
+     <div class="grid3">${colorField(`${P}.primaryColor`, "Hauptfarbe (CI)")}${colorField(`${P}.textColor`, "Textfarbe")}${colorField(`${P}.backgroundColor`, "Hintergrund")}</div>
+     ${!html ? field("Kopfzeile (Balken in der Hauptfarbe, optional)", inText(`${P}.headerText`, "z. B. Ihre {Belegart} {Belegnummer}")) : ""}
+     ${inCheck(`${P}.showDocumentBox`, "Infokasten mit Belegnummer, Datum, Betrag und Anhang anzeigen")}
+     ${field("Signatur", inArea(`${P}.signature`, 4))}
+     ${field("Fußzeile (Impressum, klein und grau)", inArea(`${P}.footer`, 3))}
+     ${html ? `${field("Eigenes HTML", `<textarea class="mono" data-path="${P}.customHtml" rows="14">${esc(t.customHtml || "")}</textarea>`,
+          "Pflicht: <code>{Inhalt}</code>. Außerdem: <code>{Logo}</code> <code>{Belegbox}</code> <code>{Signatur}</code> <code>{Fusszeile}</code> <code>{Kopfzeile}</code> <code>{Farbe}</code> und alle Platzhalter unten. Inline-Styles und Tabellen verwenden – Outlook ignoriert &lt;style&gt; und CSS-Layouts weitgehend.")}
+        ${t.customHtml ? "" : `<div class="actions"><button class="btn ghost" data-st="mt-html" data-i="${i}">Beispiel-HTML einsetzen</button></div>`}` : ""}
+
+     <details ${t.subject || t.body ? "open" : ""}><summary>Eigener Betreff und Mailtext für diese Vorlage</summary>
+       <p class="help">Leer = Vorlagen aus „E-Mail &amp; Versand“. Was das ERP mit <code>@@ed@@</code>, <code>@@sa@@</code> oder <code>@@mb@@</code> druckt, hat immer Vorrang.</p>
+       ${field("Betreff", inText(`${P}.subject`, "z. B. {Belegart} {Belegnummer} – Firma GmbH"))}
+       ${field("Mailtext", inArea(`${P}.body`, 7))}
+     </details>
+
+     <div class="actions"><button class="btn" data-st="mt-preview" data-i="${i}">Vorschau</button>
+       <span class="meta-inline">mit Beispieldaten – auch vor dem Speichern</span></div>
+     <div id="mtPreview${i}"></div>`,
+    "");
 }
 
 async function uploadLogo(el) {
@@ -892,6 +917,7 @@ async function previewTemplate(i) {
         ${r.missing?.length ? `<span class="badge missing">ohne Wert: ${r.missing.map(x => "{" + esc(x) + "}").join(", ")}</span>` : ""}</div>
       <iframe sandbox="" title="Vorschau Mail"></iframe></div>`;
   box.querySelector("iframe").srcdoc = r.html;
+  box.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 /* ---------------- Tab: E-Rechnung ---------------- */

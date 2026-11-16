@@ -74,10 +74,29 @@ public static class PdfText
                             .OrderByDescending(g => g.Key.V);
             foreach (var g in groups)
             {
+                // Mehrere Zeilen an derselben Stelle übereinander (das ERP druckt z. B. alle Steuerzeichen auf dieselbe Position):
+                // in Reihenfolge des Inhaltsstroms lesen und eine neue Zeile beginnen, sobald ein Buchstabe auf einem schon belegten Platz landet.
+                var runs = new List<List<UglyToad.PdfPig.Content.Letter>>();
+                var run = new List<UglyToad.PdfPig.Content.Letter>();
+                var used = new List<(double From, double To)>();
+                foreach (var l in g) // Reihenfolge wie im PDF
+                {
+                    var from = U(l); var to = l.EndBaseLine.X * cos + l.EndBaseLine.Y * sin;
+                    var width = Math.Max(to - from, l.PointSize * 0.2);
+                    if (!string.IsNullOrWhiteSpace(l.Value) && used.Any(u => Math.Min(u.To, from + width) - Math.Max(u.From, from) > width * 0.6))
+                    {
+                        runs.Add(run); run = new(); used.Clear();
+                    }
+                    run.Add(l);
+                    if (!string.IsNullOrWhiteSpace(l.Value)) used.Add((from, from + width));
+                }
+                runs.Add(run);
+                foreach (var r in runs.Where(r => r.Count > 0))
+                {
                 var sb = new System.Text.StringBuilder();
                 var map = new List<UglyToad.PdfPig.Content.Letter?>();
                 UglyToad.PdfPig.Content.Letter? prev = null;
-                foreach (var l in g.OrderBy(U))
+                foreach (var l in r.OrderBy(U))
                 {
                     if (prev is not null)
                     {
@@ -90,6 +109,7 @@ public static class PdfText
                     prev = l;
                 }
                 yield return (sb.ToString(), map);
+                }
             }
         }
     }

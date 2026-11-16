@@ -57,3 +57,18 @@ public sealed class MandantTests : IDisposable
         Assert.Same(global, new Mandant { Number = "4" }.ErpFor(global));
     }
 }
+
+public class StackedCodesTests
+{
+    [Fact]
+    public void Steuerzeichen_an_derselben_Stelle_werden_einzeln_gelesen()
+    {
+        var codes = new[] { "@@aakunde@firma.at@@", "@@edAngebot 4711@@", "@@saSehr geehrte Damen und Herren,@@", "@@sa@@", "@@pm10000@@" };
+        var (_, lines) = PdfText.Extract(TestData.PdfStacked(codes));
+        var p = ControlCodeParser.Parse(lines);
+        Assert.Equal(new[] { "kunde@firma.at" }, p.To);
+        Assert.Equal("Angebot 4711", p.Subject);
+        Assert.Equal(2, p.BodyLines.Count);
+        Assert.Equal("10000", p.Mandant);
+    }
+}

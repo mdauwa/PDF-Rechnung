@@ -62,4 +62,15 @@ public static class TestData
         }
         return builder.Build();
     }
+
+    /// <summary>Wie die WebWARE: alle Steuerzeichen an dieselbe Stelle gedruckt (übereinander).</summary>
+    public static byte[] PdfStacked(IEnumerable<string> codes)
+    {
+        var builder = new PdfDocumentBuilder();
+        var helv = builder.AddStandard14Font(Standard14Font.Helvetica);
+        var page = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+        page.AddText("Rechnung R2026-0815", 16, new PdfPoint(60, 780), helv);
+        foreach (var c in codes) page.AddText(c, 3, new PdfPoint(28, 810), helv);
+        return builder.Build();
+    }
 }

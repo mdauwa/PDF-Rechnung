@@ -279,7 +279,7 @@ async function onAction(e) {
       case "md-add": (ST.s.mandanten ||= { items: [] }).items.push({ number: "", name: "", ownErp: false, erpOff: false, erpEndpoint: "", erpVendor: "", erpApplication: "",
           erpSecureAppId: "", erpRevision: 0, erpUsername: "", inboxFolder: "", pathMappings: [], gotomaxxPrinter: "", exportFolder: "" });
         ST.mdEdit = ST.s.mandanten.items.length - 1; markDirty(); drawTab(); window.scrollTo(0, 0); break;
-      case "md-open": ST.mdEdit = +btn.dataset.i; drawTab(); window.scrollTo(0, 0); break;
+      case "md-open": ST.mdEdit = +e.target.closest("[data-st]").dataset.i; drawTab(); window.scrollTo(0, 0); break;
       case "md-back": ST.mdEdit = null; drawTab(); break;
       case "md-del": {
         const m = ST.s.mandanten.items[+btn.dataset.i];

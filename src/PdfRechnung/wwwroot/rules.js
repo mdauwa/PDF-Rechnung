@@ -23,7 +23,7 @@ function ruleEditor(id, opts) {
 const reList = v => (v || []).join(", ");
 const reParse = v => String(v || "").split(/[,;\n]+/).map(x => x.trim()).filter(Boolean);
 const reAttr = (ed, kind, i, f) => `data-re="${ed.id}|${kind}|${i}|${f}"`;
-const ROUTE_TEXT = { "": "wie eingestellt", direkt: "direkt (automatisch)", freigabe: "nach Freigabe im Portal", outlook: "über Outlook", gotomaxx: "an gotomaxx", keine: "keine Mail" };
+const ROUTE_TEXT = { "": "wie eingestellt", direkt: "direkt (automatisch)", wennok: "automatisch, wenn alles ok", freigabe: "nach Freigabe im Portal", outlook: "über Outlook", gotomaxx: "an gotomaxx", keine: "keine Mail" };
 
 function reText(ed, kind, i, f, value, ph = "", list) {
   return `<input ${reAttr(ed, kind, i, f)} value="${esc(value ?? "")}" placeholder="${esc(ph)}" ${list ? `list="${list}"` : ""}>`;
@@ -128,7 +128,7 @@ function ruleEditorHtml(ed) {
       ${rules || `<p class="meta">Keine${ed.global ? " globalen" : " eigenen"} Regeln.</p>`}
       <p class="help">Geprüft wird von oben nach unten – ${ed.global ? "zuerst die eigenen Regeln des Benutzers, dann diese" : "zuerst deine eigenen Regeln, dann die globalen"}. Je Aktion gilt die erste Regel, die sie setzt.
         <b>Steuerzeichen im Druck haben immer Vorrang:</b> <code>@@pt@@</code> Vorlage, <code>@@pf@@</code> Absender, <code>@@ps@@</code> Signatur, <code>@@pw…@@</code> Versandweg
-        (<code>direkt</code>, <code>freigabe</code>, <code>outlook</code>, <code>gotomaxx</code>, <code>keine</code>), <code>@@pg@@</code> gotomaxx, <code>@@cc@@</code>/<code>@@bc@@</code>, <code>@@ml0@@</code> keine Mail.</p></div>`;
+        (<code>direkt</code>, <code>wennok</code>, <code>freigabe</code>, <code>outlook</code>, <code>gotomaxx</code>, <code>keine</code>), <code>@@pg@@</code> gotomaxx, <code>@@cc@@</code>/<code>@@bc@@</code>, <code>@@ml0@@</code> keine Mail.</p></div>`;
 }
 
 /** Eingabe im Editor; liefert true, wenn sie dem Editor gehörte. */

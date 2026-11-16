@@ -151,6 +151,7 @@ public sealed class MapiIntake
         var routed = v.Mail.Route switch
         {
             MailRoute.Direct => MapiMode.Direct,
+            MailRoute.AutoIfOk => v.Status == VorgangStatus.Ready ? MapiMode.Direct : MapiMode.Portal,
             MailRoute.Approval or MailRoute.None => MapiMode.Portal,
             MailRoute.Outlook => MapiMode.Outlook,
             _ => null
@@ -163,6 +164,9 @@ public sealed class MapiIntake
             _log.LogInformation("MAPI-Mail {Id}: Versandweg {Route} ({Reason}) statt {Mode}", v.Id, v.Mail.Route, v.Mail.RouteReason, mode);
             mode = routed;
         }
+        if (v.Mail.Route == MailRoute.AutoIfOk && mode == MapiMode.Portal)
+            hint = "Der Beleg hat Hinweise oder Fehler und wartet deshalb im Belegpost-Portal auf Freigabe:\n"
+                + (v.Messages.FirstOrDefault(x => x.Level == DocumentChecker.Error)?.Text ?? v.Messages.FirstOrDefault(x => x.Level == DocumentChecker.Warning)?.Text ?? "");
         if (mode == MapiMode.Outlook && !user.SendViaOutlook)
         {
             mode = MapiMode.Portal; // Outlook nicht freigeschaltet

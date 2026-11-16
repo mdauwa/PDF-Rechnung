@@ -172,3 +172,16 @@ public sealed class UserSenderTests : IDisposable
         Assert.Contains(d.Mail.RuleNotes, n => n.Contains("ERP-Nr. 415"));
     }
 }
+
+public class MailRouteAutoIfOkTests
+{
+    [Theory]
+    [InlineData("wennok", "wennok")]
+    [InlineData("OK", "wennok")]
+    [InlineData("direkt", "direkt")]
+    public void Versandweg_wenn_ok_wird_erkannt(string input, string expected)
+        => Assert.Equal(expected, MailRoute.Normalize(input));
+
+    [Fact]
+    public void Versandweg_wenn_ok_hat_Text() => Assert.Contains("wenn alles ok", MailRoute.Text(MailRoute.AutoIfOk));
+}

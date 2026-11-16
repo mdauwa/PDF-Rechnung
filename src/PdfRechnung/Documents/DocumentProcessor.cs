@@ -454,7 +454,7 @@ public sealed class DocumentProcessor
         // Versandweg: @@pw@@ → Regel
         if (p.Route is { } pr) { m.Route = pr; m.RouteReason = $"Steuerzeichen @@pw{pr}@@"; }
         else if (rr.Route is { } rro) { m.Route = rro.Text; m.RouteReason = rro.Reason; m.RoutePrinter = rr.GotomaxxPrinter?.Text; }
-        if (p.InvalidRoute is { } ir) fixes.Add($"!Versandweg „{ir}“ (@@pw@@) ist unbekannt – erlaubt sind direkt, freigabe, outlook, gotomaxx, keine.");
+        if (p.InvalidRoute is { } ir) fixes.Add($"!Versandweg „{ir}“ (@@pw@@) ist unbekannt – erlaubt sind direkt, wennok, freigabe, outlook, gotomaxx, keine.");
         if (m.Route == MailRoute.None && p.MailEnabled is null) m.Enabled = false;
         m.RouteEffective = m.Route.Length > 0 ? $"{MailRoute.Text(m.Route)} ({m.RouteReason})"
             : !m.Enabled ? "keine Mail (@@ml0@@ bzw. Einstellung)"

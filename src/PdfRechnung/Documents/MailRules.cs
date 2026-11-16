@@ -22,11 +22,12 @@ public sealed class SignatureDef
 public static class MailRoute
 {
     /// <summary>"" = wie eingestellt (Autoversand laut „E-Mail &amp; Versand“).</summary>
-    public const string Standard = "", Direct = "direkt", Approval = "freigabe", Outlook = "outlook", Gotomaxx = "gotomaxx", None = "keine";
-    public static readonly string[] All = { Standard, Direct, Approval, Outlook, Gotomaxx, None };
+    public const string Standard = "", Direct = "direkt", AutoIfOk = "wennok", Approval = "freigabe", Outlook = "outlook", Gotomaxx = "gotomaxx", None = "keine";
+    public static readonly string[] All = { Standard, Direct, AutoIfOk, Approval, Outlook, Gotomaxx, None };
     public static string Text(string r) => r switch
     {
         Direct => "direkt versenden (automatisch)",
+        AutoIfOk => "automatisch, wenn alles ok – sonst Freigabe",
         Approval => "nach Freigabe im Portal",
         Outlook => "über Outlook des Benutzers",
         Gotomaxx => "an gotomaxx PDFMAILER",
@@ -40,6 +41,7 @@ public static class MailRoute
         {
             "" => null,
             "direkt" or "auto" or "sofort" => Direct,
+            "wennok" or "wenn-ok" or "ok" or "autook" => AutoIfOk,
             "freigabe" or "portal" or "manuell" => Approval,
             "outlook" => Outlook,
             "gotomaxx" or "pdfmailer" => Gotomaxx,

@@ -470,7 +470,7 @@ function rulesCard(v) {
   const why = t => t ? ` <span class="meta-inline">(${esc(t)})</span>` : "";
   const notes = (m.ruleNotes || []);
   const note = re => notes.find(n => re.test(n));
-  const route = { direkt: "direkt versenden", freigabe: "nach Freigabe im Portal", outlook: "über Outlook", gotomaxx: "an gotomaxx", keine: "keine Mail" };
+  const route = { direkt: "direkt versenden", wennok: "automatisch, wenn alles ok", freigabe: "nach Freigabe im Portal", outlook: "über Outlook", gotomaxx: "an gotomaxx", keine: "keine Mail" };
   const rows = [
     idRow,
     ["Angewendete Regeln", (m.appliedRules || []).length ? (m.appliedRules).map(esc).join("<br>") : '<span class="meta-inline">keine Regel hat gegriffen</span>'],

@@ -49,7 +49,7 @@ public sealed class ParsedCodes
     /// <summary>@@psName@@ – Signatur; @@ps@@ / @@ps0@@ = keine Signatur.</summary>
     public bool SignatureSet { get; set; }
     public string? Signature { get; set; }
-    /// <summary>@@pw…@@ – Versandweg: direkt, freigabe, outlook, gotomaxx, keine.</summary>
+    /// <summary>@@pw…@@ – Versandweg: direkt, wennok, freigabe, outlook, gotomaxx, keine.</summary>
     public string? Route { get; set; }
     public string? InvalidRoute { get; set; }
     /// <summary>@@pu benutzer@@ – wer gedruckt hat (Windows- oder ERP-Benutzer); überschreibt den Benutzer des Druckauftrags.</summary>

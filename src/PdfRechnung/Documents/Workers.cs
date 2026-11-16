@@ -251,12 +251,14 @@ public sealed class AutoSendWorker : BackgroundService
     }
 
     /// <summary>
-    /// Versandweg (Regel bzw. @@pw@@): „direkt“ = immer automatisch, „freigabe“/„outlook“ = nie;
+    /// Versandweg (Regel bzw. @@pw@@): „direkt“ = immer automatisch, „wennok“ = automatisch nur ohne Warnungen und Fehler,
+    /// „freigabe“/„outlook“ = nie;
     /// sonst wie eingestellt – außer der Benutzer versendet selbst über Outlook.
     /// </summary>
     private bool IsAutomatic(Vorgang v, MailOptions o) => v.Mail.Route switch
     {
         MailRoute.Direct => true,
+        MailRoute.AutoIfOk => v.Status == VorgangStatus.Ready,
         MailRoute.Standard => o.AutoSend && !(_users?.UsesOutlook(v.OwnerUserId) ?? false),
         _ => false
     };

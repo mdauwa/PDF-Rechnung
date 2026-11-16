@@ -157,17 +157,17 @@ function drawTable() {
   const allSel = rows.filter(selectable).length > 0 && rows.filter(selectable).every(v => VL.selected.has(v.id));
   $("#vlTable").innerHTML = `<thead><tr>
       ${canSel ? `<th class="cb"><input type="checkbox" data-all ${allSel ? "checked" : ""} title="Alle versendbaren auswählen"></th>` : ""}
-      <th>Eingang</th><th>Beleg</th><th>Kunde</th><th class="num">Betrag</th><th>Empfänger</th><th>E-Rechnung</th><th>Status</th></tr></thead>
+      <th>Mitarbeiter</th><th>Eingang</th><th>Beleg</th><th>Kunde</th><th class="num">Betrag</th><th>Empfänger</th><th>E-Rechnung</th><th>Status</th></tr></thead>
     <tbody>${rows.map(v => `<tr data-id="${esc(v.id)}" class="st-${esc(v.status)}">
       ${canSel ? `<td class="cb">${selectable(v) ? `<input type="checkbox" data-id="${esc(v.id)}" ${VL.selected.has(v.id) ? "checked" : ""}>` : ""}</td>` : ""}
-      <td class="nowrap">${fmtDT(v.createdAt)}<small>${esc(v.ownerName || v.printUser || v.source)}</small></td>
+      <td class="nowrap who" title="${esc(v.printUser || v.source || "")}">${esc(v.ownerName || v.printUser || v.source)}</td>
+      <td class="nowrap">${fmtDT(v.createdAt)}</td>
       <td><b>${esc(v.documentType)} ${esc(v.voucherId || "")}</b><small>${esc(v.voucherDate || "")}</small></td>
       <td>${esc(v.buyerName || "")}<small>${esc(v.buyerId || "")}</small></td>
       <td class="num nowrap">${fmtMoney(v.grossAmount, v.currency)}</td>
       <td>${v.mailEnabled ? esc(listText(v.to)) || '<span class="muted">–</span>' : '<span class="muted">kein Versand</span>'}</td>
       <td>${esc(v.formatName || "–")}</td>
-      <td>${badge(v.status)}${v.firstMessage && !["versendet", "verworfen"].includes(v.status) ? `<small class="msg">${esc(v.firstMessage)}</small>` : ""}
-        ${v.sentAt ? `<small>${fmtDT(v.sentAt)} · ${esc(v.sentBy || "")}</small>` : ""}</td>
+      <td class="nowrap">${badge(v.status)}${v.firstMessage && !["versendet", "verworfen"].includes(v.status) ? `<small class="msg" title="${esc(v.firstMessage)}">${esc(v.firstMessage)}</small>` : ""}${v.sentAt ? `<small>${fmtDT(v.sentAt)} · ${esc(v.sentBy || "")}</small>` : ""}</td>
     </tr>`).join("")}</tbody>`;
   updateSel();
 }

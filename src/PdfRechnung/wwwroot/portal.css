@@ -16,8 +16,11 @@
 .kpi.alert .kpi-value { color: var(--missing); }
 
 /* Liste */
-.vlist td small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
-.vlist td small.msg { color: var(--text); opacity: .75; max-width: 360px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* kompakt: eine Zeile je Vorgang, Zusatzinfos grau dahinter */
+.vlist th, .vlist td { padding: 5px 12px; }
+.vlist td small { display: inline; color: var(--muted); font-size: 12px; margin-left: 6px; }
+.vlist td small.msg { display: inline-block; vertical-align: middle; color: var(--text); opacity: .75; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vlist td.who { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
 .vlist tbody tr { cursor: pointer; }
 .vlist tbody tr:hover td { background: var(--surface-2); }
 .vlist .cb { width: 32px; }
@@ -83,7 +86,7 @@ details summary { cursor: pointer; padding: 6px 0; }
 .vd-side .card > h3 { margin-left: 16px; }
 .vd-side .card > .table-wrap .list th:first-child, .vd-side .card > .table-wrap .list td:first-child { padding-left: 0; }
 .btn:disabled { opacity: .45; cursor: default; filter: none; }
-.vlist td:last-child { white-space: normal; min-width: 170px; }
+.vlist td:last-child { white-space: nowrap; min-width: 170px; }
 .vlist td:last-child small { white-space: nowrap; }
 .actions input, .filters input[type=date] { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; }
 

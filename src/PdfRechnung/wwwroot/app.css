@@ -452,3 +452,4 @@ table.sender-table input { width: 100%; min-width: 160px; }
 .rules-kv th { text-align: left; font-weight: 500; color: var(--muted); padding: 7px 8px 7px 16px; width: 38%; vertical-align: top; white-space: nowrap; }
 .rules-kv td { padding: 7px 16px 7px 0; vertical-align: top; word-break: break-word; }
 .rules-kv tr + tr th, .rules-kv tr + tr td { border-top: 1px solid var(--border); }
+

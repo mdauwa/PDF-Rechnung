@@ -300,6 +300,7 @@ app.MapGet("/api/portal", (IOptionsSnapshot<PortalOptions> portal, HttpContext c
 
 VorgangApi.Map(app);
 MailRulesApi.Map(app);
+MailRulesApi.MapImages(app);
 MelderApi.Map(app);
 StatusLinkService.Map(app);
 PdfRechnung.Erp.ErpApi.Map(app);

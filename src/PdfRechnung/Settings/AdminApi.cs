@@ -109,6 +109,14 @@ public static class AdminApi
             s.Erp.Fields = s.Erp.Fields.Where(f => !string.IsNullOrWhiteSpace(f.Field)).Select(f => { f.Field = f.Field.Trim().ToUpperInvariant(); return f; }).ToList();
             s.StatusLink.AllowedNetworks = s.StatusLink.AllowedNetworks.Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToList();
             s.StatusLink.TrustedProxies = s.StatusLink.TrustedProxies.Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToList();
+            // HTML aus dem Editor bereinigen, eingefügte Bilder als Dateien ablegen
+            foreach (var t in s.MailTemplates.Items)
+            {
+                t.Body = MailHtml.ForStorage(t.Body, store.DataDirectory);
+                t.Signature = MailHtml.ForStorage(t.Signature, store.DataDirectory);
+                t.Footer = MailHtml.ForStorage(t.Footer, store.DataDirectory);
+            }
+            foreach (var sig in s.MailRules.Signatures) sig.Text = MailHtml.ForStorage(sig.Text, store.DataDirectory);
             s.Auth.Firmenportal.Secret = old.Auth.Firmenportal.Secret; // nur über /firmenportal/schluessel änderbar
             s.Server.CertificatePath = old.Server.CertificatePath;         // nur über Zertifikat-Endpunkte änderbar
             s.Server.CertificatePassword = old.Server.CertificatePassword;

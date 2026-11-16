@@ -106,17 +106,23 @@ public static partial class MailDesigner
     }
 
     /// <param name="signatureOverride">Signatur aus Benutzer-/Regel-Signaturen; null = Signatur der Vorlage, "" = keine.</param>
+    /// <remarks>Mailtext, Signatur und Fußzeile dürfen Text (mit **fett** usw.) oder HTML aus dem Editor sein; HTML wird bereinigt,
+    /// Bilder werden eingebettet (cid:). Bilder liegen neben dem Logo-Ordner unter „mailbilder“.</remarks>
     public static RenderedMail Render(MailDesign? d, string body, IReadOnlyDictionary<string, string> values, string? logoDirectory, MailFacts? facts = null,
         string? signatureOverride = null)
     {
         body = (body ?? "").Replace("\r\n", "\n").Trim('\n');
+        var dataDirectory = logoDirectory is null ? null : Path.GetDirectoryName(Path.GetFullPath(logoDirectory));
+        var none = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (d is null)
         {
-            var sig = Placeholders.Apply(signatureOverride, values).Trim('\n');
-            if (sig.Length > 0) body = body + "\n\n" + sig;
-            return new RenderedMail(Simple(body), body, new());
+            var simpleImages = new List<InlineImage>();
+            var sigPart = MailHtml.ToMailHtml(signatureOverride, values, "#1f5fbf");
+            var bodyPart = MailHtml.ToMailHtml(body, none, "#1f5fbf");
+            var html = MailHtml.EmbedImages(Simple(bodyPart + (sigPart.Length > 0 ? "<div style=\"margin-top:16px;\">" + sigPart + "</div>" : "")), dataDirectory, simpleImages);
+            var plain = string.Join("\n\n", new[] { MailHtml.ToText(body), MailHtml.ToText(Placeholders.Apply(signatureOverride, values)) }.Where(x => x.Length > 0));
+            return new RenderedMail(html, plain, simpleImages);
         }
-
         var images = new List<InlineImage>();
         string logoHtml = "";
         if (!string.IsNullOrWhiteSpace(d.LogoFile) && logoDirectory is not null)
@@ -131,18 +137,18 @@ public static partial class MailDesigner
             }
         }
 
-        var signature = Placeholders.Apply(signatureOverride ?? d.Signature, values);
-        var footer = Placeholders.Apply(d.Footer, values);
+        var signatureSource = signatureOverride ?? d.Signature;
         var header = Placeholders.Apply(d.HeaderText, values);
         var font = CssValue(d.FontFamily, "Segoe UI, Arial, Helvetica, sans-serif");
         var primary = Color(d.PrimaryColor, "#1f5fbf");
         var bg = Color(d.BackgroundColor, "#f4f5f7");
         var fg = Color(d.TextColor, "#1c2330");
-        var bodyHtml = Format(body, primary);
-        var sigHtml = signature.Length > 0 ? Format(signature, primary) : "";
-        var footHtml = footer.Length > 0 ? Format(footer, primary) : "";
+        var bodyHtml = MailHtml.ToMailHtml(body, none, primary);
+        var sigHtml = MailHtml.ToMailHtml(signatureSource, values, primary);
+        var footHtml = MailHtml.ToMailHtml(d.Footer, values, primary);
         var boxHtml = d.ShowDocumentBox && facts is not null ? Box(facts, primary, fg) : "";
-        var text = string.Join("\n\n", new[] { header, body, signature, StripMarkup(footer) }.Where(s => s.Length > 0));
+        var text = string.Join("\n\n", new[] { header, MailHtml.ToText(body), MailHtml.ToText(Placeholders.Apply(signatureSource, values)),
+            MailHtml.ToText(Placeholders.Apply(d.Footer, values)) }.Where(s => s.Length > 0));
 
         if (d.Kind == "html" && !string.IsNullOrWhiteSpace(d.CustomHtml))
         {
@@ -151,7 +157,7 @@ public static partial class MailDesigner
             htmlValues["Inhalt"] = bodyHtml; htmlValues["Logo"] = logoHtml; htmlValues["Signatur"] = sigHtml;
             htmlValues["Fusszeile"] = footHtml; htmlValues["Fußzeile"] = footHtml; htmlValues["Kopfzeile"] = Html(header);
             htmlValues["Belegbox"] = boxHtml; htmlValues["Farbe"] = primary;
-            return new RenderedMail(Placeholders.Apply(d.CustomHtml, htmlValues), text, images);
+            return new RenderedMail(MailHtml.EmbedImages(Placeholders.Apply(d.CustomHtml, htmlValues), dataDirectory, images), text, images);
         }
 
         var align = d.LogoAlign is "center" or "right" ? d.LogoAlign : "left";
@@ -177,12 +183,12 @@ public static partial class MailDesigner
         if (footHtml.Length > 0)
             sb.Append($"<table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:600px;max-width:100%;\"><tr><td style=\"padding:16px 32px;font-family:{font};font-size:12px;line-height:1.5;color:#6b7280;\">{footHtml}</td></tr></table>");
         sb.Append("</td></tr></table></body></html>");
-        return new RenderedMail(sb.ToString(), text, images);
+        return new RenderedMail(MailHtml.EmbedImages(sb.ToString(), dataDirectory, images), text, images);
     }
 
     /// <summary>Einfache Mail ohne Vorlage (nur Text, leicht formatiert).</summary>
-    private static string Simple(string body) =>
-        $"<!DOCTYPE html><html lang=\"de\"><head><meta charset=\"utf-8\"></head><body style=\"font-family:Segoe UI, Arial, sans-serif;font-size:15px;line-height:1.5;color:#1c2330;\">{Format(body, "#1f5fbf")}</body></html>";
+    private static string Simple(string bodyHtml) =>
+        $"<!DOCTYPE html><html lang=\"de\"><head><meta charset=\"utf-8\"></head><body style=\"font-family:Segoe UI, Arial, sans-serif;font-size:15px;line-height:1.5;color:#1c2330;\">{bodyHtml}</body></html>";
 
     private static string Box(MailFacts f, string primary, string fg)
     {
@@ -252,7 +258,6 @@ public static partial class MailDesigner
         return s;
     }
 
-    private static string StripMarkup(string s) => s.Replace("**", "");
 
     /// <summary>HTML-Sonderzeichen maskieren; Umlaute bleiben lesbar (die Mail ist UTF-8).</summary>
     public static string Html(string? s) => (s ?? "").Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;").Replace("'", "&#39;");

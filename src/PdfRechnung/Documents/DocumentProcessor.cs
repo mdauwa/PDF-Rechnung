@@ -468,7 +468,10 @@ public sealed class DocumentProcessor
             catch (Exception ex) { body = o.DefaultBody; fixes.Add($"!Textdatei {p.BodyFile} konnte nicht gelesen werden: {ex.Message}"); }
         }
         else body = !string.IsNullOrWhiteSpace(design?.Body) ? design!.Body : o.DefaultBody;
-        m.Body = Placeholders.Apply(Clean(body, "Mailtext"), values, missing).Replace("\r\n", "\n");
+        var bodyTemplate = Clean(body, "Mailtext");
+        m.Body = (MailHtml.IsHtml(bodyTemplate)
+            ? MailHtml.Sanitize(Placeholders.Apply(bodyTemplate, values.ToDictionary(kv => kv.Key, kv => System.Net.WebUtility.HtmlEncode(kv.Value), StringComparer.OrdinalIgnoreCase), missing))
+            : Placeholders.Apply(bodyTemplate, values, missing)).Replace("\r\n", "\n");
         // Platzhalter in Signatur/Fußzeile der Vorlage prüfen
         if (design is not null)
         {

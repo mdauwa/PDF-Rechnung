@@ -192,6 +192,7 @@ async function renderVorgang(view) {
   $("#topbarActions").innerHTML = `<a class="btn ghost" href="#/vorgaenge" id="vdBack">${icon("back")} Zurück zur Liste</a>`;
   $("#vdBack").onclick = e => { e.preventDefault(); history.length > 1 ? history.back() : (location.hash = "#/vorgaenge"); };
   view.classList.add("vd-view");
+  rteInstall(view);
   view.innerHTML = `<p class="meta">Lade Vorgang …</p>`;
   let data;
   try { data = await api("GET", "api/vorgaenge/" + encodeURIComponent(id)); }
@@ -269,7 +270,10 @@ function drawVorgang(view, data) {
               <label class="field"><span class="lbl">BCC</span><input id="mBcc" value="${esc(listText(v.mail.bcc))}" ${editable ? "" : "readonly"}></label>
             </div>
             <label class="field"><span class="lbl">Betreff</span><input id="mSubject" value="${esc(v.mail.subject)}" ${editable ? "" : "readonly"}></label>
-            <label class="field"><span class="lbl">Text</span><textarea id="mBody" rows="7" ${editable ? "" : "readonly"}>${esc(v.mail.body)}</textarea></label>
+            ${rteIsHtml(v.mail.body)
+              ? (editable ? `<div class="field"><span class="lbl">Text</span>${rteHtml(v.mail.body, 'id="mBody"')}</div>`
+                          : `<div class="field"><span class="lbl">Text</span><div class="rte-view">${rteClean(v.mail.body).html}</div></div>`)
+              : `<label class="field"><span class="lbl">Text</span><textarea id="mBody" rows="7" ${editable ? "" : "readonly"}>${esc(v.mail.body)}</textarea></label>`}
             <label class="field"><span class="lbl">Dateiname des Anhangs</span><div class="suffix"><input id="mFile" value="${esc(v.mail.fileName)}" ${editable ? "" : "readonly"}><span>.pdf</span></div></label>
             ${v.mail.attachments?.length ? `<p class="meta">Weitere Anlagen: ${v.mail.attachments.map(esc).join(", ")}</p>` : ""}
             ${v.mail.noDocument ? `<p class="meta">Ohne Beleg als Anhang (@@md@@).</p>` : ""}
@@ -361,7 +365,7 @@ function drawVorgang(view, data) {
       if (a === "mail-save") {
         r = await api("PUT", `api/vorgaenge/${encodeURIComponent(v.id)}/mail`, {
           to: split($("#mTo").value), cc: split($("#mCc").value), bcc: split($("#mBcc").value),
-          subject: $("#mSubject").value, body: $("#mBody").value, fileName: $("#mFile").value, enabled: $("#mEnabled")?.checked ?? v.mail.enabled
+          subject: $("#mSubject").value, body: $("#mBody") ? fieldValue($("#mBody")) : v.mail.body, fileName: $("#mFile").value, enabled: $("#mEnabled")?.checked ?? v.mail.enabled
         });
         drawVorgang(view, { ...data, vorgang: r.vorgang });
         toast("Versanddaten gespeichert.");
@@ -372,7 +376,7 @@ function drawVorgang(view, data) {
       if (dirty && (a.startsWith("senden") || a === "outlook")) {
         await api("PUT", `api/vorgaenge/${encodeURIComponent(v.id)}/mail`, {
           to: split($("#mTo").value), cc: split($("#mCc").value), bcc: split($("#mBcc").value),
-          subject: $("#mSubject").value, body: $("#mBody").value, fileName: $("#mFile").value, enabled: $("#mEnabled")?.checked ?? v.mail.enabled
+          subject: $("#mSubject").value, body: $("#mBody") ? fieldValue($("#mBody")) : v.mail.body, fileName: $("#mFile").value, enabled: $("#mEnabled")?.checked ?? v.mail.enabled
         });
       }
       if (a === "outlook") {

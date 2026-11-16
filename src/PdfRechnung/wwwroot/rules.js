@@ -75,8 +75,8 @@ function ruleEditorHtml(ed) {
         ${reField("Für Absender", reText(ed, "sig", i, "senders", reList(s.senders), "z. B. service@firma.at oder *@firma-b.at"))}
       </div>
       <label class="check"><input type="checkbox" ${reAttr(ed, "sig", i, "default")} ${s.default ? "checked" : ""}> Standard${ed.global ? " (für alle ohne eigene Signatur)" : " (wenn kein Briefpapier/Absender passt)"}</label>
-      ${reField("Text", `<textarea rows="4" ${reAttr(ed, "sig", i, "text")} placeholder="Freundliche Grüße&#10;**{Absender}**&#10;Tel. …">${esc(s.text || "")}</textarea>`,
-        "Platzhalter wie im Mailtext ({Absender}, {Belegnummer} …), **fett**, *kursiv*; Adressen und Links werden klickbar.")}
+      ${reField("Signatur", rteHtml(s.text, reAttr(ed, "sig", i, "text"), { small: true }),
+        "Schrift, Farbe, Links und Bilder wie in Outlook. Eine bestehende Signatur aus Outlook oder Word einfach kopieren und hier einfügen – sie wird bereinigt übernommen. Platzhalter über {…}.")}
     </div>`).join("");
 
   const rules = ed.set.rules.map((r, i) => `
@@ -130,6 +130,7 @@ function ruleEditorHtml(ed) {
 
 /** Eingabe im Editor; liefert true, wenn sie dem Editor gehörte. */
 function ruleEditorInput(el, e) {
+  if (el.dataset?.rteCmd) return false;
   if (!el.dataset.re) return false;
   const [id, kind, idx, f] = el.dataset.re.split("|"), ed = RULE_EDITORS[id];
   if (!ed) return true;
@@ -141,7 +142,7 @@ function ruleEditorInput(el, e) {
   }
   else if (f === "users") obj.users = [...el.selectedOptions].map(o => o.value);
   else if (lists.includes(f)) obj[f] = reParse(el.value);
-  else obj[f] = el.value;
+  else obj[f] = el.dataset.rte === "1" ? fieldValue(el) : el.value;
   ed.onChange?.();
   if (e.type === "change" && (["route", "default", "enabled"].includes(f) || el.tagName === "SELECT")) ed.redraw?.();
   return true;
@@ -207,6 +208,7 @@ async function renderMyRules(view) {
         ${ruleEditorHtml(ed)}</div></section>`;
   }
   draw();
+  rteInstall(view);
   view.addEventListener("input", e => ruleEditorInput(e.target, e));
   view.addEventListener("change", e => ruleEditorInput(e.target, e));
   view.addEventListener("click", async e => {

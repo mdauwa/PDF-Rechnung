@@ -50,6 +50,7 @@ async function renderSettings(view) {
     const t = e.target.closest("[data-tab]")?.dataset.tab;
     if (t) { ST.tab = t; ST.mtEdit = null; ST.userEdit = null; store.set("st.tab", t); drawTab(); }
   };
+  rteInstall(view);
   view.addEventListener("click", onAction);
   view.addEventListener("input", onInput);
   view.addEventListener("change", onInput);
@@ -112,7 +113,9 @@ const section = (title, inner, extra = "") => `<section class="st-card"><div cla
 
 function onInput(e) {
   const el = e.target;
+  if (el.dataset?.rteCmd) return; // Werkzeugleiste des Editors
   if (ruleEditorInput(el, e)) return;
+  if (el.dataset?.rte === "1" && el.dataset.path) { set(ST.s, el.dataset.path, fieldValue(el)); markDirty(); return; }
   if (ST.tab === "benutzer" && onUsersInput(el, e)) return;
   if (el.dataset.entrasecret !== undefined) { ST.entraSecret = el.value; markDirty(); return; }
   if (el.dataset.mailpw !== undefined) { ST.mailPassword = el.value; markDirty(); return; }
@@ -753,7 +756,7 @@ function tabMail() {
        <p class="help">Vorgänge mit Fehlern werden nie automatisch versendet. Ein fehlgeschlagener Versand wird nicht automatisch wiederholt, sondern im Portal als „Versandfehler“ angezeigt.</p>`) +
     section("Vorlagen",
       `${field("Betreff (wenn kein @@ed@@ gedruckt wurde)", inText("mail.defaultSubject"))}
-       ${field("Mailtext (wenn kein @@sa@@ gedruckt wurde)", inArea("mail.defaultBody", 6))}
+       ${field("Mailtext (wenn kein @@sa@@ gedruckt wurde)", rteHtml(get(ST.s, "mail.defaultBody"), `data-path="mail.defaultBody"`))}
        ${field("Dateiname des Anhangs (wenn kein @@fn@@/@@mf@@ gedruckt wurde)", inText("mail.defaultFileName"))}
        <p class="help">Platzhalter: ${ph}</p>`);
 }
@@ -880,8 +883,9 @@ function templateMask(i) {
      <div class="grid3">${colorField(`${P}.primaryColor`, "Hauptfarbe (CI)")}${colorField(`${P}.textColor`, "Textfarbe")}${colorField(`${P}.backgroundColor`, "Hintergrund")}</div>
      ${!html ? field("Kopfzeile (Balken in der Hauptfarbe, optional)", inText(`${P}.headerText`, "z. B. Ihre {Belegart} {Belegnummer}")) : ""}
      ${inCheck(`${P}.showDocumentBox`, "Infokasten mit Belegnummer, Datum, Betrag und Anhang anzeigen")}
-     ${field("Signatur", inArea(`${P}.signature`, 4))}
-     ${field("Fußzeile (Impressum, klein und grau)", inArea(`${P}.footer`, 3))}
+     ${field("Signatur", rteHtml(t.signature, `data-path="${P}.signature"`, { small: true }),
+        "Formatiert wie in Outlook: Schrift, Farbe, Links und Bilder. Aus Outlook/Word einfach kopieren und einfügen – überflüssige Formatierungen werden entfernt. Eigene Signaturen je Benutzer, Briefpapier oder Absender unter „Regeln &amp; Signaturen“.")}
+     ${field("Fußzeile (Impressum, klein und grau)", rteHtml(t.footer, `data-path="${P}.footer"`, { small: true }))}
      ${html ? `${field("Eigenes HTML", `<textarea class="mono" data-path="${P}.customHtml" rows="14">${esc(t.customHtml || "")}</textarea>`,
           "Pflicht: <code>{Inhalt}</code>. Außerdem: <code>{Logo}</code> <code>{Belegbox}</code> <code>{Signatur}</code> <code>{Fusszeile}</code> <code>{Kopfzeile}</code> <code>{Farbe}</code> und alle Platzhalter unten. Inline-Styles und Tabellen verwenden – Outlook ignoriert &lt;style&gt; und CSS-Layouts weitgehend.")}
         ${t.customHtml ? "" : `<div class="actions"><button class="btn ghost" data-st="mt-html" data-i="${i}">Beispiel-HTML einsetzen</button></div>`}` : ""}
@@ -889,7 +893,7 @@ function templateMask(i) {
      <details ${t.subject || t.body ? "open" : ""}><summary>Eigener Betreff und Mailtext für diese Vorlage</summary>
        <p class="help">Leer = Vorlagen aus „E-Mail &amp; Versand“. Was das ERP mit <code>@@ed@@</code>, <code>@@sa@@</code> oder <code>@@mb@@</code> druckt, hat immer Vorrang.</p>
        ${field("Betreff", inText(`${P}.subject`, "z. B. {Belegart} {Belegnummer} – Firma GmbH"))}
-       ${field("Mailtext", inArea(`${P}.body`, 7))}
+       ${field("Mailtext", rteHtml(t.body, `data-path="${P}.body"`))}
      </details>
 
      <div class="actions"><button class="btn" data-st="mt-preview" data-i="${i}">Vorschau</button>

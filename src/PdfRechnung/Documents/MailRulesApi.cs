@@ -39,7 +39,7 @@ public static class MailRulesApi
             });
         });
 
-        app.MapPut("/api/meine-regeln", (HttpContext ctx, SaveRequest req, PortalAccess access, UserStore users, MailRuleStore store) =>
+        app.MapPut("/api/meine-regeln", (HttpContext ctx, SaveRequest req, PortalAccess access, UserStore users, MailRuleStore store, SettingsStore settings) =>
         {
             var (user, error) = Target(ctx, access, users);
             if (user is null) return error!;
@@ -47,8 +47,35 @@ public static class MailRulesApi
             foreach (var r in set.Rules) r.Users.Clear(); // „Benutzer“ gibt es nur global
             var errors = MailRuleStore.Validate(set, global: false);
             if (errors.Count > 0) return Results.BadRequest(new { error = string.Join(" ", errors) });
+            foreach (var sig in set.Signatures) sig.Text = MailHtml.ForStorage(sig.Text, settings.DataDirectory);
             store.Save(user.Id, set);
             return Results.Ok(new { ok = true, message = "Signaturen und Regeln gespeichert – sie gelten für neue Belege." });
+        });
+    }
+
+    /// <summary>
+    /// Bilder für Vorlagen und Signaturen (Editor): hochladen (PNG/JPG/GIF, höchstens 2 MB) und anzeigen.
+    /// Jeder angemeldete Benutzer darf – Signaturen pflegen auch Nicht-Admins.
+    /// </summary>
+    public static void MapImages(WebApplication app)
+    {
+        app.MapPost("/api/mailbilder", async (HttpContext ctx, PortalAccess access, SettingsStore settings) =>
+        {
+            if (!access.For(ctx).Authenticated) return Results.Unauthorized();
+            using var ms = new MemoryStream();
+            await ctx.Request.Body.CopyToAsync(ms);
+            if (ms.Length > MailHtml.MaxImageBytes) return Results.BadRequest(new { error = "Das Bild ist größer als 2 MB." });
+            var bytes = ms.ToArray();
+            var ext = MailHtml.DetectImage(bytes);
+            if (ext is null) return Results.BadRequest(new { error = "Nur PNG-, JPG- oder GIF-Bilder sind möglich." });
+            return Results.Ok(new { url = MailHtml.UrlPrefix + MailHtml.SaveImage(bytes, ext, settings.DataDirectory) });
+        });
+        app.MapGet("/api/mailbilder/{file}", (string file, HttpContext ctx, PortalAccess access, SettingsStore settings) =>
+        {
+            if (!access.For(ctx).Authenticated) return Results.Unauthorized();
+            var name = Path.GetFileName(file);
+            var path = Path.Combine(MailHtml.ImageDirectory(settings.DataDirectory), name);
+            return File.Exists(path) ? Results.File(path, MailDesigner.ImageType(path)) : Results.NotFound();
         });
     }
 

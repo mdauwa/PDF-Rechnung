@@ -97,6 +97,11 @@ public static class XmlInvoiceValidator
             syntax = "UBL";
             spec = root.Element(XName.Get("CustomizationID", Cbc))?.Value.Trim();
         }
+        else if (Connect.ConnectValidator.Detect(r.FileName, doc) is not null)
+        {
+            r.Checks.Clear();
+            return Connect.ConnectValidator.Validate(data, r.FileName, r);
+        }
         else
         {
             r.Format = "XML";

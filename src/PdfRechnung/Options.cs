@@ -22,6 +22,8 @@ public sealed class AppSettings
     public MandantOptions Mandanten { get; set; } = new();
     /// <summary>Globale Einstellungen der Versandwege (Kunden-Versand und Abruf).</summary>
     public PdfRechnung.Delivery.DeliveryOptions Delivery { get; set; } = new();
+    /// <summary>ERP Suite Connect (Webshop-Schnittstelle): Ordner anzeigen und Dateien prüfen.</summary>
+    public PdfRechnung.Connect.ConnectOptions Connect { get; set; } = new();
 }
 
 /// <summary>

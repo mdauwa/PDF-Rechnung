@@ -71,6 +71,7 @@ function renderMenu() {
   if (portal.seeInbound) html += `<a href="#/eingang" data-key="eingang">${icon("download")}<span>Eingang</span><span class="menu-count" data-count="eingang"></span></a>`;
   if (portal.userId) html += `<div class="menu-group">Persönlich</div><a href="#/melder" data-key="melder">${icon("bell")}<span>Melder &amp; Hinweise</span><span class="menu-dot" id="liveDot" title="Live-Verbindung"></span></a>`
     + `<a href="#/regeln" data-key="regeln">${icon("send")}<span>Meine Mail-Regeln</span></a>`;
+  if (portal.connect) html += `<div class="menu-group">ERP Suite Connect</div><a href="#/connect?b=eingang" data-key="connect:eingang">${icon("download")}<span>Eingang</span></a><a href="#/connect?b=ausgang" data-key="connect:ausgang">${icon("upload")}<span>Ausgang</span></a>`;
   html += `<div class="menu-group">Tools</div><a href="#/pruefen" data-key="pruefen">${icon("check")}<span>Datei prüfen (EDI / E-Rechnung)</span></a>`;
   if (portal.isAdmin) html += `<div class="menu-group">System</div><a href="#/einstellungen" data-key="einstellungen">${icon("settings")}<span>Einstellungen</span></a>`;
   $("#menu").innerHTML = html;
@@ -100,7 +101,8 @@ const VIEWS = {
   melder: { title: "Melder & Hinweise", render: v => renderMelder(v) },
   regeln: { title: "Meine Mail-Regeln", render: v => renderMyRules(v) },
   eingang: { title: "Eingang", render: v => renderEingang(v) },
-  pruefen: { title: "Datei prüfen", render: v => renderPruefen(v) }
+  pruefen: { title: "Datei prüfen", render: v => renderPruefen(v) },
+  connect: { title: "ERP Suite Connect", render: v => renderConnect(v) }
 };
 
 function route() {
@@ -123,12 +125,13 @@ function route() {
   }
   if (key === "einstellungen" && !portal.isAdmin) key = "vorgaenge";
   if (key === "eingang" && !portal.seeInbound) key = "vorgaenge";
+  if (key === "connect" && !portal.connect) key = "vorgaenge";
   const v = VIEWS[key] || VIEWS.vorgaenge;
   $("#viewTitle").textContent = v.title;
   v.render(view);
 
   const q = new URLSearchParams(hash.split("?")[1] || "");
-  const active = key === "vorgaenge" ? `vorgaenge:${q.get("f") || "offen"}` : key;
+  const active = key === "vorgaenge" ? `vorgaenge:${q.get("f") || "offen"}` : key === "connect" ? `connect:${q.get("b") || "eingang"}` : key;
   document.querySelectorAll("#menu a").forEach(a => a.classList.toggle("active", a.dataset.key === active));
 }
 

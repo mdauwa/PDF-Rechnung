@@ -21,6 +21,7 @@ const TABS = [
   ["mandanten", "Mandanten"],
   ["versandwege", "Versandwege"],
   ["kunden", "Kunden"],
+  ["connect", "ERP Suite Connect"],
   ["erp", "ERP-Rückmeldung"],
   ["mapi", "MAPI-Mails"],
   ["statuslink", "Status-Link"],
@@ -82,7 +83,7 @@ function drawTab() {
   const body = $("#stBody");
   if (!ST.s) return;
   const fn = { dienst: tabService, server: tabServer, eingang: tabInbox, briefpapier: tabStationery, mail: tabMail, mailvorlagen: tabTemplates, erechnung: tabInvoice, ablage: tabStorage, benutzer: tabUsers, anmeldung: tabAuth,
-    erp: tabErp, mapi: tabMapi, statuslink: tabStatusLink, regeln: tabRules, mandanten: tabMandanten, versandwege: tabDelivery, kunden: tabCustomers }[ST.tab] || tabService;
+    erp: tabErp, mapi: tabMapi, statuslink: tabStatusLink, regeln: tabRules, mandanten: tabMandanten, versandwege: tabDelivery, kunden: tabCustomers, connect: tabConnect }[ST.tab] || tabService;
   body.innerHTML = fn();
   if (ST.tab === "benutzer" && !ST.users) loadUsers();
   if (ST.tab === "benutzer" && !ST.devices) loadDevices();
@@ -1030,6 +1031,23 @@ function tabStorage() {
      <p class="help">Das Portal ist kein Archiv im Sinne der Aufbewahrungspflichten – dafür den Exportordner oder das DMS verwenden.</p>`) +
     section("Export",
       field("Versendete Belege zusätzlich ablegen in", inText("storage.exportFolder", "\\\\server\\archiv\\rechnungen"), "Leer = aus. Der Dienst braucht Schreibrechte (läuft als SYSTEM → Computerkonto des Servers berechtigen)."));
+}
+
+/* ---------------- Tab: ERP Suite Connect ---------------- */
+
+function tabConnect() {
+  ST.s.connect ||= {};
+  return section("ERP Suite Connect (Webshop-Schnittstelle)",
+    `${inCheck("connect.enabled", "Schnittstelle ist aktiv – Menüpunkt „ERP Suite Connect“ anzeigen")}
+     <p class="help">Die Verarbeitung der Dateien macht ERP Suite Connect selbst. Belegpost zeigt die Ordner an und prüft jede Datei gegen die Schnittstellenbeschreibung.
+       Abgerufene Connect-Dateien (z. B. über einen Versandweg mit Abruf in den Eingangsordner) erscheinen unter ERP Suite Connect; im allgemeinen Eingang nur die Bestellungen (ORDER_…).</p>
+     <div class="grid2">
+       ${field("Eingang: Ordner, aus dem ERP Suite Connect liest", inText("connect.inFolder", "C:\\ERPSuiteConnect\\Import"), "Dateien vom Webshop: ORDER_, USERS_, PRODUCTS_ …")}
+       ${field("Eingang: verarbeitete Dateien (Archiv)", inText("connect.inArchive", "optional"), "Archivordner von ERP Suite Connect – leer = nicht anzeigen.")}
+       ${field("Ausgang: Ordner, in den das ERP schreibt", inText("connect.outFolder", "C:\\ERPSuiteConnect\\Export"), "Dateien für den Webshop: Artikelstamm_, Lagerbestand_, Orderstatus_, Adressen_, Kategorie_, Gutscheine_.")}
+       ${field("Ausgang: gesendete Dateien (Archiv)", inText("connect.outArchive", "optional"))}
+     </div>
+     <p class="help">Werden die Dateien über einen Versandweg aus dem Ausgangsordner gesendet, prüft Belegpost sie vorher („Vor dem Senden prüfen“) und hält fehlerhafte zurück.</p>`);
 }
 
 /* ---------------- Tab: Benutzer ---------------- */

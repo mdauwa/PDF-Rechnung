@@ -207,3 +207,9 @@ details.fold:not([open]) > summary { border-bottom: 0; }
 .pr-code tr.lvl-fehler td { background: color-mix(in srgb, var(--missing, #c0392b) 12%, transparent); }
 .pr-code tr.lvl-warnung td { background: color-mix(in srgb, var(--partial, #e6a700) 14%, transparent); }
 .pr-code tr.flash td { outline: 2px solid var(--accent); }
+
+/* ERP Suite Connect */
+.seg { display: inline-flex; border: 1px solid var(--border, #ccd); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 6px 12px; cursor: pointer; color: inherit; font: inherit; }
+.seg button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.cn-h { margin: 18px 0 8px; font-size: 15px; }

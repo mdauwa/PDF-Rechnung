@@ -1,0 +1,2382 @@
+{
+ "version": "5.76",
+ "types": [
+  {
+   "key": "ORDER",
+   "title": "Bestellung vom Webshop",
+   "direction": "eingang",
+   "names": [
+    "ORDER_"
+   ],
+   "sheet": "ORDER",
+   "root": {
+    "name": "ROOT",
+    "req": "zwingend",
+    "children": [
+     {
+      "name": "ORDER",
+      "req": "zwingend",
+      "children": [
+       {
+        "name": "Status",
+        "req": "erforderlich",
+        "type": "String",
+        "len": 1,
+        "desc": "I=Insert (bei order immer I)",
+        "sample": "I"
+       },
+       {
+        "name": "Bestellnummer",
+        "req": "zwingend",
+        "type": "String",
+        "len": 30,
+        "desc": "Webshop Bestellnummer",
+        "sample": "12717"
+       },
+       {
+        "name": "PaymentStatus",
+        "req": "erforderlich",
+        "type": "String",
+        "len": 30,
+        "desc": "Zahlungsstatus ( frei definierbar )",
+        "sample": "processing"
+       },
+       {
+        "name": "PaymentType",
+        "req": "erforderlich",
+        "type": "String",
+        "len": 30,
+        "desc": "Zahlungsart (Frei definierbar)",
+        "sample": "PayPal"
+       },
+       {
+        "name": "PaymentTotal",
+        "req": "erforderlich",
+        "type": "R2",
+        "len": 12,
+        "desc": "Rechnungsbetrag inkl. MwSt. bzw. bezahlte Summe für diesen Beleg // wurde ersetzt durch InvoiceTotal",
+        "sample": "108.70"
+       },
+       {
+        "name": "InvoiceTotal",
+        "req": "optional",
+        "type": "R2",
+        "len": 12,
+        "desc": "Rechnungsbetrag inklusive MwSt.",
+        "sample": "108.70"
+       },
+       {
+        "name": "OrderAmount",
+        "req": "optional",
+        "type": "R2",
+        "len": 12,
+        "desc": "Bestellsumme für diesen Beleg (Feld ist identisch mit InvoiceTotal und kann wahlweise verwendet werden)",
+        "sample": "50"
+       },
+       {
+        "name": "PaidAmount",
+        "req": "optional",
+        "type": "R2",
+        "len": 12,
+        "desc": "Bereits bezahlte Summe für diesen Beleg",
+        "sample": "50"
+       },
+       {
+        "name": "PaymentMethod",
+        "req": "optional",
+        "type": "String",
+        "len": 1,
+        "desc": "0-7 0=Standard, 7=Kreditkarte"
+       },
+       {
+        "name": "PaymentTranactionID",
+        "req": "optional",
+        "type": "String",
+        "len": 60,
+        "desc": "Transaktionsnummer"
+       },
+       {
+        "name": "Belegart",
+        "req": "optional",
+        "type": "String",
+        "len": 1,
+        "desc": "Abweichende Belegart (A=Auftrag, L=Lieferschein, I=Interner Beleg)"
+       },
+       {
+        "name": "Datum",
+        "req": "erforderlich",
+        "type": "String",
+        "len": 10,
+        "desc": "Datum der Bestellung / des Beleges",
+        "sample": "17.12.2022"
+       },
+       {
+        "name": "Währung",
+        "req": "optional",
+        "type": "String",
+        "len": 3,
+        "desc": "Währung als ISO Code"
+       },
+       {
+        "name": "Quelle",
+        "req": "optional",
+        "type": "String",
+        "len": 30,
+        "desc": "Quellsystem (z.B. Amazon, Magento, xt_commerce...) --> freier text"
+       },
+       {
+        "name": "Belegnummer",
+        "req": "optional",
+        "type": "Integer",
+        "len": 8,
+        "desc": "Fixe Belegnummer für das ERP-System"
+       },
+       {
+        "name": "Versandart",
+        "req": "optional",
+        "type": "String",
+        "len": 30,
+        "desc": "Versandart als Textinformation"
+       },
+       {
+        "name": "Sprache",
+        "req": "optional",
+        "type": "String",
+        "len": 10,
+        "desc": "Sprache z.B. EN, DE ..."
+       },
+       {
+        "name": "Steuerberechnung",
+        "req": "erforderlich",
+        "type": "String",
+        "len": 6,
+        "desc": "Brutto oder Netto"
+       },
+       {
+        "name": "IBAN",
+        "req": "optional",
+        "type": "String",
+        "len": 40,
+        "desc": "IBAN Belegbezogen"
+       },
+       {
+        "name": "BIC",
+        "req": "optional",
+        "type": "String",
+        "len": 20,
+        "desc": "BIC Belegbezogen"
+       },
+       {
+        "name": "FiburelevanteEinstellungenEinlesen",
+        "req": "optional",
+        "type": "String",
+        "len": 5,
+        "desc": "Kann True oder False sein, ist im Standard immer True (automatisch False wenn Steuerberechnungsart übergeben wird!)"
+       },
+       {
+        "name": "Erlöszuordnung",
+        "req": "optional",
+        "type": "String",
+        "len": 1,
+        "desc": "Kann 0-9 und A-Z sein (siehe ERP-Suite Belegerfassung/Bearbeiten/Optionen/Übergabe Finanzbuchhaltung"
+       },
+       {
+        "name": "Steuerberechnungsart",
+        "req": "optional",
+        "type": "String",
+        "len": 1,
+        "desc": "3,4 oder 5 (3=Auf Netto EUR, 4=Aus Brutto EUR, 5=keine MwSt/Vst)"
+       },
+       {
+        "name": "Zeitstempel",
+        "req": "optional",
+        "desc": "Übergabe eines Zeitstempels"
+       },
+       {
+        "name": "ADRESS",
+        "req": "zwingend",
+        "desc": "Adressblock",
+        "children": [
+         {
+          "name": "ShopID",
+          "req": "zwingend",
+          "type": "R0",
+          "len": 8,
+          "desc": "Webshop ID dieser Adresse, 999999 = Gastbestellung, 1-999998 = Kunden",
+          "sample": "999999"
+         },
+         {
+          "name": "AdressTyp",
+          "req": "optional",
+          "type": "String",
+          "len": 2,
+          "desc": "AdressTyp 1 = Privatkunde, 0 = Firma",
+          "sample": "1"
+         },
+         {
+          "name": "Adressnummer",
+          "req": "erforderlich",
+          "type": "R2",
+          "len": 8,
+          "desc": "Adressnummer des Kunden im ERP System"
+         },
+         {
+          "name": "Anrede",
+          "req": "optional",
+          "type": "String",
+          "len": 30,
+          "desc": "Anrede"
+         },
+         {
+          "name": "Vorname",
+          "req": "optional",
+          "type": "String",
+          "len": 30,
+          "desc": "Vorname",
+          "sample": "Gabriel"
+         },
+         {
+          "name": "Nachname",
+          "req": "optional",
+          "type": "String",
+          "len": 30,
+          "desc": "Nachname",
+          "sample": "Mustermann"
+         },
+         {
+          "name": "Firma",
+          "req": "optional",
+          "type": "String",
+          "len": 30,
+          "desc": "Firmenname"
+         },
+         {
+          "name": "Firma2",
+          "req": "optional",
+          "type": "String",
+          "len": 30,
+          "desc": "Firmenname2"
+         },
+         {
+          "name": "Firma3",
+          "req": "optional",
+          "type": "String",
+          "len": 30,
+          "desc": "Firmenname3"
+         },
+         {
+          "name": "Strasse",
+          "req": "erforderlich",
+          "type": "String",
+          "len": 46,
+          "desc": "Straße",
+          "sample": "Am Bahnhof"
+         },
+         {
+          "name": "Hausnummer",
+          "req": "optional",
+          "type": "String",
+          "len": 11,
+          "desc": "Hausnummer (Optional, kann auch in Straße angegeben werden, wenn so vom Kunden gewünscht)"
+         },
+         {
+          "name": "PLZ",
+          "req": "erforderlich",
+          "type": "String",
+          "len": 10,
+          "desc": "PLZ",
+          "sample": "32699"
+         },
+         {
+          "name": "Ort",
+          "req": "erforderlich",
+          "type": "String",
+          "len": 40,
+          "desc": "Ort",
+          "sample": "Köln"
+         },
+         {
+          "name": "Land",
+          "req": "erforderlich",
+          "type": "String",
+          "len": 3,
+          "desc": "Land (ISO-Code)",
+          "sample": "DE"
+         },
+         {
+          "name": "Telefon",
+          "req": "optional",
+          "type": "String",
+          "len": 20,
+          "desc": "Telefon",
+          "sample": "01762412345"
+         },
+         {
+          "name": "Preiskennung",
+          "req": "optional",
+          "type": "String",
+          "len": 1,
+          "desc": "Preisliste 1-6 (siehe Artikelstamm)",
+          "sample": "2"
+         },
+         {
+          "name": "Email",
+          "req": "zwingend",
+          "type": "String",
+          "len": 60,
+          "desc": "Emailadresse",
+          "sample": "info@mustermann.de"
+         },
+         {
+          "name": "UID",
+          "req": "optional",
+          "type": "String",
+          "len": 20,
+          "desc": "UST-ID des Kunden"
+         },
+         {
+          "name": "IBAN",
+          "req": "optional",
+          "type": "String",
+          "len": 40,
+          "desc": "IBAN Adressbezogen (aktualisiert den Adressstamm)"
+         },
+         {
+          "name": "BIC",
+          "req": "optional",
+          "type": "String",
+          "len": 20,
+          "desc": "BIC Adressbezogen (aktualisiert den Adressstamm)"
+         },
+         {
+          "name": "KeineStammdatenaktualisierung",
+          "req": "optional",
+          "desc": "Kann True oder False sein, ist im Standard immer False"
+         },
+         {
+          "name": "LIEFER",
+          "req": "optional",
+          "desc": "Lieferadresse (optional)",
+          "children": [
+           {
+            "name": "ShopID",
+            "req": "optional",
+            "type": "R0",
+            "len": 8,
+            "desc": "Eindeutige ID im Shopsystem 999999 = Gast Lieferadresse, 1-999998 = normaler Kunde",
+            "sample": "999999",
+            "note": "Lieferadressen ohne ShopID bekommen einen eigenen Nummernkreis"
+           },
+           {
+            "name": "Adressnummer",
+            "req": "erforderlich",
+            "type": "R0",
+            "len": 8,
+            "desc": "Lieferadressnummer vom ERP System"
+           },
+           {
+            "name": "Vorname",
+            "req": "optional",
+            "type": "String",
+            "len": 30,
+            "desc": "Vorname",
+            "sample": "Gabriel"
+           },
+           {
+            "name": "Nachname",
+            "req": "optional",
+            "type": "String",
+            "len": 30,
+            "desc": "Nachname",
+            "sample": "Mustermann"
+           },
+           {
+            "name": "Firma",
+            "req": "optional",
+            "type": "String",
+            "len": 30,
+            "desc": "Firmenname"
+           },
+           {
+            "name": "Firma2",
+            "req": "optional",
+            "type": "String",
+            "len": 30,
+            "desc": "Firmenname2"
+           },
+           {
+            "name": "Firma3",
+            "req": "optional",
+            "type": "String",
+            "len": 30,
+            "desc": "Firmenname3"
+           },
+           {
+            "name": "Strasse",
+            "req": "erforderlich",
+            "type": "String",
+            "len": 46,
+            "desc": "Straße",
+            "sample": "Am Bahnhof"
+           },
+           {
+            "name": "Hausnummer",
+            "req": "optional",
+            "type": "String",
+            "len": 11,
+            "desc": "Hausnummer (Optional, kann auch in Straße angegeben werden, wenn so vom Kunden gewünscht)"
+           },
+           {
+            "name": "PLZ",
+            "req": "erforderlich",
+            "type": "String",
+            "len": 10,
+            "desc": "PLZ",
+            "sample": "32699"
+           },
+           {
+            "name": "Ort",
+            "req": "erforderlich",
+            "type": "String",
+            "len": 40,
+            "desc": "Ort",
+            "sample": "Köln"
+           },
+           {
+            "name": "Land",
+            "req": "erforderlich",
+            "type": "String",
+            "len": 3,
+            "desc": "Land (ISO-Code)",
+            "sample": "DE"
+           },
+           {
+            "name": "Email",
+            "req": "optional",
+            "type": "String",
+            "len": 60,
+            "desc": "Emailadresse der Lieferadresse"
+           },
+           {
+            "name": "Telefon",
+            "req": "optional",
+            "type": "String",
+            "len": 20,
+            "desc": "Telefonnummer der Lieferadresse",
+            "sample": "01762412345"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "name": "ARTIKEL",
+        "req": "zwingend",
+        "desc": "Artikelblock // 1:n",
+        "children": [
+         {
+          "name": "Artikelnummer",
+          "req": "zwingend",
+          "type": "String",
+          "len": 25,
+          "desc": "Artikelnummer vom ERP-System",
+          "sample": "10233"
+         },
+         {
+          "name": "ProductID",
+          "req": "zwingend",
+          "type": "String",
+          "len": 25,
+          "desc": "Eindeutige Artikelnummer ID im Webshop",
+          "sample": "2241"
+         },
+         {
+          "name": "Bezeichnung",
+          "req": "optional",
+          "type": "String",
+          "len": 60,
+          "desc": "Bezeichnung",
+          "sample": "Walnussöl - 250 ml"
+         },
+         {
+          "name": "Menge",
+          "req": "zwingend",
+          "type": "R",
+          "len": 8,
+          "desc": "Menge",
+          "sample": "2"
+         },
+         {
+          "name": "Netto",
+          "req": "erforderlich",
+          "type": "R",
+          "len": 12,
+          "desc": "Nettobetrag (Idealerweise Gesamtsumme)",
+          "sample": "21.31"
+         },
+         {
+          "name": "Brutto",
+          "req": "erforderlich",
+          "type": "R",
+          "len": 12,
+          "desc": "Bruttobetrag (Idealerweise Gesamtsumme)",
+          "sample": "22.80"
+         },
+         {
+          "name": "Steuersatz",
+          "req": "optional",
+          "type": "R2",
+          "len": 5,
+          "desc": "Steuersatz in %",
+          "sample": "7"
+         },
+         {
+          "name": "Steuer",
+          "req": "optional",
+          "type": "R",
+          "len": 12,
+          "desc": "Steuer in Währung",
+          "sample": "1.49"
+         },
+         {
+          "name": "Rabatt",
+          "req": "optional",
+          "type": "R",
+          "len": 12,
+          "desc": "Rabatt in Währung"
+         },
+         {
+          "name": "RabattNetto",
+          "req": "optional",
+          "type": "R",
+          "len": 12,
+          "desc": "Rabatt ohne MwSt"
+         },
+         {
+          "name": "RabattBrutto",
+          "req": "optional",
+          "type": "R",
+          "len": 12,
+          "desc": "Rabatt incl. MwSt"
+         },
+         {
+          "name": "Seriennummer",
+          "req": "optional",
+          "type": "String",
+          "len": 25,
+          "desc": "Seriennummer"
+         },
+         {
+          "name": "TypeNumber",
+          "req": "optional",
+          "type": "String",
+          "len": 25,
+          "desc": "TypeNumber (Sonderfunktion)"
+         },
+         {
+          "name": "ContaminationDeclaration",
+          "req": "optional",
+          "type": "String",
+          "len": 25,
+          "desc": "Sonderfunktion"
+         },
+         {
+          "name": "Leihgerät",
+          "req": "optional",
+          "type": "String",
+          "len": 25,
+          "desc": "Leihgerät (Feldtyp nicht fixiert)"
+         },
+         {
+          "name": "Gutscheinnummer",
+          "req": "optional",
+          "type": "String",
+          "len": 60,
+          "desc": "Wenn es sich um einen gekauften Gutschein handelt ist dieses Feld obligatorisch"
+         },
+         {
+          "name": "Info",
+          "req": "optional",
+          "type": "L",
+          "len": 100,
+          "desc": "Infotexte werden je nach Einstellung als K oder Positionsnotiz eingelesen.",
+          "sample": "Zusatzinfo als K-Zeile"
+         },
+         {
+          "name": "Text",
+          "req": "optional",
+          "type": "L",
+          "len": 60,
+          "desc": "Zusatztextzeile unterhalb des Artikels",
+          "sample": "Meine Z-Zeile"
+         }
+        ],
+        "repeat": true
+       },
+       {
+        "name": "TEXT",
+        "req": "optional",
+        "type": "String",
+        "len": 100,
+        "desc": "Texte außerhalb vom Artikelblock werden als Kommentarzeile im Beleg eingefügt",
+        "sample": "Mein individueller Text"
+       },
+       {
+        "name": "GUTSCHEIN",
+        "req": "optional",
+        "desc": "Verarbeitung wie ein Standardartikel. Verbuchung im ERP-System als eingelöster Gutschein",
+        "children": [
+         {
+          "name": "Artikelnummer",
+          "req": "zwingend",
+          "type": "String",
+          "len": 25,
+          "sample": "Rabatt25"
+         },
+         {
+          "name": "Gutscheinnummer",
+          "req": "optional",
+          "desc": "Eindeutige Gutscheinnummer, wenn diese im ERP benötigt oder mit ERP-Gutscheinen abgeglichen werden soll"
+         },
+         {
+          "name": "ProductID",
+          "req": "zwingend",
+          "type": "String",
+          "len": 25
+         },
+         {
+          "name": "Bezeichnung",
+          "req": "optional",
+          "type": "String",
+          "len": 25,
+          "sample": "Kostenlose Lieferung"
+         },
+         {
+          "name": "Menge",
+          "req": "zwingend",
+          "type": "R",
+          "len": 9,
+          "sample": "1"
+         },
+         {
+          "name": "Netto",
+          "req": "zwingend",
+          "type": "R",
+          "len": 12,
+          "sample": "0.00"
+         },
+         {
+          "name": "Brutto",
+          "req": "zwingend",
+          "type": "R",
+          "len": 12,
+          "sample": "0.00"
+         },
+         {
+          "name": "Steuersatz",
+          "req": "optional",
+          "type": "R",
+          "len": 5,
+          "sample": "7"
+         },
+         {
+          "name": "Steuer",
+          "req": "optional",
+          "type": "R",
+          "len": 12,
+          "sample": "0.00"
+         }
+        ]
+       },
+       {
+        "name": "RABATTE",
+        "req": "optional",
+        "desc": "Rabattblock und Kupon - Verarbeitung wie ein Artikel",
+        "children": [
+         {
+          "name": "Artikelnummer",
+          "req": "zwingend",
+          "type": "String",
+          "len": 25,
+          "sample": "Rabatt25"
+         },
+         {
+          "name": "ProductID",
+          "req": "zwingend",
+          "type": "String",
+          "len": 25
+         },
+         {
+          "name": "Kupon",
+          "req": "optional",
+          "type": "String",
+          "len": 25,
+          "desc": "Wenn eine Kupon-Nummer angegeben wurde, dann sind alle anderen Felder nicht mehr relevant"
+         },
+         {
+          "name": "Bezeichnung",
+          "req": "optional",
+          "type": "String",
+          "len": 60,
+          "sample": "Kostenlose Lieferung"
+         },
+         {
+          "name": "Menge",
+          "req": "zwingend",
+          "type": "R",
+          "len": 9,
+          "sample": "1"
+         },
+         {
+          "name": "Netto",
+          "req": "zwingend",
+          "type": "R",
+          "len": 12,
+          "sample": "0.00"
+         },
+         {
+          "name": "Brutto",
+          "req": "zwingend",
+          "type": "R",
+          "len": 12,
+          "sample": "0.00"
+         },
+         {
+          "name": "Steuersatz",
+          "req": "optional",
+          "type": "R",
+          "len": 5,
+          "sample": "7"
+         },
+         {
+          "name": "Steuer",
+          "req": "optional",
+          "type": "R",
+          "len": 12,
+          "sample": "0.00"
+         }
+        ]
+       },
+       {
+        "name": "TREUEPUNKTE",
+        "req": "optional",
+        "desc": "Treuepunkte welche an das ERP-System gemeldet werden",
+        "children": [
+         {
+          "name": "Erhalten",
+          "req": "optional",
+          "type": "R",
+          "len": 12,
+          "desc": "Erhaltene Treuepunkte bei dieser Bestellung",
+          "sample": "123"
+         },
+         {
+          "name": "Eingelöst",
+          "req": "optional",
+          "type": "R",
+          "len": 12,
+          "desc": "Eingelöste Treuepunkte bei dieser Bestellung",
+          "sample": "10"
+         }
+        ]
+       },
+       {
+        "name": "VERSAND",
+        "req": "optional",
+        "desc": "Versandkosten",
+        "children": [
+         {
+          "name": "ProductID",
+          "req": "zwingend",
+          "type": "String",
+          "len": 25,
+          "desc": "Versandkosten (müssen im ERP-System angelegt sein!)",
+          "sample": "versandkostenfrei"
+         },
+         {
+          "name": "Bezeichnung",
+          "req": "optional",
+          "type": "String",
+          "len": 60,
+          "sample": "Kostenlose Lieferung"
+         },
+         {
+          "name": "Menge",
+          "req": "erforderlich",
+          "type": "R",
+          "len": 9,
+          "sample": "1"
+         },
+         {
+          "name": "Netto",
+          "req": "erforderlich",
+          "type": "R",
+          "len": 12,
+          "sample": "0.00"
+         },
+         {
+          "name": "Brutto",
+          "req": "erforderlich",
+          "type": "R",
+          "len": 12,
+          "sample": "0.00"
+         },
+         {
+          "name": "Steuersatz",
+          "req": "optional",
+          "type": "R",
+          "len": 5,
+          "sample": "7"
+         },
+         {
+          "name": "Steuer",
+          "req": "optional",
+          "type": "R",
+          "len": 12,
+          "sample": "0.00"
+         }
+        ]
+       },
+       {
+        "name": "NOTIZ",
+        "req": "optional",
+        "children": [
+         {
+          "name": "Text",
+          "req": "optional",
+          "type": "String",
+          "len": 255,
+          "desc": "Optionale Notiz für den Webshop-Auftrag"
+         },
+         {
+          "name": "Zeitstempel",
+          "req": "optional",
+          "type": "String",
+          "len": 18,
+          "desc": "Zeitstempel"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "key": "USERS",
+   "title": "Neue Adressen vom Webshop",
+   "direction": "eingang",
+   "names": [
+    "USERS"
+   ],
+   "sheet": "USERS",
+   "root": {
+    "name": "ROOT",
+    "req": "zwingend",
+    "children": [
+     {
+      "name": "ADRESS",
+      "req": "zwingend",
+      "desc": "Adressblock",
+      "children": [
+       {
+        "name": "ShopID",
+        "req": "zwingend",
+        "type": "R0",
+        "len": 8,
+        "desc": "Webshop ID dieser Adresse, 999999 = Gastbestellung, 1-999998 = Kunden",
+        "sample": "999999"
+       },
+       {
+        "name": "AdressTyp",
+        "req": "optional",
+        "type": "String",
+        "len": 2,
+        "desc": "AdressTyp 1 = Privatkunde, 0 = Firma",
+        "sample": "1"
+       },
+       {
+        "name": "Adressnummer",
+        "req": "erforderlich",
+        "type": "R2",
+        "len": 8,
+        "desc": "Adressnummer des Kunden im ERP System"
+       },
+       {
+        "name": "Anrede",
+        "req": "optional",
+        "type": "String",
+        "len": 30,
+        "desc": "Anrede"
+       },
+       {
+        "name": "Vorname",
+        "req": "optional",
+        "type": "String",
+        "len": 30,
+        "desc": "Vorname",
+        "sample": "Gabriel"
+       },
+       {
+        "name": "Nachname",
+        "req": "optional",
+        "type": "String",
+        "len": 30,
+        "desc": "Nachname",
+        "sample": "Mustermann"
+       },
+       {
+        "name": "Firma",
+        "req": "optional",
+        "type": "String",
+        "len": 30,
+        "desc": "Firmenname"
+       },
+       {
+        "name": "Firma2",
+        "req": "optional",
+        "type": "String",
+        "len": 30,
+        "desc": "Firmenname2"
+       },
+       {
+        "name": "Firma3",
+        "req": "optional",
+        "type": "String",
+        "len": 30,
+        "desc": "Firmenname3"
+       },
+       {
+        "name": "Strasse",
+        "req": "erforderlich",
+        "type": "String",
+        "len": 46,
+        "desc": "Straße",
+        "sample": "Am Bahnhof"
+       },
+       {
+        "name": "Hausnummer",
+        "req": "optional",
+        "type": "String",
+        "len": 11,
+        "desc": "Hausnummer (Optional, kann auch in Straße angegeben werden, wenn so vom Kunden gewünscht)"
+       },
+       {
+        "name": "PLZ",
+        "req": "erforderlich",
+        "type": "String",
+        "len": 10,
+        "desc": "PLZ",
+        "sample": "32699"
+       },
+       {
+        "name": "Ort",
+        "req": "erforderlich",
+        "type": "String",
+        "len": 40,
+        "desc": "Ort",
+        "sample": "Köln"
+       },
+       {
+        "name": "Land",
+        "req": "erforderlich",
+        "type": "String",
+        "len": 3,
+        "desc": "Land (ISO-Code)",
+        "sample": "DE"
+       },
+       {
+        "name": "Telefon",
+        "req": "optional",
+        "type": "String",
+        "len": 20,
+        "desc": "Telefon",
+        "sample": "01762412345"
+       },
+       {
+        "name": "Preiskennung",
+        "req": "optional",
+        "type": "String",
+        "len": 1,
+        "desc": "Preisliste 1-6 (siehe Artikelstamm VK1-VK6)",
+        "sample": "2"
+       },
+       {
+        "name": "Email",
+        "req": "zwingend",
+        "type": "String",
+        "len": 60,
+        "desc": "Emailadresse",
+        "sample": "info@mustermann.de"
+       },
+       {
+        "name": "UID",
+        "req": "optional",
+        "type": "String",
+        "len": 20,
+        "desc": "UST-ID des Kunden"
+       },
+       {
+        "name": "LIEFER",
+        "req": "optional",
+        "desc": "Lieferadresse (optional) 1:2",
+        "children": [
+         {
+          "name": "ShopID",
+          "req": "zwingend",
+          "type": "R0",
+          "len": 8,
+          "desc": "Eindeutige ID im Shopsystem 999999 = Gast Lieferadresse, 1-999998 = normaler Kunde",
+          "sample": "999999"
+         },
+         {
+          "name": "Adressnummer",
+          "req": "erforderlich",
+          "type": "R0",
+          "len": 8,
+          "desc": "Lieferadressnummer vom ERP System"
+         },
+         {
+          "name": "Vorname",
+          "req": "optional",
+          "type": "String",
+          "len": 30,
+          "desc": "Vorname",
+          "sample": "Gabriel"
+         },
+         {
+          "name": "Nachname",
+          "req": "optional",
+          "type": "String",
+          "len": 30,
+          "desc": "Nachname",
+          "sample": "Mustermann"
+         },
+         {
+          "name": "Firma",
+          "req": "optional",
+          "type": "String",
+          "len": 30,
+          "desc": "Firmenname"
+         },
+         {
+          "name": "Firma2",
+          "req": "optional",
+          "type": "String",
+          "len": 30,
+          "desc": "Firmenname2"
+         },
+         {
+          "name": "Firma3",
+          "req": "optional",
+          "type": "String",
+          "len": 30,
+          "desc": "Firmenname3"
+         },
+         {
+          "name": "Strasse",
+          "req": "erforderlich",
+          "type": "String",
+          "len": 46,
+          "desc": "Straße",
+          "sample": "Am Bahnhof"
+         },
+         {
+          "name": "Hausnummer",
+          "req": "optional",
+          "type": "String",
+          "len": 11,
+          "desc": "Hausnummer (Optional, kann auch in Straße angegeben werden, wenn so vom Kunden gewünscht)"
+         },
+         {
+          "name": "PLZ",
+          "req": "erforderlich",
+          "type": "String",
+          "len": 10,
+          "desc": "PLZ",
+          "sample": "32699"
+         },
+         {
+          "name": "Ort",
+          "req": "erforderlich",
+          "type": "String",
+          "len": 40,
+          "desc": "Ort",
+          "sample": "Köln"
+         },
+         {
+          "name": "Land",
+          "req": "erforderlich",
+          "type": "String",
+          "len": 3,
+          "desc": "Land (ISO-Code)",
+          "sample": "DE"
+         }
+        ]
+       }
+      ],
+      "repeat": true
+     }
+    ]
+   }
+  },
+  {
+   "key": "PRODUCTS",
+   "title": "Rückmeldung der Webshop-ID zu Artikeln",
+   "direction": "eingang",
+   "names": [
+    "PRODUCTS"
+   ],
+   "sheet": "PRODUCTS",
+   "root": {
+    "name": "ROOT",
+    "req": "zwingend",
+    "children": [
+     {
+      "name": "ARTIKEL",
+      "req": "zwingend",
+      "children": [
+       {
+        "name": "Status",
+        "req": "zwingend",
+        "type": "String",
+        "len": 1,
+        "desc": "U=Update, I=Insert",
+        "sample": "U"
+       },
+       {
+        "name": "Artikelnummer",
+        "req": "zwingend",
+        "type": "String",
+        "len": 25,
+        "desc": "Artikelnummer vom ERP-System",
+        "sample": "kaeferbohnen"
+       },
+       {
+        "name": "ProductID",
+        "req": "zwingend",
+        "type": "String",
+        "len": 25,
+        "desc": "Eindeutige ID im Webshop",
+        "sample": "2568"
+       },
+       {
+        "name": "Artikeltext",
+        "req": "optional",
+        "type": "String",
+        "len": 60,
+        "desc": "Artikelbezeichnung"
+       },
+       {
+        "name": "Steuersatz",
+        "req": "erforderlich",
+        "type": "Integer",
+        "len": 2,
+        "desc": "Steuersatz"
+       },
+       {
+        "name": "WGR",
+        "req": "optional",
+        "type": "String",
+        "len": 5,
+        "desc": "Warengruppe"
+       },
+       {
+        "name": "VK1",
+        "req": "optional",
+        "type": "Double",
+        "len": 9,
+        "desc": "VK-Preis 1 excl. MwSt"
+       },
+       {
+        "name": "VK2",
+        "req": "optional",
+        "type": "Double",
+        "len": 9,
+        "desc": "VK-Preis 2 excl. MwSt"
+       },
+       {
+        "name": "Kontenzurodnung",
+        "req": "optional",
+        "type": "Integer",
+        "len": 5,
+        "desc": "Kontenzuordnungsmodell"
+       },
+       {
+        "name": "Lager",
+        "req": "erforderlich",
+        "type": "Integer",
+        "len": 6,
+        "desc": "Lagerort für Lagerzu/Lagerabgang"
+       }
+      ],
+      "repeat": true
+     }
+    ]
+   }
+  },
+  {
+   "key": "ORDERSTATUS",
+   "title": "Bestellstatus an den Webshop",
+   "direction": "ausgang",
+   "names": [
+    "ORDERSTATUS"
+   ],
+   "sheet": "ORDERSTATUS",
+   "root": {
+    "name": "ROOT",
+    "req": "zwingend",
+    "children": [
+     {
+      "name": "ORDER",
+      "req": "zwingend",
+      "children": [
+       {
+        "name": "Status",
+        "req": "optional",
+        "type": "String",
+        "len": 1,
+        "desc": "U=Update",
+        "sample": "U"
+       },
+       {
+        "name": "Bestellnummer",
+        "req": "optional",
+        "type": "String",
+        "len": 25,
+        "desc": "Bestellnummer die bei der Order an das ERP System übermittelt wurde",
+        "sample": "12717"
+       },
+       {
+        "name": "Belegnummer",
+        "req": "optional",
+        "type": "R0",
+        "len": 8,
+        "desc": "Zugewiesene Belegnummer im ERP-System",
+        "sample": "213531"
+       },
+       {
+        "name": "Belegart",
+        "req": "optional",
+        "type": "String",
+        "len": 1,
+        "desc": "Belegart (A=Auftrag, L=Lieferschein, R=Rechnung)",
+        "sample": "A"
+       },
+       {
+        "name": "PaymentStatus",
+        "req": "optional",
+        "type": "String",
+        "len": 30,
+        "desc": "Zahlungsstatus (frei definierbar)",
+        "sample": "processing"
+       },
+       {
+        "name": "Lieferstatus",
+        "req": "optional",
+        "type": "String",
+        "len": 30,
+        "desc": "Lieferstatus (frei definierbar)",
+        "sample": "open"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "key": "ARTIKELSTAMM",
+   "title": "Artikelstamm an den Webshop",
+   "direction": "ausgang",
+   "names": [
+    "ARTIKELSTAMM",
+    "ARTIKEL_"
+   ],
+   "sheet": "ARTIKELSTAMM",
+   "root": {
+    "name": "ROOT",
+    "req": "zwingend",
+    "children": [
+     {
+      "name": "ARTIKEL",
+      "req": "zwingend",
+      "desc": "Artikelblock 1:n",
+      "children": [
+       {
+        "name": "Status",
+        "req": "zwingend",
+        "desc": "I = neuer Artikel, U=Update, D=Delete",
+        "sample": "U"
+       },
+       {
+        "name": "Artikelnummer",
+        "req": "zwingend",
+        "type": "String",
+        "len": 60,
+        "desc": "Artielnummer",
+        "sample": "10457"
+       },
+       {
+        "name": "Variantenvater",
+        "req": "optional",
+        "type": "String",
+        "len": 25,
+        "desc": "Variantenvater"
+       },
+       {
+        "name": "ProductID",
+        "req": "optional",
+        "type": "String",
+        "len": 25,
+        "desc": "Eindeutige ID im Webshop",
+        "sample": "12893"
+       },
+       {
+        "name": "Bezeichnung",
+        "req": "optional",
+        "type": "String",
+        "len": 60,
+        "desc": "Bezeichnung",
+        "sample": "Kirsch Fruchtgummi"
+       },
+       {
+        "name": "BezeichnungEnglisch",
+        "req": "optional",
+        "type": "String",
+        "len": 60,
+        "desc": "Bezeichnung englisch"
+       },
+       {
+        "name": "Standardpreisliste",
+        "req": "optional",
+        "type": "String",
+        "len": 1,
+        "desc": "Standardpreisliste (VK1-VK6)",
+        "sample": "1"
+       },
+       {
+        "name": "WGR",
+        "req": "optional",
+        "type": "String",
+        "len": 5,
+        "desc": "Warengruppe",
+        "sample": "325"
+       },
+       {
+        "name": "VK1",
+        "req": "optional",
+        "type": "R",
+        "len": 12,
+        "desc": "Verkaufspreis 1 netto",
+        "sample": "4"
+       },
+       {
+        "name": "VK1B",
+        "req": "optional",
+        "type": "R",
+        "len": 12,
+        "desc": "Verkaufspreis 1 brutto",
+        "sample": "4,4"
+       },
+       {
+        "name": "VK2",
+        "req": "optional",
+        "type": "R",
+        "len": 12,
+        "desc": "Verkaufspreis 2 netto",
+        "sample": "4"
+       },
+       {
+        "name": "VK2B",
+        "req": "optional",
+        "type": "R",
+        "len": 12,
+        "desc": "Verkaufspreis 2 brutto",
+        "sample": "4,4"
+       },
+       {
+        "name": "VK3",
+        "req": "optional",
+        "type": "R",
+        "len": 12,
+        "desc": "Verkaufspreis…",
+        "sample": "4"
+       },
+       {
+        "name": "VK3B",
+        "req": "optional",
+        "type": "R",
+        "len": 12,
+        "sample": "4,4"
+       },
+       {
+        "name": "VK4",
+        "req": "optional",
+        "type": "R",
+        "len": 12
+       },
+       {
+        "name": "VK4B",
+        "req": "optional",
+        "type": "R",
+        "len": 12
+       },
+       {
+        "name": "VK5",
+        "req": "optional",
+        "type": "R",
+        "len": 12
+       },
+       {
+        "name": "VK5B",
+        "req": "optional",
+        "type": "R",
+        "len": 12
+       },
+       {
+        "name": "VK6",
+        "req": "optional",
+        "type": "R",
+        "len": 12
+       },
+       {
+        "name": "VK6B",
+        "req": "optional",
+        "type": "R",
+        "len": 12
+       },
+       {
+        "name": "Staffel1",
+        "req": "optional",
+        "desc": "Rabattstaffel 1 für diesen Artikel",
+        "children": [
+         {
+          "name": "VK1",
+          "req": "optional",
+          "desc": "Staffelrabatt für VK1",
+          "children": [
+           {
+            "name": "AbMenge",
+            "req": "optional",
+            "type": "R",
+            "len": 9,
+            "desc": "Menge ab welcher der Rabatt gilt"
+           },
+           {
+            "name": "Rabatt",
+            "req": "optional",
+            "type": "R",
+            "len": 5,
+            "desc": "Rabatt in %"
+           }
+          ]
+         },
+         {
+          "name": "VK2",
+          "req": "optional",
+          "desc": "Staffelrabatt für VK2",
+          "children": [
+           {
+            "name": "AbMenge",
+            "req": "optional",
+            "type": "R",
+            "len": 9
+           },
+           {
+            "name": "Rabatt",
+            "req": "optional",
+            "type": "R",
+            "len": 5
+           }
+          ]
+         },
+         {
+          "name": "VK3",
+          "req": "optional",
+          "desc": "Staffelrabatt für VK3",
+          "children": [
+           {
+            "name": "AbMenge",
+            "req": "optional",
+            "type": "R",
+            "len": 9
+           },
+           {
+            "name": "Rabatt",
+            "req": "optional",
+            "type": "R",
+            "len": 5
+           }
+          ]
+         },
+         {
+          "name": "VK4",
+          "req": "optional",
+          "children": [
+           {
+            "name": "AbMenge",
+            "req": "optional",
+            "type": "R",
+            "len": 9
+           },
+           {
+            "name": "Rabatt",
+            "req": "optional",
+            "type": "R",
+            "len": 5
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "name": "Staffel2",
+        "req": "optional",
+        "desc": "Rabattstaffel 2 für diesen Artikel",
+        "children": [
+         {
+          "name": "VK1",
+          "req": "optional",
+          "children": [
+           {
+            "name": "AbMenge",
+            "req": "optional",
+            "type": "R",
+            "len": 9
+           },
+           {
+            "name": "Rabatt",
+            "req": "optional",
+            "type": "R",
+            "len": 5
+           }
+          ]
+         },
+         {
+          "name": "VK2",
+          "req": "optional",
+          "children": [
+           {
+            "name": "AbMenge",
+            "req": "optional",
+            "type": "R",
+            "len": 9
+           },
+           {
+            "name": "Rabatt",
+            "req": "optional",
+            "type": "R",
+            "len": 5
+           }
+          ]
+         },
+         {
+          "name": "VK3",
+          "req": "optional",
+          "children": [
+           {
+            "name": "AbMenge",
+            "req": "optional",
+            "type": "R",
+            "len": 9
+           },
+           {
+            "name": "Rabatt",
+            "req": "optional",
+            "type": "R",
+            "len": 5
+           }
+          ]
+         },
+         {
+          "name": "VK4",
+          "req": "optional",
+          "children": [
+           {
+            "name": "AbMenge",
+            "req": "optional",
+            "type": "R",
+            "len": 9
+           },
+           {
+            "name": "Rabatt",
+            "req": "optional",
+            "type": "R",
+            "len": 5
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "name": "Mengeneinheit",
+        "req": "optional",
+        "type": "String",
+        "len": 60
+       },
+       {
+        "name": "Verpackungsmenge",
+        "req": "optional",
+        "type": "R",
+        "len": 8,
+        "desc": "Menge pro Verpackungseinheit",
+        "sample": "190"
+       },
+       {
+        "name": "Verpackungseinheit",
+        "req": "optional",
+        "type": "String",
+        "len": 5,
+        "desc": "Verpackungseinheit",
+        "sample": "ml"
+       },
+       {
+        "name": "Gewicht",
+        "req": "optional",
+        "type": "R",
+        "len": 10,
+        "desc": "Gewicht pro Mengeneinheit",
+        "sample": "0,345"
+       },
+       {
+        "name": "Shopfaehig",
+        "req": "zwingend",
+        "type": "String",
+        "len": 1,
+        "desc": "Shopfähig (J/N) N=deaktivieren",
+        "sample": "J"
+       },
+       {
+        "name": "InShopAnzeigen",
+        "req": "optional",
+        "type": "String",
+        "len": 1,
+        "desc": "Artikel wird im Shop angezeigt",
+        "sample": "J"
+       },
+       {
+        "name": "InShopKaufbar",
+        "req": "optional",
+        "type": "String",
+        "len": 1,
+        "desc": "Artikel kann im Webshop gekauft werden",
+        "sample": "J"
+       },
+       {
+        "name": "Gruppenrabatt",
+        "req": "optional",
+        "type": "String",
+        "len": 1,
+        "desc": "Gruppenrabatt erlaubt",
+        "sample": "N"
+       },
+       {
+        "name": "Steuersatz",
+        "req": "optional",
+        "type": "R",
+        "len": 5,
+        "desc": "Standardsteuersatz im Land des Händlers",
+        "sample": "10"
+       },
+       {
+        "name": "Kontenzuordung",
+        "req": "zwingend",
+        "type": "R",
+        "len": 5,
+        "desc": "Kontenzuordnung !!! OSS - Steuerermittlung!!!",
+        "sample": "10000"
+       },
+       {
+        "name": "Hersteller",
+        "req": "optional",
+        "type": "String",
+        "len": 30,
+        "desc": "Hersteller",
+        "sample": "SCHNEEBERGER"
+       },
+       {
+        "name": "KategorieID",
+        "req": "optional",
+        "type": "R",
+        "len": 8,
+        "desc": "Kategorie ID, mehrfachzuweisungen werden mit \",\" getrennt. Beispiel: 11,2,33,13"
+       },
+       {
+        "name": "Kategorie1",
+        "req": "optional",
+        "type": "String",
+        "len": 8,
+        "desc": "Webshop Kategorie 1 (wenn nicht der BüroWARE-Standard verwendet wird)",
+        "sample": "DEL"
+       },
+       {
+        "name": "Kategorie2",
+        "req": "optional",
+        "type": "String",
+        "len": 8,
+        "desc": "Webshop Kategorie 2"
+       },
+       {
+        "name": "Kategorie3",
+        "req": "optional",
+        "type": "String",
+        "len": 8,
+        "desc": "Webshop Kategorie 3"
+       },
+       {
+        "name": "Kategorie4",
+        "req": "optional",
+        "type": "String",
+        "len": 8,
+        "desc": "Webshop Kategorie 4"
+       },
+       {
+        "name": "Kategorie1lang",
+        "req": "optional",
+        "type": "String",
+        "len": 30,
+        "desc": "Kategorie 1 lange Beschreibung",
+        "sample": "DELIKATESSEN"
+       },
+       {
+        "name": "Kategorie2lang",
+        "req": "optional",
+        "type": "String",
+        "len": 30
+       },
+       {
+        "name": "Kategorie3lang",
+        "req": "optional",
+        "type": "String",
+        "len": 30
+       },
+       {
+        "name": "Kategorie4lang",
+        "req": "optional",
+        "type": "String",
+        "len": 30
+       },
+       {
+        "name": "Lagerbestand",
+        "req": "optional",
+        "type": "R",
+        "len": 12,
+        "desc": "Aktueller Lagerbestand",
+        "sample": "17"
+       },
+       {
+        "name": "Bild1",
+        "req": "optional",
+        "type": "String",
+        "len": 80,
+        "desc": "Bildname im ERP System"
+       },
+       {
+        "name": "Rabattfähig",
+        "req": "optional",
+        "type": "String",
+        "len": 1,
+        "desc": "Artikel ist Rabattfähig (J/N)",
+        "sample": "N"
+       },
+       {
+        "name": "LangtextDeutsch",
+        "req": "optional",
+        "type": "BLOB",
+        "desc": "Artikelbeschreibung lang",
+        "children": []
+       },
+       {
+        "name": "Steuerberechnung",
+        "req": "optional",
+        "desc": "Optionaler Block für OSS Steuerermittlung",
+        "children": [
+         {
+          "name": "Land",
+          "req": "optional",
+          "desc": "Steuersatz pro Land für diesen Artikel in%",
+          "sample": "AT",
+          "attrs": [
+           "Steuersatz"
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "key": "LAGERBESTAND",
+   "title": "Lagerbestand an den Webshop",
+   "direction": "ausgang",
+   "names": [
+    "LAGERBESTAND"
+   ],
+   "sheet": "LAGERBESTAND",
+   "root": {
+    "name": "ROOT",
+    "req": "zwingend",
+    "children": [
+     {
+      "name": "ARTIKEL",
+      "req": "zwingend",
+      "desc": "Artikellagerbestand 1:n",
+      "children": [
+       {
+        "name": "Status",
+        "req": "zwingend",
+        "type": "String",
+        "len": 1,
+        "desc": "U=Update",
+        "sample": "U"
+       },
+       {
+        "name": "Artikelnummer",
+        "req": "zwingend",
+        "type": "String",
+        "len": 25,
+        "desc": "Artikelnummer im ERP System",
+        "sample": "10200"
+       },
+       {
+        "name": "ProductID",
+        "req": "optional",
+        "type": "String",
+        "len": 25,
+        "desc": "Eindeutige ID dieses Artikels im Webshop",
+        "sample": "2161"
+       },
+       {
+        "name": "Lagerbestand",
+        "req": "zwingend",
+        "type": "R0",
+        "len": 12,
+        "desc": "Aktueller Lagerbestand im ERP System",
+        "sample": "436"
+       }
+      ],
+      "repeat": true
+     }
+    ]
+   }
+  },
+  {
+   "key": "ADRESSEN",
+   "title": "Adressen an den Webshop",
+   "direction": "ausgang",
+   "names": [
+    "ADRESSEN"
+   ],
+   "sheet": "ADRESSEN",
+   "root": {
+    "name": "ROOT",
+    "req": "zwingend",
+    "children": [
+     {
+      "name": "ADRESS",
+      "req": "zwingend",
+      "desc": "Adressen 1:n",
+      "children": [
+       {
+        "name": "Status",
+        "req": "optional",
+        "sample": "I"
+       },
+       {
+        "name": "AdressTyp",
+        "req": "optional",
+        "type": "String",
+        "len": 1,
+        "desc": "Adresstyp: 1=Privatkunde, 0 = Firmenkunde",
+        "sample": "1"
+       },
+       {
+        "name": "Adressnummer",
+        "req": "zwingend",
+        "type": "R0",
+        "len": 8,
+        "desc": "Adressnummer im ERP System",
+        "sample": "206533"
+       },
+       {
+        "name": "ShopID",
+        "req": "optional",
+        "type": "String",
+        "len": 25,
+        "desc": "Eindeutige Shop-ID im Webshop"
+       },
+       {
+        "name": "Kundengruppe",
+        "req": "optional",
+        "type": "String",
+        "len": 2,
+        "desc": "Kundengruppe"
+       },
+       {
+        "name": "Anrede",
+        "req": "optional",
+        "type": "String",
+        "len": 30,
+        "desc": "Anrede"
+       },
+       {
+        "name": "Name",
+        "req": "optional",
+        "type": "String",
+        "len": 30,
+        "desc": "Name 1 oder Firmenname 1"
+       },
+       {
+        "name": "Name2",
+        "req": "optional",
+        "type": "String",
+        "len": 30,
+        "desc": "Name 2"
+       },
+       {
+        "name": "Name3",
+        "req": "optional",
+        "type": "String",
+        "len": 30,
+        "desc": "Name 3"
+       },
+       {
+        "name": "Vorname",
+        "req": "optional",
+        "type": "String",
+        "len": 30,
+        "desc": "Vorname",
+        "sample": "Max"
+       },
+       {
+        "name": "Nachname",
+        "req": "optional",
+        "type": "String",
+        "len": 30,
+        "desc": "Nachname",
+        "sample": "Mustermann"
+       },
+       {
+        "name": "Strasse",
+        "req": "optional",
+        "type": "String",
+        "len": 46,
+        "desc": "Straße (ev. Mit Hausnummer)",
+        "sample": "Mustergasse 5"
+       },
+       {
+        "name": "Hausnummer",
+        "req": "optional",
+        "type": "String",
+        "len": 11,
+        "desc": "Hausnummer"
+       },
+       {
+        "name": "PLZ",
+        "req": "optional",
+        "type": "String",
+        "len": 10,
+        "desc": "PLZ",
+        "sample": "2391"
+       },
+       {
+        "name": "Ort",
+        "req": "optional",
+        "type": "String",
+        "len": 40,
+        "desc": "Ort",
+        "sample": "Wiener Neudorf"
+       },
+       {
+        "name": "Land",
+        "req": "optional",
+        "type": "String",
+        "len": 3,
+        "desc": "Land (ISO-Code)",
+        "sample": "AT"
+       },
+       {
+        "name": "USTID",
+        "req": "optional",
+        "type": "String",
+        "len": 20,
+        "desc": "Umsatzsteuer ID"
+       },
+       {
+        "name": "Email",
+        "req": "zwingend",
+        "type": "String",
+        "len": 60,
+        "desc": "Emailadresse",
+        "sample": "quastlschuhe@gmustermann.at"
+       },
+       {
+        "name": "Telefon",
+        "req": "optional",
+        "type": "String",
+        "len": 20,
+        "desc": "Telefonnummer",
+        "sample": "+43 (7777) 7563"
+       },
+       {
+        "name": "Preiskennung",
+        "req": "optional",
+        "type": "String",
+        "len": 1,
+        "desc": "Preisliste des Kunden (1=VK1, 2=VK2… bis VK6)",
+        "sample": "2"
+       },
+       {
+        "name": "Haendler",
+        "req": "optional",
+        "type": "String",
+        "len": 1,
+        "desc": "Adresse ist ein Händler",
+        "sample": "N"
+       },
+       {
+        "name": "Haendlersuche",
+        "req": "optional",
+        "type": "String",
+        "len": 1,
+        "desc": "IN Händlersuche anzeigen",
+        "sample": "N"
+       },
+       {
+        "name": "Rechnungskauf",
+        "req": "optional",
+        "type": "String",
+        "len": 1,
+        "desc": "Kauf auf Rechnung erlaubt (J/N)",
+        "sample": "J"
+       },
+       {
+        "name": "Rabattgruppe",
+        "req": "optional",
+        "type": "String",
+        "len": 2,
+        "desc": "Kundenrabattgruppe",
+        "sample": "2"
+       },
+       {
+        "name": "Adressrabatt",
+        "req": "optional",
+        "type": "R2",
+        "len": 5,
+        "desc": "Adressrabatt in %",
+        "sample": "5,00"
+       },
+       {
+        "name": "Adressgruppe",
+        "req": "optional",
+        "type": "String",
+        "len": 2,
+        "desc": "Adressgruppe",
+        "sample": "SK"
+       },
+       {
+        "name": "FirmennameZeilenanzahl",
+        "req": "optional",
+        "type": "R0",
+        "len": 1,
+        "desc": "Anzahl der Zeilen wenn eine Adresse vom Webshop in mehre Zeilen aufgeteilt wurde"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "key": "KATEGORIE",
+   "title": "Kategorien an den Webshop",
+   "direction": "ausgang",
+   "names": [
+    "KATEGORIE"
+   ],
+   "sheet": "KATEGORIE",
+   "root": {
+    "name": "ROOT",
+    "req": "zwingend",
+    "children": [
+     {
+      "name": "Kategorie",
+      "req": "zwingend",
+      "children": [
+       {
+        "name": "Status",
+        "req": "erforderlich",
+        "type": "String",
+        "len": 1,
+        "desc": "U=Update",
+        "sample": "I"
+       },
+       {
+        "name": "ID",
+        "req": "zwingend",
+        "type": "Integer",
+        "len": 8,
+        "desc": "Enthält die ID der Kategorie",
+        "sample": "1"
+       },
+       {
+        "name": "Bezeichnung",
+        "req": "zwingend",
+        "type": "String",
+        "len": 60,
+        "desc": "Bezeichnung der Kategorie",
+        "sample": "Fahrräder"
+       },
+       {
+        "name": "ElternID",
+        "req": "erforderlich",
+        "type": "Integer",
+        "len": 8,
+        "desc": "Enthält den Vorgänger (Parent) der aktuellen Kategorie"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "key": "GUTSCHEINE",
+   "title": "Gutscheine an den Webshop",
+   "direction": "ausgang",
+   "names": [
+    "GUTSCHEIN"
+   ],
+   "sheet": "GUTSCHEINE",
+   "root": {
+    "name": "ROOT",
+    "req": "zwingend",
+    "children": [
+     {
+      "name": "GUTSCHEIN",
+      "req": "zwingend",
+      "children": [
+       {
+        "name": "SNR",
+        "req": "optional",
+        "type": "Integer",
+        "len": 10,
+        "desc": "Interne Satznummer",
+        "sample": "12717"
+       },
+       {
+        "name": "Betrag_Nennwert",
+        "req": "optional",
+        "type": "R2",
+        "len": 9,
+        "desc": "Gutscheinwert",
+        "sample": "406,6"
+       },
+       {
+        "name": "Betrag_eingelöst",
+        "req": "optional",
+        "type": "R2",
+        "len": 9,
+        "desc": "Eingelöste Summe",
+        "sample": "358,03"
+       },
+       {
+        "name": "Erledigt",
+        "req": "optional",
+        "type": "ANJ",
+        "len": 1,
+        "desc": "Gutschein Erledigt (Leer oder N = Nein, J = Gutschein nicht mehr gültig)"
+       },
+       {
+        "name": "Gutscheincode",
+        "req": "optional",
+        "type": "String",
+        "len": 60,
+        "desc": "Gutscheincode",
+        "sample": "AAA-BBB-CCC-DDD"
+       },
+       {
+        "name": "Restwert",
+        "req": "optional",
+        "type": "R2",
+        "len": 9,
+        "desc": "Restwert des Gutscheines",
+        "sample": "48,57"
+       }
+      ],
+      "repeat": true
+     }
+    ]
+   }
+  }
+ ],
+ "aliases": {
+  "blocks": {
+   "product": "ARTIKEL",
+   "listlineitem": "ARTIKEL",
+   "address": "ADRESS",
+   "orderingparty": "ADRESS",
+   "invoicerecipient": "ADRESS",
+   "deliveryaddress": "LIEFER",
+   "remark": "NOTIZ",
+   "ordercomments": "NOTIZ"
+  },
+  "ORDER": {
+   "orderstatus": "",
+   "rechnungsbetrag": "InvoiceTotal",
+   "ordertotal": "InvoiceTotal",
+   "gezahlterbetrag": "PaidAmount",
+   "paymenttransactionid": "PaymentTranactionID",
+   "zreferenz": "",
+   "zempfaenger": "",
+   "ustid": "",
+   "uid": "",
+   "orderdate": "Datum",
+   "currency": "Währung",
+   "ordercurrency": "Währung",
+   "language": "Sprache",
+   "ordersource": "Quelle",
+   "notiz": "",
+   "remark": "",
+   "created": "Zeitstempel",
+   "text": "TEXT"
+  },
+  "ADRESS": {
+   "addressnummer": "Adressnummer",
+   "firstname": "Vorname",
+   "name": "",
+   "companyname": "Firma",
+   "firma1": "Firma",
+   "adresszusatz1": "",
+   "adresszusatz2": "",
+   "street": "Strasse",
+   "zip": "PLZ",
+   "zip-code": "PLZ",
+   "city": "Ort",
+   "country": "Land",
+   "mail": "Email",
+   "phone": "Telefon",
+   "telephone": "Telefon",
+   "ustid": "UID",
+   "name2": "Firma2",
+   "name3": "Firma3"
+  },
+  "LIEFER": {
+   "addressnummer": "Adressnummer",
+   "name": "",
+   "name1": "",
+   "companyname": "Firma",
+   "firma1": "Firma",
+   "adresstyp": "",
+   "firstname": "Vorname",
+   "adresszusatz1": "",
+   "sdresszusatz": "",
+   "adresszusatz2": "",
+   "street": "Strasse",
+   "zip": "PLZ",
+   "zip-code": "PLZ",
+   "city": "Ort",
+   "country": "Land",
+   "mail": "Email",
+   "phone": "Telefon",
+   "telephone": "Telefon",
+   "status": "",
+   "name2": "Firma2",
+   "name3": "Firma3"
+  },
+  "ARTIKEL": {
+   "name": "Bezeichnung",
+   "rabattbrutto": "RabattBrutto",
+   "bruttorabatt": "RabattBrutto",
+   "rabattwertbrutto": "RabattBrutto",
+   "nettorabatt": "RabattNetto",
+   "rabattwertnetto": "RabattNetto",
+   "serialnumber": "Seriennummer",
+   "loaner": "Leihgerät",
+   "order": "",
+   "text": "Text"
+  },
+  "VERSAND": {
+   "artikelnummer": "",
+   "typenumber": "",
+   "info": ""
+  },
+  "RABATTE": {
+   "gesamtbetragrabatt": "Brutto",
+   "rabattsteuer": "Steuer",
+   "typenumber": "",
+   "info": ""
+  },
+  "GUTSCHEIN": {
+   "info": "",
+   "gutscheinnummer": "Gutscheinnummer"
+  }
+ },
+ "misspelled": {
+  "ORDER": {
+   "PaymentTranactionID": "PaymentTransactionID"
+  },
+  "USERS": {
+   "Anrede": "Andrede"
+  },
+  "PRODUCTS": {
+   "Kontenzurodnung": "Kontenzuordnung"
+  }
+ },
+ "extra": [
+  {
+   "key": "CATEGORIES",
+   "title": "Kategorien vom Webshop",
+   "direction": "eingang",
+   "names": [
+    "CATEGORIES"
+   ],
+   "block": "KATEGORIE",
+   "fields": [
+    "Status",
+    "ID",
+    "Bezeichnung",
+    "ShopID",
+    "Parent"
+   ]
+  },
+  {
+   "key": "REPAIRREQUEST",
+   "title": "Reparaturauftrag vom Webshop",
+   "direction": "eingang",
+   "names": [
+    "REPAIRREQUEST"
+   ],
+   "block": "REPAIRREQUEST",
+   "fields": [
+    "voegltin",
+    "Belegnummer",
+    "FormID"
+   ]
+  },
+  {
+   "key": "PRODUCTREGISTRATION",
+   "title": "Produktregistrierung vom Webshop",
+   "direction": "eingang",
+   "names": [
+    "PRODUCTREGISTRATION"
+   ],
+   "block": null,
+   "fields": []
+  },
+  {
+   "key": "CHARGEN",
+   "title": "Chargen vom Webshop",
+   "direction": "eingang",
+   "names": [
+    "CHARGEN"
+   ],
+   "block": "CHARGE",
+   "fields": [
+    "Chargenname",
+    "Feuchtigkeit",
+    "AW-Wert"
+   ]
+  }
+ ]
+}

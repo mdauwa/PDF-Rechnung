@@ -48,6 +48,7 @@ async function renderPruefen(view) {
   $("#prResults").addEventListener("click", prClick);
 
   if (q.get("eingang")) run(api("GET", `api/eingang/${encodeURIComponent(q.get("eingang"))}/pruefung`).then(r => [r]));
+  if (q.get("connect")) run(api("GET", `api/connect/${encodeURIComponent(q.get("connect"))}/pruefung?name=${encodeURIComponent(q.get("name") || "")}&archiv=${q.get("archiv") || ""}`).then(r => [r]));
 }
 
 function drawReports() {

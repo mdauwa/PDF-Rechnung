@@ -223,3 +223,11 @@ Danach kommt ZUGFeRD: `@@xt@@`/`@@xi@@`/`@@xr@@` werden zu CII/UBL, dazu **PDF/A
 - `Edi/EdiValidation.cs`: Einstieg, erkennt EDIFACT / XML / PDF; ZUGFeRD-PDF: eingebettete factur-x.xml, PDF/A-3- und fx-XMP-Kennung.
 - Eingang: jede abgerufene Datei wird geprüft (Spalte „Prüfung“, Klick → Bericht). Ausgangsordner: „Vor dem Senden prüfen“ (Standard: bei Fehlern zurückhalten → Unterordner „fehlerhaft“ mit .pruefung.txt).
 - Tools → Datei prüfen (`tools.js`, `/api/tools/pruefen`, `/pruefen-text`, `/bericht`). Kommandozeile: `Belegpost.exe --pruefen <Datei> …`.
+
+## ERP Suite Connect (Webshop-Schnittstelle, 16.11.2026)
+- Quelle: Beschreibung `XML Beschreibung Schnittstellenversion_V5.76_12.11.2026.xlsx` (Nextcloud …\Beispieldaten\Webshop\XML-Testdaten) und Quellcode FWebshop (Y:\Visual Studio 2012\Kundenprojekte\Fandler\FWebshop, nur gelesen).
+- `tools/connect_schema.py <xlsx>` → `Connect/ErpSuiteConnect.json` (eingebettet): Aufbau je Nachrichtentyp, Pflicht laut Zellfarbe (rot = zwingend → Fehler, orange = erforderlich → Warnung),
+  plus aus dem Code: Aliase (Street/Strasse, OrderDate/Datum, product/ARTIKEL …), Namen, die Beschreibung und Code verschieden schreiben (PaymentTranactionID, Anrede/„andrede“ in ReadKunden, Kontenzurodnung),
+  Typen nur im Code (CATEGORIES, REPAIRREQUEST, PRODUCTREGISTRATION, CHARGEN), Lieferadresse ohne ShopID erlaubt.
+- `Connect/ConnectValidator.cs`: Typ am Dateinamen wie FWebshop (GetFileType), Aufbau/Pflicht/Typ/Länge, Plausibilität (Status, Steuerberechnung, Land, E-Mail, ShopID, Netto/Brutto/Steuersatz).
+- Einstellungen → ERP Suite Connect (aktiv, Ein-/Ausgangsordner, Archive). Menü „ERP Suite Connect → Eingang/Ausgang“ nur wenn aktiv. Abgerufene Connect-Dateien: im allgemeinen Eingang nur ORDER, alle anderen nur unter ERP Suite Connect (Spalte connect_typ).

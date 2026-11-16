@@ -114,6 +114,7 @@ builder.Services.Configure<MailTemplateOptions>(builder.Configuration.GetSection
 builder.Services.Configure<MailRuleOptions>(builder.Configuration.GetSection("MailRules"));
 builder.Services.Configure<MandantOptions>(builder.Configuration.GetSection("Mandanten"));
 builder.Services.Configure<PdfRechnung.Delivery.DeliveryOptions>(builder.Configuration.GetSection("Delivery"));
+builder.Services.Configure<PdfRechnung.Connect.ConnectOptions>(builder.Configuration.GetSection("Connect"));
 builder.Services.AddSingleton<MailRuleStore>();
 builder.Services.AddSingleton(sp => new RuntimeControl(sp.GetRequiredService<IHostApplicationLifetime>(), isService));
 
@@ -308,6 +309,7 @@ app.MapGet("/api/portal", (IOptionsSnapshot<PortalOptions> portal, HttpContext c
         login = a.Login,
         isAdmin = a.IsAdmin,
         seeInbound = a.Authenticated && (a.SeeAll || a.IsAdmin),
+        connect = a.Authenticated && (a.SeeAll || a.IsAdmin) && app.Services.GetRequiredService<IOptionsMonitor<PdfRechnung.Connect.ConnectOptions>>().CurrentValue.Enabled,
         isLocalAdmin = a.IsLocalAdmin,
         canSend = a.CanSend,
         userId = a.UserId,
@@ -333,6 +335,8 @@ PdfRechnung.Delivery.DeliveryApi.Map(app);
 PdfRechnung.Delivery.As2Receiver.Map(app);
 PdfRechnung.Delivery.InboundApi.Map(app);
 PdfRechnung.Edi.ToolsApi.Map(app);
+PdfRechnung.Connect.ConnectApi.Map(app);
+PdfRechnung.Delivery.InboundLog.ConnectEnabled = () => app.Services.GetRequiredService<IOptionsMonitor<PdfRechnung.Connect.ConnectOptions>>().CurrentValue.Enabled;
 
 // ---------------- Start ----------------
 

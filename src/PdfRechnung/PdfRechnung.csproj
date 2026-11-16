@@ -49,6 +49,8 @@
     <EmbeddedResource Include="Documents\ERechnungFelder.json" LogicalName="ERechnungFelder.json" />
     <EmbeddedResource Include="Edi\Verzeichnisse\*.json.gz" LogicalName="Edi.%(Filename)%(Extension)" />
     <EmbeddedResource Include="Edi\Validierung.zip" LogicalName="Edi.Validierung.zip" />
+    <Content Remove="Connect\ErpSuiteConnect.json" />
+    <EmbeddedResource Include="Connect\ErpSuiteConnect.json" LogicalName="ErpSuiteConnect.json" />
     <None Include="..\BelegpostMapi\out\BelegpostMapi-*.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" Link="%(Filename)%(Extension)" />
   </ItemGroup>
 

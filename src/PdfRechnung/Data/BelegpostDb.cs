@@ -179,6 +179,10 @@ public sealed class BelegpostDb
         """
         ALTER TABLE eingang ADD COLUMN pruefung TEXT;
         ALTER TABLE eingang ADD COLUMN pruefung_text TEXT;
+        """,
+        // 4: ERP Suite Connect – Nachrichtentyp; Nicht-Bestellungen erscheinen nur unter ERP Suite Connect
+        """
+        ALTER TABLE eingang ADD COLUMN connect_typ TEXT;
         """
     };
 

@@ -4,7 +4,8 @@ namespace PdfRechnung.Delivery;
 
 /// <summary>Ein Eintrag im Eingang: eine abgerufene oder per AS2 empfangene Datei.</summary>
 public sealed record InboundEntry(long Nr, DateTimeOffset At, string Channel, string ChannelText, string? Source, string? CustomerId, string? Customer,
-    string FileName, long Size, string Target, bool HasCopy, bool InTarget, string? VorgangId, bool Read);
+    string FileName, long Size, string Target, bool HasCopy, bool InTarget, string? VorgangId, bool Read,
+    string? Check = null, string? CheckText = null);
 
 /// <summary>
 /// Eingangsbuch: jede abgerufene Datei wird mit Herkunft (Versandweg, Kunde) in der Datenbank vermerkt und als Kopie unter
@@ -19,6 +20,13 @@ public sealed class InboundLog
     {
         _db = db;
         _archive = Path.Combine(dataDirectory, "eingang-archiv");
+    }
+
+    /// <summary>PDFs nur prüfen, wenn sie eine eingebettete Datei haben (sonst ist es ein normales PDF, keine E-Rechnung).</summary>
+    private static bool IsZugferdCandidate(byte[] data)
+    {
+        var s = System.Text.Encoding.Latin1.GetString(data);
+        return s.Contains("/EmbeddedFiles") || s.Contains("factur-x", StringComparison.OrdinalIgnoreCase) || s.Contains("zugferd", StringComparison.OrdinalIgnoreCase);
     }
 
     public static string Normalize(string path)
@@ -36,6 +44,15 @@ public sealed class InboundLog
                 ("@z", BelegpostDb.Ms(DateTimeOffset.Now)), ("@k", channel), ("@q", source), ("@ki", customerId), ("@ku", customer),
                 ("@d", Path.GetFileName(fullPath)), ("@g", (long)data.Length), ("@t", Normalize(fullPath)));
             var nr = Convert.ToInt64(BelegpostDb.Scalar(c, "SELECT last_insert_rowid()"));
+            try
+            {
+                if (Edi.EdiValidation.CanValidate(data) && !(Edi.EdiValidation.IsPdf(data) && !IsZugferdCandidate(data)))
+                {
+                    var rep = Edi.EdiValidation.Validate(data, Path.GetFileName(fullPath));
+                    BelegpostDb.Exec(c, "UPDATE eingang SET pruefung=@p, pruefung_text=@t WHERE nr=@n", ("@p", rep.Status), ("@t", rep.Summary), ("@n", nr));
+                }
+            }
+            catch (Exception) { }
             try
             {
                 var dir = Path.Combine(_archive, DateTime.Now.ToString("yyyy-MM"));
@@ -74,7 +91,7 @@ public sealed class InboundLog
         if (!string.IsNullOrWhiteSpace(channel)) { where.Add("kanal = @k"); p.Add(("@k", channel)); }
         if (unreadOnly) where.Add("gelesen IS NULL");
         p.Add(("@l", Math.Clamp(limit, 1, 5000)));
-        using var cmd = BelegpostDb.Cmd(c, "SELECT nr, zeit, kanal, quelle, kunde_id, kunde, datei, groesse, ziel, kopie, vorgang_id, gelesen FROM eingang"
+        using var cmd = BelegpostDb.Cmd(c, "SELECT nr, zeit, kanal, quelle, kunde_id, kunde, datei, groesse, ziel, kopie, vorgang_id, gelesen, pruefung, pruefung_text FROM eingang"
             + (where.Count > 0 ? " WHERE " + string.Join(" AND ", where) : "") + " ORDER BY nr DESC LIMIT @l", p.ToArray());
         using var r = cmd.ExecuteReader();
         var list = new List<InboundEntry>();
@@ -96,7 +113,7 @@ public sealed class InboundLog
     private (InboundEntry Entry, string? Copy)? Raw(long nr)
     {
         using var c = _db.Open();
-        using var cmd = BelegpostDb.Cmd(c, "SELECT nr, zeit, kanal, quelle, kunde_id, kunde, datei, groesse, ziel, kopie, vorgang_id, gelesen FROM eingang WHERE nr=@n", ("@n", nr));
+        using var cmd = BelegpostDb.Cmd(c, "SELECT nr, zeit, kanal, quelle, kunde_id, kunde, datei, groesse, ziel, kopie, vorgang_id, gelesen, pruefung, pruefung_text FROM eingang WHERE nr=@n", ("@n", nr));
         using var r = cmd.ExecuteReader();
         return r.Read() ? (Read(r), r.IsDBNull(9) ? null : r.GetString(9)) : null;
     }
@@ -123,6 +140,7 @@ public sealed class InboundLog
         var target = r.GetString(8);
         return new InboundEntry(r.GetInt64(0), BelegpostDb.At(r.GetInt64(1)), channel, ChannelType.Text(channel),
             r.IsDBNull(3) ? null : r.GetString(3), r.IsDBNull(4) ? null : r.GetString(4), r.IsDBNull(5) ? null : r.GetString(5),
-            r.GetString(6), r.GetInt64(7), target, !r.IsDBNull(9), File.Exists(target), r.IsDBNull(10) ? null : r.GetString(10), !r.IsDBNull(11));
+            r.GetString(6), r.GetInt64(7), target, !r.IsDBNull(9), File.Exists(target), r.IsDBNull(10) ? null : r.GetString(10), !r.IsDBNull(11),
+            r.IsDBNull(12) ? null : r.GetString(12), r.IsDBNull(13) ? null : r.GetString(13));
     }
 }

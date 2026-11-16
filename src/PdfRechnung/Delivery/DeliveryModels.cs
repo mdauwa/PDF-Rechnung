@@ -89,6 +89,8 @@ public sealed class ChannelSettings
     public string OutboxPattern { get; set; } = "";
     /// <summary>Gesendete Dateien hierhin verschieben. Leer = Unterordner „gesendet“.</summary>
     public string OutboxArchive { get; set; } = "";
+    /// <summary>Vor dem Senden prüfen (EDIFACT, E-Rechnungs-XML, ZUGFeRD-PDF): fehler = bei Fehlern zurückhalten (Standard), warnung = auch bei Warnungen, nein = nicht prüfen.</summary>
+    public string OutboxValidate { get; set; } = "";
 
     // ---- FTP / FTPS / SFTP / eXite ----
     public string Host { get; set; } = "";
@@ -180,7 +182,8 @@ public sealed class ChannelSettings
             InboundInterval = own.InboundInterval > 0 ? own.InboundInterval : g.InboundInterval > 0 ? g.InboundInterval : 5,
             MailProtocol = S(own.MailProtocol, S(g.MailProtocol, PdfRechnung.Delivery.MailProtocol.Imaps)),
             OutboxFolder = S(own.OutboxFolder, g.OutboxFolder), OutboxPattern = S(own.OutboxPattern, g.OutboxPattern),
-            OutboxArchive = S(own.OutboxArchive, g.OutboxArchive)
+            OutboxArchive = S(own.OutboxArchive, g.OutboxArchive),
+            OutboxValidate = S(own.OutboxValidate, S(g.OutboxValidate, "fehler"))
         };
     }
 

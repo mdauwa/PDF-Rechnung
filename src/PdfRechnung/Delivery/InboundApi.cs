@@ -49,6 +49,13 @@ public static class InboundApi
             return Results.File(x.Value.Path, MimeTypes.For(name), name);
         });
 
+        g.MapGet("/{nr:long}/pruefung", (long nr, InboundLog book) =>
+        {
+            var x = book.Download(nr);
+            if (x?.Path is null) return Results.NotFound(new { error = "Datei nicht mehr vorhanden." });
+            return Results.Ok(Edi.EdiValidation.Validate(File.ReadAllBytes(x.Value.Path), x.Value.Entry.FileName));
+        });
+
         g.MapPost("/gelesen", (ReadRequest req, InboundLog book) =>
             Results.Ok(new { changed = book.MarkRead(req.All ? null : req.Nrs ?? new()), unread = book.Unread() }));
     }

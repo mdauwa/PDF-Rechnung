@@ -211,3 +211,15 @@ Danach kommt ZUGFeRD: `@@xt@@`/`@@xi@@`/`@@xr@@` werden zu CII/UBL, dazu **PDF/A
   Beschreibungen, Bemerkungen und Beispiele von gotomaxx werden bewusst NICHT übernommen; die Bezeichnungen sind eigene Texte. Die Excel-Datei liegt nicht im Repo.
 - Die Prüfung (DocumentChecker.CheckFields) richtet sich nach dem Format aus @@xt: Pflichtfelder je Format, Vorbelegungen (Info), nachgerechnete Summen (Info),
   Datums-/Zahl-/Länder-/Währungsformat, unbekannte Felder und Tabellen (Tippfehler), Felder, die im Format nicht übertragen werden, gedruckte table=VAT gegen Nachrechnung.
+
+## Prüfen: EDIFACT/EANCOM und E-Rechnung (16.11.2026)
+- Projekt läuft jetzt auf **.NET 10** (wegen SaxonCS-HE 13, XSLT 3.0 für die offiziellen Schematron-Regeln). Die EXE bleibt eigenständig (self-contained).
+- `Edi/EdifactValidator.cs`: Syntax (UNA, Freigabezeichen, Zeichensatz UNOA/UNOB/UNOC…, UTF-8-Erkennung), Umschlag (UNB/UNZ, UNG/UNE, UNH/UNT: Zähler, Referenzen),
+  Struktur gegen das Verzeichnis (Segmentgruppen, Reihenfolge, Wiederholungen, Pflicht), Datenelemente (Typ, Länge, Composites), Codes nur als Hinweis.
+  Verzeichnisse D.96A, D.01B, D.12A, D.20B, EANCOM 2002 aus EDIFlow (MIT) → `tools/edi_verzeichnisse.py` → `Edi/Verzeichnisse/*.json.gz` (eingebettet).
+- `Edi/XmlInvoiceValidator.cs`: CII/UBL – Wohlgeformtheit, XSD (CII D16B bzw. UBL 2.1), Schematron EN 16931 (CEN, EUPL) und XRechnung (KoSIT, Apache) als XSLT.
+  Artefakte in `Edi/Validierung.zip` (eingebettet, wird nach `<Daten>\validierung\paket-<hash>` entpackt). Herkunft/Lizenzen in der ZIP (STAND.txt, lizenzen/).
+  Eigene Artefakte (FeRD-Paket für Extended/Basic/Minimum): `<Daten>\validierung\eigene\<profil>\*.xsd` bzw. `*.xslt`.
+- `Edi/EdiValidation.cs`: Einstieg, erkennt EDIFACT / XML / PDF; ZUGFeRD-PDF: eingebettete factur-x.xml, PDF/A-3- und fx-XMP-Kennung.
+- Eingang: jede abgerufene Datei wird geprüft (Spalte „Prüfung“, Klick → Bericht). Ausgangsordner: „Vor dem Senden prüfen“ (Standard: bei Fehlern zurückhalten → Unterordner „fehlerhaft“ mit .pruefung.txt).
+- Tools → Datei prüfen (`tools.js`, `/api/tools/pruefen`, `/pruefen-text`, `/bericht`). Kommandozeile: `Belegpost.exe --pruefen <Datei> …`.

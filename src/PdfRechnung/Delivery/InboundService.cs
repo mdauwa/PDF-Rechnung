@@ -32,6 +32,7 @@ public sealed class InboundService : BackgroundService
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly InboundLog? _book;
     private InboundJob? _job; // laufender Abruf (unter _gate)
+    private List<string> _held = new(); // im letzten Ausgangslauf zurückgehalten (Prüffehler)
 
     public InboundService(IOptionsMonitor<DeliveryOptions> opt, CustomerStore customers, Settings.SettingsStore settings, ILogger<InboundService> log,
         InboundLog? book = null)
@@ -99,10 +100,12 @@ public sealed class InboundService : BackgroundService
             _job = job;
             var s = job.Settings;
             var password = _settings.Secrets.Unprotect(s.Password);
+            _held = new();
             var sent = !string.IsNullOrWhiteSpace(s.OutboxFolder) && OutboxSupported(s.Type) ? await OutboxAsync(s, password, ct) : new List<string>();
+            var heldText = _held.Count == 0 ? "" : $" · {_held.Count} zurückgehalten (Prüffehler, Ordner „fehlerhaft“): {string.Join(", ", _held.Take(3))}{(_held.Count > 3 ? " …" : "")}";
             if (s.InboundEnabled != "ja" || !Supported(s.Type))
-                return _runs[job.Key] = new InboundRun(job.Key, job.Label, DateTimeOffset.Now, true, sent.Count,
-                    sent.Count == 0 ? "Ausgangsordner leer" : $"{sent.Count} Datei(en) gesendet: {string.Join(", ", sent.Take(5))}{(sent.Count > 5 ? " …" : "")}");
+                return _runs[job.Key] = new InboundRun(job.Key, job.Label, DateTimeOffset.Now, _held.Count == 0, sent.Count,
+                    (sent.Count == 0 ? "Ausgangsordner leer" : $"{sent.Count} Datei(en) gesendet: {string.Join(", ", sent.Take(5))}{(sent.Count > 5 ? " …" : "")}") + heldText);
             var target = Target(s);
             Directory.CreateDirectory(target);
             var files = s.Type switch
@@ -115,7 +118,7 @@ public sealed class InboundService : BackgroundService
             };
             var run = new InboundRun(job.Key, job.Label, DateTimeOffset.Now, true, files.Count + sent.Count,
                 (sent.Count > 0 ? $"{sent.Count} gesendet · " : "") +
-                (files.Count == 0 ? "keine neuen Dateien" : $"{files.Count} Datei(en) nach {target}: {string.Join(", ", files.Take(5))}{(files.Count > 5 ? " …" : "")}"));
+                (files.Count == 0 ? "keine neuen Dateien" : $"{files.Count} Datei(en) nach {target}: {string.Join(", ", files.Take(5))}{(files.Count > 5 ? " …" : "")}") + heldText);
             if (files.Count > 0) _log.LogInformation("Abruf {Label}: {Count} Datei(en) nach {Target}", job.Label, files.Count, target);
             return _runs[job.Key] = run;
         }
@@ -135,12 +138,30 @@ public sealed class InboundService : BackgroundService
         var archive = string.IsNullOrWhiteSpace(s.OutboxArchive) ? Path.Combine(dir, "gesendet") : s.OutboxArchive.Trim();
         var patterns = DeliveryService.Patterns(s.OutboxPattern);
         var sent = new List<string>();
+        var held = new List<string>();
         foreach (var path in Directory.GetFiles(dir).OrderBy(File.GetLastWriteTimeUtc))
         {
             var name = Path.GetFileName(path);
             if (name.EndsWith(".part", StringComparison.OrdinalIgnoreCase) || (patterns.Count > 0 && !patterns.Any(p => Documents.MailRuleEngine.Like(name, p)))) continue;
             byte[] data;
             try { data = await File.ReadAllBytesAsync(path, ct); } catch (IOException) { continue; } // noch in Benutzung
+            var check = s.OutboxValidate is "" or "fehler" or "warnung" ? s.OutboxValidate : "nein";
+            if (check != "nein" && Edi.EdiValidation.CanValidate(data))
+            {
+                var rep = Edi.EdiValidation.Validate(data, name);
+                if (rep.Errors > 0 || (check == "warnung" && rep.Warnings > 0))
+                {
+                    var bad = Path.Combine(dir, "fehlerhaft");
+                    Directory.CreateDirectory(bad);
+                    var dest0 = Path.Combine(bad, name);
+                    if (File.Exists(dest0)) dest0 = Path.Combine(bad, $"{Path.GetFileNameWithoutExtension(name)}_{DateTime.Now:yyyyMMdd-HHmmss}{Path.GetExtension(name)}");
+                    File.Move(path, dest0);
+                    await File.WriteAllTextAsync(dest0 + ".pruefung.txt", Edi.EdiReportText.Format(rep), ct);
+                    held.Add($"{name} ({rep.Errors} Fehler, {rep.Warnings} Warnungen)");
+                    _log.LogWarning("Ausgang: {File} nicht gesendet – {Summary}", name, rep.Summary);
+                    continue;
+                }
+            }
             var file = new DeliveryFile(name, data, MimeTypes.For(name));
             switch (s.Type)
             {
@@ -157,6 +178,7 @@ public sealed class InboundService : BackgroundService
             File.Move(path, dest);
             sent.Add(name);
         }
+        _held = held;
         return sent;
     }
 

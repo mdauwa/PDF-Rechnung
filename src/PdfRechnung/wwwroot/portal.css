@@ -185,3 +185,25 @@ details.fold:not([open]) > summary { border-bottom: 0; }
 .eglist tr.unread td { background: color-mix(in srgb, var(--accent, #2563eb) 6%, transparent); }
 .eglist tr.unread td:first-child { box-shadow: inset 3px 0 0 var(--accent, #2563eb); font-weight: 600; }
 .eglist td small { display: block; color: var(--muted); }
+
+/* Tools → Datei prüfen */
+.pr-drop { border: 2px dashed var(--border, #ccd); }
+.pr-drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.pr-drop-inner { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.pr-drop-inner p { flex-basis: 100%; margin: 4px 0 0; }
+.pr-drop textarea { width: 100%; font-family: ui-monospace, Consolas, monospace; font-size: 12px; margin-top: 10px; }
+.pr-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.pr-head h3 { margin: 0; }
+.pr-head-right { display: flex; gap: 8px; align-items: center; }
+.kv-inline { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 8px 0; font-size: 13px; }
+.pr-tabs { display: flex; justify-content: space-between; align-items: center; margin: 12px 0 6px; font-size: 13px; color: var(--muted); }
+.pr-report.hide-info tr.lvl-info { display: none; }
+.pr-issues td small { display: block; color: var(--muted); }
+.pr-content summary { cursor: pointer; margin: 10px 0; font-weight: 500; }
+.pr-code { max-height: 520px; overflow: auto; border: 1px solid var(--border, #dde); border-radius: 6px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.pr-code table { border-collapse: collapse; width: 100%; }
+.pr-code td { padding: 1px 8px; white-space: pre-wrap; word-break: break-all; vertical-align: top; }
+.pr-code td.ln { color: var(--muted); text-align: right; user-select: none; width: 1%; white-space: nowrap; border-right: 1px solid var(--border, #dde); }
+.pr-code tr.lvl-fehler td { background: color-mix(in srgb, var(--missing, #c0392b) 12%, transparent); }
+.pr-code tr.lvl-warnung td { background: color-mix(in srgb, var(--partial, #e6a700) 14%, transparent); }
+.pr-code tr.flash td { outline: 2px solid var(--accent); }

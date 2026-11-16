@@ -73,7 +73,7 @@ async function renderEingang(view) {
 function drawEingang() {
   const rows = EG.items;
   if (!rows.length) { $("#egTable").innerHTML = `<tbody><tr><td class="empty">Noch keine Dateien abgerufen.</td></tr></tbody>`; return; }
-  $("#egTable").innerHTML = `<thead><tr><th>Eingang</th><th>Versandweg</th><th>Kunde</th><th>Datei</th><th>Abgelegt in</th><th>Vorgang</th><th></th></tr></thead>
+  $("#egTable").innerHTML = `<thead><tr><th>Eingang</th><th>Versandweg</th><th>Kunde</th><th>Datei</th><th>Prüfung</th><th>Abgelegt in</th><th>Vorgang</th><th></th></tr></thead>
     <tbody>${rows.map(x => {
       const url = `api/eingang/${x.nr}/datei`;
       const dir = x.target.replace(/[\\/][^\\/]*$/, "");
@@ -85,6 +85,7 @@ function drawEingang() {
         <td class="nowrap">${esc(x.channelText)}<small>${esc(x.customerId ? "" : x.source || "")}</small></td>
         <td>${esc(x.customer || "")}</td>
         <td><b>${esc(x.fileName)}</b><small>${fmtSize(x.size)}</small></td>
+        <td class="nowrap">${x.check ? `<a href="#/pruefen?eingang=${x.nr}" title="${esc(x.checkText || "")}"><span class="badge ${x.check === "fehler" ? "missing" : x.check === "warnung" ? "partial" : "ok"}">${x.check === "fehler" ? "Fehler" : x.check === "warnung" ? "Warnungen" : "in Ordnung"}</span></a>` : '<span class="muted">–</span>'}</td>
         <td>${where}</td>
         <td class="nowrap">${x.vorgangId ? `<a href="#/vorgang?id=${encodeURIComponent(x.vorgangId)}">Vorgang öffnen</a>` : '<span class="muted">–</span>'}</td>
         <td class="nowrap">${can ? `${egViewable(x.fileName) ? `<a href="${url}?ansehen=1" target="_blank" rel="noopener" data-nr="${x.nr}">Ansehen</a> · ` : ""}<a href="${url}" download data-nr="${x.nr}">Herunterladen</a>` : '<span class="muted">Datei fehlt</span>'}</td>

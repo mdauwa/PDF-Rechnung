@@ -86,6 +86,7 @@ function channelFields(c, P, bind, own) {
       ${txt("outboxFolder", "Dateien aus diesem Ordner senden", ownPh || "C:\\EDI\\ausgang", "z. B. EDI- oder XML-Dateien aus dem ERP. Leer = aus. Wird im Abruf-Intervall geprüft.")}
       ${txt("outboxPattern", "Welche Dateien", "*.edi; *.xml", "Leer = alle.")}
       ${txt("outboxArchive", "Danach verschieben nach", ownPh || "Unterordner „gesendet“")}
+      ${sel("outboxValidate", "Vor dem Senden prüfen", [...(own ? [["", "wie global"]] : []), ["fehler", "ja – bei Fehlern zurückhalten"], ["warnung", "ja – auch bei Warnungen zurückhalten"], ["nein", "nicht prüfen"]], "EDIFACT/EANCOM, E-Rechnungs-XML und ZUGFeRD-PDF. Zurückgehaltene Dateien kommen mit Prüfbericht in den Unterordner „fehlerhaft“.")}
     </div>`;
   }
   // ---- Abruf ----

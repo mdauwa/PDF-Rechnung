@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
@@ -15,5 +15,8 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\PdfRechnung\PdfRechnung.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Daten\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

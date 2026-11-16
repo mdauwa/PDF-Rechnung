@@ -174,6 +174,11 @@ public sealed class BelegpostDb
             gelesen INTEGER);
         CREATE INDEX ix_eingang_zeit ON eingang(zeit);
         CREATE INDEX ix_eingang_ziel ON eingang(ziel);
+        """,
+        // 3: Prüfergebnis je Eingangsdatei (EDIFACT / E-Rechnung)
+        """
+        ALTER TABLE eingang ADD COLUMN pruefung TEXT;
+        ALTER TABLE eingang ADD COLUMN pruefung_text TEXT;
         """
     };
 

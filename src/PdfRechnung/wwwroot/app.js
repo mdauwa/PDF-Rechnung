@@ -17,6 +17,7 @@ const ICONS = {
   back: '<path d="M15 6l-6 6 6 6"/>',
   doc: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
   download: '<path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>',
+  check: '<path d="M9 12l2 2 4-4"/><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
   bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/>'
 };
 const icon = name => `<svg viewBox="0 0 24 24">${ICONS[name] || ICONS.doc}</svg>`;
@@ -70,6 +71,7 @@ function renderMenu() {
   if (portal.seeInbound) html += `<a href="#/eingang" data-key="eingang">${icon("download")}<span>Eingang</span><span class="menu-count" data-count="eingang"></span></a>`;
   if (portal.userId) html += `<div class="menu-group">Persönlich</div><a href="#/melder" data-key="melder">${icon("bell")}<span>Melder &amp; Hinweise</span><span class="menu-dot" id="liveDot" title="Live-Verbindung"></span></a>`
     + `<a href="#/regeln" data-key="regeln">${icon("send")}<span>Meine Mail-Regeln</span></a>`;
+  html += `<div class="menu-group">Tools</div><a href="#/pruefen" data-key="pruefen">${icon("check")}<span>Datei prüfen (EDI / E-Rechnung)</span></a>`;
   if (portal.isAdmin) html += `<div class="menu-group">System</div><a href="#/einstellungen" data-key="einstellungen">${icon("settings")}<span>Einstellungen</span></a>`;
   $("#menu").innerHTML = html;
   if (portal.seeInbound) api("GET", "api/eingang?anzahl=1").then(r => setInboundCount(r.unread)).catch(() => { });
@@ -97,7 +99,8 @@ const VIEWS = {
   einstellungen: { title: "Einstellungen", render: v => renderSettings(v) },
   melder: { title: "Melder & Hinweise", render: v => renderMelder(v) },
   regeln: { title: "Meine Mail-Regeln", render: v => renderMyRules(v) },
-  eingang: { title: "Eingang", render: v => renderEingang(v) }
+  eingang: { title: "Eingang", render: v => renderEingang(v) },
+  pruefen: { title: "Datei prüfen", render: v => renderPruefen(v) }
 };
 
 function route() {

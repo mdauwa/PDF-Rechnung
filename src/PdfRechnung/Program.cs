@@ -18,8 +18,23 @@ using PdfRechnung.Settings;
 if (OperatingSystem.IsWindows() && args.Contains(PdfRechnung.Printing.WindowsGotomaxxPrinter.HelperArgument))
     return PdfRechnung.Printing.WindowsGotomaxxPrinter.RunHelper(args);
 
+// Datei prüfen ohne Dienst: Belegpost.exe --pruefen <Datei> [weitere …] → Prüfbericht in der Konsole, Rückgabe 1 bei Fehlern
+if (args.Length > 1 && args[0] is "--pruefen" or "--validate")
+{
+    PdfRechnung.Edi.XmlInvoiceValidator.DataDirectory = Path.Combine(Path.GetTempPath(), "Belegpost");
+    var failed = false;
+    foreach (var f in args.Skip(1))
+    {
+        var rep = PdfRechnung.Edi.EdiValidation.Validate(File.ReadAllBytes(f), Path.GetFileName(f));
+        Console.WriteLine(PdfRechnung.Edi.EdiReportText.Format(rep));
+        failed |= !rep.Valid;
+    }
+    return failed ? 1 : 0;
+}
+
 var isService = WindowsServiceHelpers.IsWindowsService();
 var store = new SettingsStore(SettingsStore.DefaultDataDirectory());
+PdfRechnung.Edi.XmlInvoiceValidator.DataDirectory = store.DataDirectory;
 
 if (CommandLine.Handles(args)) return CommandLine.Run(args, store);
 
@@ -317,6 +332,7 @@ AdminApi.Map(app);
 PdfRechnung.Delivery.DeliveryApi.Map(app);
 PdfRechnung.Delivery.As2Receiver.Map(app);
 PdfRechnung.Delivery.InboundApi.Map(app);
+PdfRechnung.Edi.ToolsApi.Map(app);
 
 // ---------------- Start ----------------
 

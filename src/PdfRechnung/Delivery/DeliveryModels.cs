@@ -82,6 +82,14 @@ public sealed class ChannelSettings
     /// <summary>Mail-Abruf: imaps, imap, pop3s, pop3. Server, Port, Benutzer und Kennwort wie oben.</summary>
     public string MailProtocol { get; set; } = "";
 
+    // ---- Ausgangsordner (wie BWEDI „FTPLocalUploadPath“): Dateien aus einem Ordner bei dir verschicken ----
+    /// <summary>Ordner bei dir, dessen Dateien (z. B. EDI/XML aus dem ERP) regelmäßig über diesen Versandweg gesendet werden. Leer = aus.</summary>
+    public string OutboxFolder { get; set; } = "";
+    /// <summary>Welche Dateien, z. B. „*.edi; *.xml“. Leer = alle.</summary>
+    public string OutboxPattern { get; set; } = "";
+    /// <summary>Gesendete Dateien hierhin verschieben. Leer = Unterordner „gesendet“.</summary>
+    public string OutboxArchive { get; set; } = "";
+
     // ---- FTP / FTPS / SFTP / eXite ----
     public string Host { get; set; } = "";
     public int Port { get; set; }
@@ -170,7 +178,9 @@ public sealed class ChannelSettings
             InboundPattern = S(own.InboundPattern, g.InboundPattern), InboundTarget = S(own.InboundTarget, g.InboundTarget),
             InboundAfter = S(own.InboundAfter, S(g.InboundAfter, "loeschen")), InboundArchive = S(own.InboundArchive, g.InboundArchive),
             InboundInterval = own.InboundInterval > 0 ? own.InboundInterval : g.InboundInterval > 0 ? g.InboundInterval : 5,
-            MailProtocol = S(own.MailProtocol, S(g.MailProtocol, PdfRechnung.Delivery.MailProtocol.Imaps))
+            MailProtocol = S(own.MailProtocol, S(g.MailProtocol, PdfRechnung.Delivery.MailProtocol.Imaps)),
+            OutboxFolder = S(own.OutboxFolder, g.OutboxFolder), OutboxPattern = S(own.OutboxPattern, g.OutboxPattern),
+            OutboxArchive = S(own.OutboxArchive, g.OutboxArchive)
         };
     }
 

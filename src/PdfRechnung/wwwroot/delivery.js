@@ -80,6 +80,14 @@ function channelFields(c, P, bind, own) {
       ${sel("template", "Mail-Vorlage", [["", "wie ermittelt"], ...tpl.map(x => [x, x])])}
     </div>`;
   }
+  // ---- Ausgangsordner ----
+  if (["ftp", "ftps", "sftp", "exite", "as2"].includes(t)) {
+    out += `<h4>Ausgangsordner</h4><div class="grid3">
+      ${txt("outboxFolder", "Dateien aus diesem Ordner senden", ownPh || "C:\\EDI\\ausgang", "z. B. EDI- oder XML-Dateien aus dem ERP. Leer = aus. Wird im Abruf-Intervall geprüft.")}
+      ${txt("outboxPattern", "Welche Dateien", "*.edi; *.xml", "Leer = alle.")}
+      ${txt("outboxArchive", "Danach verschieben nach", ownPh || "Unterordner „gesendet“")}
+    </div>`;
+  }
   // ---- Abruf ----
   if (t !== "gotomaxx") {
     const on = c.inboundEnabled === "ja";
@@ -95,7 +103,7 @@ function channelFields(c, P, bind, own) {
         ${txt("inboundTarget", "Zielordner bei dir", ownPh || "C:\\ProgramData\\Belegpost\\eingang", "Der Belegpost-Eingangsordner macht aus PDFs Vorgänge. Leer = daten\\abruf\\" + t)}
         ${t !== "as2" && t !== "exite" ? sel("inboundAfter", "Danach am Server", [...(own ? [["", "wie global"]] : []), ["loeschen", "löschen"], ...(c.mailProtocol?.startsWith("pop3") ? [] : [["verschieben", "in Archivordner verschieben"]]), ["behalten", t === "mail" ? "als gelesen markieren" : "behalten (merken)"]], "", true) : ""}
         ${c.inboundAfter === "verschieben" ? txt("inboundArchive", t === "mail" ? "Archiv-Ordner im Postfach" : "Archivordner am Server", "/archiv") : ""}
-        ${t !== "as2" ? num("inboundInterval", "alle … Minuten", own ? "wie global" : "5") : ""}
+        ${num("inboundInterval", "alle … Minuten", own ? "wie global" : "5", "Gilt auch für den Ausgangsordner.")}
       </div>`;
     }
   }

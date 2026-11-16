@@ -139,8 +139,9 @@ public static class ExiteTransport
 {
     public const string DefaultHost = "www.exite.net";
 
-    private static async Task<AsyncFtpClient> ConnectAsync(ChannelSettings s, string? password, CancellationToken ct)
+    public static async Task<AsyncFtpClient> ConnectAsync(ChannelSettings s, string? password, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(s.User)) throw new InvalidOperationException("eXite: Benutzername des Postfachs fehlt.");
         var host = string.IsNullOrWhiteSpace(s.Host) ? DefaultHost : s.Host.Trim();
         var client = new AsyncFtpClient(host, s.User.Trim(), password ?? "", s.Port > 0 ? s.Port : 21);
         client.Config.EncryptionMode = FtpEncryptionMode.Explicit;
@@ -154,51 +155,96 @@ public static class ExiteTransport
 
     public static async Task<string> TestAsync(ChannelSettings s, string? password, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(s.User)) throw new InvalidOperationException("eXite: Benutzername des Postfachs fehlt.");
         using var client = await ConnectAsync(s, password, ct);
         var n = (await client.GetListing(Folder(s), ct)).Length;
         await client.Disconnect(ct);
         return $"Anmeldung am eXite-Postfach in Ordnung ({n} Dateien im Verzeichnis).";
     }
 
+    public static string Type(ChannelSettings s) => s.ExiteType?.Trim().ToUpperInvariant() == "E" ? "E" : "X";
+
+    /// <summary>Wie BWEDI: Zeitstempel-Namen „CSend_…“/„SSend_…“ bzw. „CRecv_…“ → „RRecv_…“.</summary>
+    public static string Stamp() => DateTime.UtcNow.ToString("yyyyMMdd_HHmmss_fff");
+
     public static async Task<string> SendAsync(ChannelSettings s, string? password, DeliveryFile file, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(s.User)) throw new InvalidOperationException("eXite: Benutzername des Postfachs fehlt.");
-        var type = s.ExiteType?.Trim().ToUpperInvariant() == "E" ? "E" : "X";
-        var name = $"BP{DateTime.Now:yyMMddHHmmss}{Random.Shared.Next(100, 999)}";
+        using var client = await ConnectAsync(s, password, ct);
+        var r = await SendAsync(client, s, file, ct);
+        await client.Disconnect(ct);
+        return r;
+    }
+
+    public static async Task<string> SendAsync(AsyncFtpClient client, ChannelSettings s, DeliveryFile file, CancellationToken ct)
+    {
+        var type = Type(s);
+        var name = "Send_" + Stamp();
         var folder = Folder(s);
         string P(string n) => folder.Length == 0 ? n : folder + "/" + n;
-        var cmd = new StringBuilder();
-        cmd.Append("* Belegpost ").Append(file.Name).Append("\r\n");
-        cmd.Append("ser(S)\r\n").Append($"typ({type})\r\n");
+        var cmd = new StringBuilder($"ser(S)\r\ntyp({type})\r\n");
         if (!string.IsNullOrWhiteSpace(s.ExiteMessageClass)) cmd.Append($"umc({s.ExiteMessageClass.Trim()})\r\n");
         if (s.ExiteAck == "ja") cmd.Append("ack(1)\r\n");
-
-        using var client = await ConnectAsync(s, password, ct);
-        // erst die Daten, dann der Befehl – eXite verarbeitet beim Eintreffen der Befehlsdatei
+        // erst die Daten („S…“), dann der Befehl („C…“) – eXite verarbeitet beim Eintreffen der Befehlsdatei
         if (await client.UploadBytes(file.Data, P("S" + name), FtpRemoteExists.Overwrite, false, null, ct) == FtpStatus.Failed)
             throw new IOException("eXite: Datendatei konnte nicht hochgeladen werden.");
         if (await client.UploadBytes(Encoding.ASCII.GetBytes(cmd.ToString()), P("C" + name), FtpRemoteExists.Overwrite, false, null, ct) == FtpStatus.Failed)
             throw new IOException("eXite: Befehlsdatei konnte nicht hochgeladen werden.");
-
-        // Ergebnis abwarten: J… = verarbeitet, E… = Fehler
-        for (var i = 0; i < 30; i++)
+        // Ergebnis abwarten: J… = verarbeitet, E… = Fehler. Kommt keines, gilt die Datei als übergeben (eXite verarbeitet später) – nicht noch einmal senden.
+        for (var i = 0; i < 20; i++)
         {
             await Task.Delay(TimeSpan.FromSeconds(2), ct);
+            if (await client.FileExists(P("E" + name), ct))
+                throw new InvalidOperationException($"eXite hat {name} mit Fehler abgelehnt – Grund im eXite-Protokoll (eXite Online Services).");
             if (await client.FileExists(P("J" + name), ct))
             {
-                try { await client.DeleteFile(P("J" + name), ct); } catch { /* Aufräumen ist optional */ }
-                await client.Disconnect(ct);
-                return $"eXite-Postfach {s.User.Trim()}: {name} verarbeitet ({file.Name}, typ {type})";
-            }
-            if (await client.FileExists(P("E" + name), ct))
-            {
-                await client.Disconnect(ct);
-                throw new InvalidOperationException($"eXite hat {name} mit Fehler abgelehnt – Grund im eXite-Protokoll (eXite Online Services).");
+                foreach (var n in new[] { "J" + name, "P" + name })
+                    try { if (await client.FileExists(P(n), ct)) await client.DeleteFile(P(n), ct); } catch { /* Aufräumen ist optional */ }
+                return $"eXite-Postfach {s.User.Trim()}: {file.Name} als {name} verarbeitet (typ {type})";
             }
         }
+        return $"eXite-Postfach {s.User.Trim()}: {file.Name} als {name} übergeben (typ {type}) – Bestätigung (J-Datei) steht noch aus";
+    }
+
+    /// <summary>
+    /// Abholen wie BWEDI: Befehl „CRecv_…“ mit <c>ser(H) typ(X|E) so(1)</c> (je Durchgang die älteste ungesammelte Nachricht),
+    /// Ergebnis „RRecv_…“ laden; leeres R = nichts mehr da. Höchstens <paramref name="max"/> Nachrichten je Abruf.
+    /// </summary>
+    public static async Task<List<(string Name, byte[] Data)>> ReceiveAsync(ChannelSettings s, string? password, int max, CancellationToken ct)
+    {
+        using var client = await ConnectAsync(s, password, ct);
+        var folder = Folder(s);
+        string P(string n) => folder.Length == 0 ? n : folder + "/" + n;
+        var type = Type(s);
+        var got = new List<(string, byte[])>();
+        for (var round = 0; round < max; round++)
+        {
+            var name = "Recv_" + Stamp();
+            var cmd = $"ser(H)\r\ntyp({type})\r\nso(1)\r\n" + (string.IsNullOrWhiteSpace(s.ExiteMessageClass) ? "" : $"umc({s.ExiteMessageClass.Trim()})\r\n");
+            await client.UploadBytes(Encoding.ASCII.GetBytes(cmd), P("C" + name), FtpRemoteExists.Overwrite, false, null, ct);
+            var done = false;
+            for (var i = 0; i < 20 && !done; i++)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(i == 0 ? 500 : 1500), ct);
+                if (await client.FileExists(P("E" + name), ct)) throw new InvalidOperationException($"eXite hat den Abruf {name} abgelehnt – Grund im eXite-Protokoll.");
+                done = await client.FileExists(P("J" + name), ct);
+            }
+            if (!done) throw new TimeoutException($"eXite hat den Abruf {name} nach 30 Sekunden noch nicht verarbeitet.");
+            var any = false;
+            foreach (var item in await client.GetListing(folder, ct))
+            {
+                if (item.Type != FtpObjectType.File || !item.Name.StartsWith("R" + name, StringComparison.Ordinal)) continue;
+                if (item.Size > 0)
+                {
+                    var data = await client.DownloadBytes(item.FullName, ct) ?? Array.Empty<byte>();
+                    if (data.Length > 0) { got.Add((item.Name + (type == "X" ? ".xml" : ".edi"), data)); any = true; }
+                }
+                await client.DeleteFile(item.FullName, ct);
+            }
+            foreach (var n in new[] { "J" + name, "P" + name })
+                try { if (await client.FileExists(P(n), ct)) await client.DeleteFile(P(n), ct); } catch { }
+            if (!any) break; // Postfach leer
+        }
         await client.Disconnect(ct);
-        throw new TimeoutException($"eXite hat {name} nach 60 Sekunden noch nicht verarbeitet (weder J- noch E-Datei) – bitte im eXite-Postfach prüfen.");
+        return got;
     }
 
     private static string Folder(ChannelSettings s) => (s.Folder ?? "").Trim().Replace('\\', '/').TrimEnd('/');

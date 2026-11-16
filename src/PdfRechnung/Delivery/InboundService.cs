@@ -46,20 +46,26 @@ public sealed class InboundService : BackgroundService
         foreach (var g in o.Channels)
         {
             var s = ChannelSettings.Merge(null, g);
-            if (s.InboundEnabled == "ja" && Supported(s.Type)) list.Add(new InboundJob("global-" + g.Type, $"{ChannelType.Text(g.Type)} (global)", s));
+            if (Active(s)) list.Add(new InboundJob("global-" + g.Type, $"{ChannelType.Text(g.Type)} (global)", s));
         }
         foreach (var c in _customers.All().Where(c => c.Active))
             foreach (var ch in c.Channels.Where(x => x.Enabled))
             {
                 var s = ChannelSettings.Merge(o.Global(ch.Settings.Type), ch.Settings);
-                if (s.InboundEnabled == "ja" && Supported(s.Type)) list.Add(new InboundJob($"kunde-{c.Id}-{ch.Id}", $"{c.Label}: {ch.Label}", s));
+                if (Active(s)) list.Add(new InboundJob($"kunde-{c.Id}-{ch.Id}", $"{c.Label}: {ch.Label}", s));
             }
         return list.GroupBy(j => Identity(j.Settings)).Select(g => g.First()).ToList();
     }
 
+    /// <summary>Abruf ein oder Ausgangsordner gesetzt.</summary>
+    private static bool Active(ChannelSettings s) =>
+        (s.InboundEnabled == "ja" && Supported(s.Type)) || (!string.IsNullOrWhiteSpace(s.OutboxFolder) && OutboxSupported(s.Type));
+
+    private static bool OutboxSupported(string type) => type is ChannelType.Ftp or ChannelType.Ftps or ChannelType.Sftp or ChannelType.Exite or ChannelType.As2;
+
     private static bool Supported(string type) => type is ChannelType.Ftp or ChannelType.Ftps or ChannelType.Sftp or ChannelType.Exite or ChannelType.Mail;
 
-    private static string Identity(ChannelSettings s) => string.Join("|", s.Type, s.Host.ToLowerInvariant(), s.Port, s.User.ToLowerInvariant(), s.InboundFolder, s.InboundPattern, s.InboundTarget.ToLowerInvariant(), s.MailProtocol);
+    private static string Identity(ChannelSettings s) => string.Join("|", s.Type, s.Host.ToLowerInvariant(), s.Port, s.User.ToLowerInvariant(), s.InboundFolder, s.InboundPattern, s.InboundTarget.ToLowerInvariant(), s.MailProtocol, s.OutboxFolder.ToLowerInvariant());
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -88,9 +94,13 @@ public sealed class InboundService : BackgroundService
         try
         {
             var s = job.Settings;
+            var password = _settings.Secrets.Unprotect(s.Password);
+            var sent = !string.IsNullOrWhiteSpace(s.OutboxFolder) && OutboxSupported(s.Type) ? await OutboxAsync(s, password, ct) : new List<string>();
+            if (s.InboundEnabled != "ja" || !Supported(s.Type))
+                return _runs[job.Key] = new InboundRun(job.Key, job.Label, DateTimeOffset.Now, true, sent.Count,
+                    sent.Count == 0 ? "Ausgangsordner leer" : $"{sent.Count} Datei(en) gesendet: {string.Join(", ", sent.Take(5))}{(sent.Count > 5 ? " …" : "")}");
             var target = Target(s);
             Directory.CreateDirectory(target);
-            var password = _settings.Secrets.Unprotect(s.Password);
             var files = s.Type switch
             {
                 ChannelType.Ftp or ChannelType.Ftps => await FtpAsync(s, password, s.Type == ChannelType.Ftps, target, job.Key, ct),
@@ -99,8 +109,9 @@ public sealed class InboundService : BackgroundService
                 ChannelType.Mail => await MailAsync(s, password, target, job.Key, ct),
                 _ => new List<string>()
             };
-            var run = new InboundRun(job.Key, job.Label, DateTimeOffset.Now, true, files.Count,
-                files.Count == 0 ? "keine neuen Dateien" : $"{files.Count} Datei(en) nach {target}: {string.Join(", ", files.Take(5))}{(files.Count > 5 ? " …" : "")}");
+            var run = new InboundRun(job.Key, job.Label, DateTimeOffset.Now, true, files.Count + sent.Count,
+                (sent.Count > 0 ? $"{sent.Count} gesendet · " : "") +
+                (files.Count == 0 ? "keine neuen Dateien" : $"{files.Count} Datei(en) nach {target}: {string.Join(", ", files.Take(5))}{(files.Count > 5 ? " …" : "")}"));
             if (files.Count > 0) _log.LogInformation("Abruf {Label}: {Count} Datei(en) nach {Target}", job.Label, files.Count, target);
             return _runs[job.Key] = run;
         }
@@ -110,6 +121,39 @@ public sealed class InboundService : BackgroundService
             return _runs[job.Key] = new InboundRun(job.Key, job.Label, DateTimeOffset.Now, false, 0, ex.Message);
         }
         finally { _gate.Release(); }
+    }
+
+    /// <summary>Ausgangsordner: jede passende Datei über den Versandweg senden und danach in den Archivordner verschieben.</summary>
+    private async Task<List<string>> OutboxAsync(ChannelSettings s, string? password, CancellationToken ct)
+    {
+        var dir = s.OutboxFolder.Trim();
+        if (!Directory.Exists(dir)) throw new DirectoryNotFoundException("Ausgangsordner nicht gefunden: " + dir);
+        var archive = string.IsNullOrWhiteSpace(s.OutboxArchive) ? Path.Combine(dir, "gesendet") : s.OutboxArchive.Trim();
+        var patterns = DeliveryService.Patterns(s.OutboxPattern);
+        var sent = new List<string>();
+        foreach (var path in Directory.GetFiles(dir).OrderBy(File.GetLastWriteTimeUtc))
+        {
+            var name = Path.GetFileName(path);
+            if (name.EndsWith(".part", StringComparison.OrdinalIgnoreCase) || (patterns.Count > 0 && !patterns.Any(p => Documents.MailRuleEngine.Like(name, p)))) continue;
+            byte[] data;
+            try { data = await File.ReadAllBytesAsync(path, ct); } catch (IOException) { continue; } // noch in Benutzung
+            var file = new DeliveryFile(name, data, MimeTypes.For(name));
+            switch (s.Type)
+            {
+                case ChannelType.Exite: await ExiteTransport.SendAsync(s, password, file, ct); break;
+                case ChannelType.As2: await As2Transport.SendAsync(s, _settings.Secrets.Unprotect(s.OwnCertificatePassword), file, ct); break;
+                default:
+                    var up = ChannelSettings.Merge(null, s);
+                    await FileTransfer.UploadAsync(s.Type, up, password, new[] { file }, ct);
+                    break;
+            }
+            Directory.CreateDirectory(archive);
+            var dest = Path.Combine(archive, name);
+            if (File.Exists(dest)) dest = Path.Combine(archive, $"{Path.GetFileNameWithoutExtension(name)}_{DateTime.Now:yyyyMMdd-HHmmss}{Path.GetExtension(name)}");
+            File.Move(path, dest);
+            sent.Add(name);
+        }
+        return sent;
     }
 
     /// <summary>Zielordner: eingestellt, sonst daten\abruf\&lt;Versandweg&gt;.</summary>
@@ -227,45 +271,12 @@ public sealed class InboundService : BackgroundService
         return got;
     }
 
-    // ---------------- eXite: Befehlsdatei ser(H), Ergebnis in R… ----------------
+    // ---------------- eXite: Befehlsdatei ser(H) so(1), Ergebnis in R… ----------------
     private static async Task<List<string>> ExiteAsync(ChannelSettings s, string? password, string target, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(s.User)) throw new InvalidOperationException("eXite: Benutzername des Postfachs fehlt.");
-        using var client = new AsyncFtpClient(string.IsNullOrWhiteSpace(s.Host) ? ExiteTransport.DefaultHost : s.Host.Trim(), s.User.Trim(), password ?? "", s.Port > 0 ? s.Port : 21);
-        client.Config.EncryptionMode = FtpEncryptionMode.Explicit;
-        client.Config.DataConnectionType = FtpDataConnectionType.AutoPassive;
-        client.Config.UploadDataType = FtpDataType.Binary;
-        client.Config.DownloadDataType = FtpDataType.Binary;
-        await client.Connect(ct);
-        var folder = (s.Folder ?? "").Trim().Replace('\\', '/').TrimEnd('/');
-        string P(string n) => folder.Length == 0 ? n : folder + "/" + n;
-        var type = s.ExiteType?.Trim().ToUpperInvariant() == "E" ? "E" : "X";
-        var name = $"BH{DateTime.Now:yyMMddHHmmss}{Random.Shared.Next(100, 999)}";
-        var cmd = $"* Belegpost Abruf\r\nser(H)\r\ntyp({type})\r\n" + (string.IsNullOrWhiteSpace(s.ExiteMessageClass) ? "" : $"umc({s.ExiteMessageClass.Trim()})\r\n");
-        await client.UploadBytes(Encoding.ASCII.GetBytes(cmd), P("C" + name), FtpRemoteExists.Overwrite, false, null, ct);
         var got = new List<string>();
-        for (var i = 0; i < 30; i++)
-        {
-            await Task.Delay(TimeSpan.FromSeconds(2), ct);
-            if (await client.FileExists(P("E" + name), ct)) throw new InvalidOperationException($"eXite hat den Abruf {name} abgelehnt – Grund im eXite-Protokoll.");
-            if (!await client.FileExists(P("J" + name), ct)) continue;
-            foreach (var item in await client.GetListing(folder, ct))
-            {
-                if (item.Type != FtpObjectType.File || !item.Name.StartsWith("R" + name, StringComparison.Ordinal)) continue;
-                if (item.Size > 0)
-                {
-                    var data = await client.DownloadBytes(item.FullName, ct) ?? Array.Empty<byte>();
-                    if (data.Length > 0) got.Add(Save(target, item.Name + (type == "X" ? ".xml" : ".edi"), data));
-                }
-                await client.DeleteFile(item.FullName, ct);
-            }
-            foreach (var n in new[] { "J" + name, "P" + name })
-                if (await client.FileExists(P(n), ct)) await client.DeleteFile(P(n), ct);
-            await client.Disconnect(ct);
-            return got;
-        }
-        await client.Disconnect(ct);
-        throw new TimeoutException($"eXite hat den Abruf {name} nach 60 Sekunden noch nicht verarbeitet.");
+        foreach (var (name, data) in await ExiteTransport.ReceiveAsync(s, password, 50, ct)) got.Add(Save(target, name, data));
+        return got;
     }
 
     // ---------------- E-Mail: IMAP(S) / POP3(S), Anhänge ----------------

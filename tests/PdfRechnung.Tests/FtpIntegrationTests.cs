@@ -81,3 +81,31 @@ public class CustomerFtpEndToEndTests
         Assert.True(Directory.GetFiles("/tmp/ftproot/e2e", "*.pdf").Length >= 1);
     }
 }
+
+/// <summary>Nur mit EXITE_TEST=1 und einem nachgebauten eXite-FTPS-Postfach auf 127.0.0.1:2122 (Benutzer eu/ep).</summary>
+public class ExiteIntegrationTests
+{
+    [Fact]
+    public async Task Exite_senden_abholen_und_Ausgangsordner()
+    {
+        if (Environment.GetEnvironmentVariable("EXITE_TEST") != "1") return;
+        var dir = Path.Combine(Path.GetTempPath(), "exite-" + Guid.NewGuid().ToString("N")[..6]); Directory.CreateDirectory(dir);
+        var settings = new SettingsStore(dir);
+        var s = new ChannelSettings { Type = ChannelType.Exite, Host = "127.0.0.1", Port = 2122, User = "eu", ExiteType = "E" };
+        // FTPS (explizit) über denselben Server
+        await FileTransfer.UploadAsync(ChannelType.Ftps, new ChannelSettings { Type = ChannelType.Ftps, Host = "127.0.0.1", Port = 2122, User = "eu", Folder = "ftps" },
+            "ep", new[] { new DeliveryFile("x.xml", new byte[] { 1 }, "application/xml") }, default);
+        Assert.True(File.Exists("/tmp/exiteroot/ftps/x.xml"));
+        Assert.Contains("verarbeitet", await ExiteTransport.SendAsync(s, "ep", new DeliveryFile("R1.edi", new byte[] { 65, 66 }, "application/edifact"), default));
+        var outbox = Path.Combine(dir, "aus"); Directory.CreateDirectory(outbox);
+        File.WriteAllText(Path.Combine(outbox, "INVOIC_1.edi"), "UNA");
+        var opt = new DeliveryOptions { Channels = { new ChannelSettings { Type = ChannelType.Exite, Host = "127.0.0.1", Port = 2122, User = "eu", Password = settings.Secrets.Protect("ep"),
+            ExiteType = "E", InboundEnabled = "ja", InboundTarget = Path.Combine(dir, "ein"), OutboxFolder = outbox } } };
+        var inbound = new InboundService(new StaticOptions<DeliveryOptions>(opt), new CustomerStore(dir), settings, NullLogger<InboundService>.Instance);
+        var run = await inbound.RunAsync(Assert.Single(inbound.Jobs()), default);
+        Assert.True(run.Ok, run.Message);
+        Assert.True(File.Exists(Path.Combine(outbox, "gesendet", "INVOIC_1.edi")));
+        var got = Assert.Single(Directory.GetFiles(Path.Combine(dir, "ein")));
+        Assert.EndsWith(".edi", got);
+    }
+}

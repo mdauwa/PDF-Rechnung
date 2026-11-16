@@ -264,7 +264,11 @@ app.Use(async (ctx, next) =>
     await next();
 });
 app.UseDefaultFiles();
-app.UseStaticFiles();
+// Oberfläche immer neu prüfen lassen (ETag) – nach einem Update sieht der Browser sofort die neuen Dateien
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-cache"
+});
 
 // ---------------- API ----------------
 

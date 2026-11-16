@@ -256,6 +256,8 @@ function drawVorgang(view, data) {
       <div class="vd-side">
         <div class="card">
           <div class="card-head"><h2>Status</h2>${badge(v.status)}</div>
+          <p class="meta vd-id">Vorgangsnummer <code id="vdId">${esc(v.id)}</code>
+            <button class="icon-btn" id="vdIdCopy" title="Vorgangsnummer kopieren (z. B. für den ERP-Test unter Einstellungen → ERP-Rückmeldung)">⧉</button></p>
           ${autoInfo}
           ${v.sendError && v.status === "versandfehler" ? `<div class="notice">Versandfehler: ${esc(v.sendError)}</div>` : ""}
           ${v.sentAt ? `<p class="meta">Versendet ${fmtDT(v.sentAt)} von ${esc(v.sentBy || "")}</p>` : ""}
@@ -345,6 +347,11 @@ function drawVorgang(view, data) {
         <iframe sandbox="" title="Vorschau Mail"></iframe></div>`;
       box.querySelector("iframe").srcdoc = r.html;
     } catch (err) { box.innerHTML = `<p class="bad">${esc(err.message)}</p>`; }
+  });
+
+  $("#vdIdCopy")?.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(v.id); toast("Vorgangsnummer kopiert."); }
+    catch { getSelection().selectAllChildren($("#vdId")); toast("Bitte mit Strg+C kopieren.", false); }
   });
 
   view.querySelector(".pdf-switch")?.addEventListener("click", e => {

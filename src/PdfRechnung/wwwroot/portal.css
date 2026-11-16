@@ -162,3 +162,7 @@ ul.erp-jobs { list-style: none; margin: 6px 0; padding: 0; }
 ul.erp-jobs li { padding: 6px 0; border-top: 1px solid var(--border); }
 ul.erp-jobs li:first-child { border-top: 0; }
 ul.erp-jobs small { display: block; color: var(--muted); font-size: 12px; word-break: break-word; margin-top: 2px; }
+
+.vd-id { display: flex; align-items: center; gap: 6px; padding-bottom: 0; }
+.vd-id code { user-select: all; font-size: 12px; background: var(--surface-2); padding: 1px 6px; border-radius: 4px; color: var(--text); }
+.vd-id .icon-btn { width: 26px; height: 26px; font-size: 13px; }

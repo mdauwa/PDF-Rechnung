@@ -78,6 +78,9 @@ public sealed class Vorgang
     public string? OwnerName { get; set; }
     /// <summary>ERP-Bedienernummer aus @@pb@@ (3-stellig).</summary>
     public string? OperatorNumber { get; set; }
+    /// <summary>Betreff und Empfänger, die das ERP per MAPI übergeben hat (für die Mail-Regeln; haben Vorrang vor Steuerzeichen).</summary>
+    public string? MapiSubject { get; set; }
+    public List<string> MapiTo { get; set; } = new();
     /// <summary>ERP-Benutzernummer aus dem druckenden Prozess (z. B. wwa.exe 000 …), falls erkannt.</summary>
     public string? ProcessOperator { get; set; }
     /// <summary>Druckender Prozess mit Befehlszeile (Anzeige).</summary>

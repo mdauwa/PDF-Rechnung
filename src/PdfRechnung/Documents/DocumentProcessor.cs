@@ -198,11 +198,11 @@ public sealed class DocumentProcessor
     }
 
     public Vorgang Process(byte[] pdf, string source, string? fileName, string? user = null, string? machine = null, string? ownerUserId = null,
-        Action<Vorgang>? beforeSave = null, bool publish = true, string? processOperator = null)
+        Action<Vorgang>? beforeSave = null, bool publish = true, string? processOperator = null, string? mapiSubject = null, List<string>? mapiTo = null)
     {
         var now = DateTimeOffset.Now;
         var v = new Vorgang { Id = DocumentStore.NewId(now), CreatedAt = now, Source = source, OriginalFileName = fileName, PrintUser = user, PrintMachine = machine,
-            ProcessOperator = processOperator };
+            ProcessOperator = processOperator, MapiSubject = string.IsNullOrWhiteSpace(mapiSubject) ? null : mapiSubject.Trim(), MapiTo = mapiTo ?? new() };
         string text;
         ParsedCodes p;
         try
@@ -412,8 +412,8 @@ public sealed class DocumentProcessor
         var globalRules = _rules?.CurrentValue;
         var ctx = new MailRuleContext(
             MailRuleEngine.GuessDocumentType(string.IsNullOrEmpty(inv.DocumentTypeCode) ? null : v.DocumentType, p.MailFileName, p.FileName, p.Subject, v.OriginalFileName),
-            stationery, p.Sender?.Trim() ?? o.FromAddress, m.To, v.BuyerId, v.BuyerName, v.Source, p.InvoiceFormat,
-            string.Join(" ", new[] { p.Subject, p.MailFileName, p.FileName, v.OriginalFileName }.Where(x => !string.IsNullOrWhiteSpace(x))),
+            stationery, p.Sender?.Trim() ?? o.FromAddress, v.MapiTo.Count > 0 ? v.MapiTo : m.To, v.BuyerId, v.BuyerName, v.Source, p.InvoiceFormat,
+            string.Join(" ", new[] { v.MapiSubject, p.Subject, p.MailFileName, p.FileName, v.OriginalFileName }.Where(x => !string.IsNullOrWhiteSpace(x))),
             v.OwnerUserId);
         var rr = MailRuleEngine.Evaluate(ctx, userRules, globalRules);
         m.RuleNotes = new List<string>();

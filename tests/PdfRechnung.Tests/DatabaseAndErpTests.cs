@@ -341,6 +341,46 @@ public sealed class DatabaseAndErpTests : IDisposable
     }
 
     [Fact]
+    public async Task MAPI_Beleg_Regel_auf_MAPI_Betreff_uebersteuert_Outlook()
+    {
+        var (store, _, users, settings) = Create();
+        var s = DefaultSettings.Create();
+        s.MailTemplates.Items.Add(new MailDesign { Name = "MZ" });
+        var hub = new EventHub();
+        var global = new MailRuleOptions { Rules = { new MailRule { Name = "Rechnungsversand", TextContains = "Rechnung*", Template = "MZ", FromAddress = "office@erpaustria.com", Route = "direkt" } } };
+        var proc = new DocumentProcessor(store, new StaticOptions<MailOptions>(s.Mail), new StaticOptions<InvoiceOptions>(s.Invoice),
+            NullLogger<DocumentProcessor>.Instance, settings: settings, users: users, events: hub,
+            templates: new StaticOptions<MailTemplateOptions>(s.MailTemplates), rules: new StaticOptions<MailRuleOptions>(global), ruleStore: new MailRuleStore(settings));
+        var send = new SendService(store, settings, new StaticOptions<MailOptions>(s.Mail), new StaticOptions<StorageOptions>(s.Storage),
+            new StaticOptions<MailTemplateOptions>(s.MailTemplates), NullLogger<SendService>.Instance);
+        var tasks = new MelderTasks(store.Db, hub);
+        var (pc, _) = users.AddDevice("martin", "Büro");
+        users.TouchDevice(pc.Id, "PC-BUERO");
+        var intake = new MapiIntake(proc, store, users, tasks, hub, send, new StaticOptions<MapiOptions>(new MapiOptions()), NullLogger<MapiIntake>.Instance);
+
+        // Betreff nur über MAPI – im PDF steht kein @@ed@@
+        var msg = new MapiMessage
+        {
+            Subject = "Rechnung R-77", Body = "anbei die Rechnung", ClientName = "PC-BUERO",
+            Recipients = { new() { Type = "to", Address = "SMTP:kunde@firma.at" } },
+            Attachments = { new() { Name = "R-77.pdf", Data = Convert.ToBase64String(TestData.Pdf(new[] { "@@mf R-77@@" })) } }
+        };
+        var r = await intake.HandleAsync(msg, "FIRMA\\mmuster", default);
+        Assert.Equal(MapiMode.Direct, r.Mode);                 // nicht Outlook
+        Assert.Empty(tasks.Pending("martin", pc.Id));
+        var v = store.Get(r.VorgangId!)!;
+        Assert.Equal("MZ", v.Mail.Template);
+        Assert.Equal("office@erpaustria.com", v.Mail.FromAddress);
+        Assert.Equal(MailRoute.Direct, v.Mail.Route);
+        Assert.Contains("Rechnungsversand", v.Mail.RouteReason);
+
+        // ohne passenden Betreff gilt wieder die MAPI-Einstellung (Outlook)
+        msg.Subject = "Angebot A-1";
+        var r2 = await intake.HandleAsync(msg, "FIRMA\\mmuster", default);
+        Assert.Equal(MapiMode.Outlook, r2.Mode);
+    }
+
+    [Fact]
     public async Task Normale_MAPI_Mail_ohne_Steuerzeichen_geht_ungeprueft_nach_Outlook()
     {
         var (store, _, users, settings) = Create();

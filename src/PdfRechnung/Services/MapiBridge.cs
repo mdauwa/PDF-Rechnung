@@ -106,7 +106,7 @@ public sealed class MapiIntake
         var bcc = Addresses(m, "bcc");
         var owner = _users.FindByWindowsAccount(windowsAccount);
 
-        var v = _proc.Process(pdf, "MAPI", fileName ?? "E-Mail", windowsAccount, m.ClientName, owner?.Id, beforeSave: x =>
+        var v = _proc.Process(pdf, "MAPI", fileName ?? "E-Mail", windowsAccount, m.ClientName, owner?.Id, mapiSubject: m.Subject, mapiTo: to, beforeSave: x =>
         {
             // Was das ERP über MAPI übergibt, hat Vorrang (Empfänger, Betreff, Text); Steuerzeichen im PDF (z. B. @@pi@@, @@pb@@) gelten weiter.
             if (to.Count > 0) x.Mail.To = to;
@@ -147,6 +147,19 @@ public sealed class MapiIntake
         var device = _users.TargetDevice(userId, m.ClientName);
         var mode = _users.EffectiveMapiMode(userId, device?.Id, _opt.CurrentValue.DefaultMode);
         string? hint = null;
+        // Versandweg aus Mail-Regel bzw. @@pw@@ übersteuert die MAPI-Einstellung des Benutzers/PCs
+        var routed = v.Mail.Route switch
+        {
+            MailRoute.Direct => MapiMode.Direct,
+            MailRoute.Approval or MailRoute.None => MapiMode.Portal,
+            MailRoute.Outlook => MapiMode.Outlook,
+            _ => null
+        };
+        if (routed is not null)
+        {
+            _log.LogInformation("MAPI-Mail {Id}: Versandweg {Route} ({Reason}) statt {Mode}", v.Id, v.Mail.Route, v.Mail.RouteReason, mode);
+            mode = routed;
+        }
         if (mode == MapiMode.Outlook && !user.SendViaOutlook)
         {
             mode = MapiMode.Portal; // Outlook nicht freigeschaltet

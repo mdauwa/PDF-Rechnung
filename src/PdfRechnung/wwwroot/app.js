@@ -18,6 +18,7 @@ const ICONS = {
   doc: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
   download: '<path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/>',
   check: '<path d="M9 12l2 2 4-4"/><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
   bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/>'
 };
 const icon = name => `<svg viewBox="0 0 24 24">${ICONS[name] || ICONS.doc}</svg>`;
@@ -105,8 +106,15 @@ function renderMenu() {
     + `<a href="#/regeln" data-key="regeln">${icon("send")}<span>Meine Mail-Regeln</span></a>`;
   if (portal.connect) html += `<div class="menu-group">ERP Suite Connect</div><a href="#/connect?b=eingang" data-key="connect:eingang">${icon("download")}<span>Eingang</span></a><a href="#/connect?b=ausgang" data-key="connect:ausgang">${icon("upload")}<span>Ausgang</span></a>`;
   html += `<div class="menu-group">Tools</div><a href="#/pruefen" data-key="pruefen">${icon("check")}<span>Dokument validieren</span></a>`;
-  if (portal.isAdmin) html += `<div class="menu-group">Einstellungen</div>` +
-    ST_GROUPS.map(([g, title, ic]) => `<a href="#/einstellungen?g=${g}" data-key="einstellungen:${g}">${icon(ic)}<span>${esc(title)}</span></a>`).join("");
+  if (portal.isAdmin) {
+    const sub = ST_GROUPS.filter(([g]) => g !== "benutzer");
+    const inSettings = /^#\/einstellungen/.test(location.hash) && !/[?&]g=benutzer/.test(location.hash);
+    const open = inSettings || store.get("menu.einstellungen", false);
+    html += `<div class="menu-group">System</div>
+      <a href="#/einstellungen?g=benutzer" data-key="einstellungen:benutzer">${icon("users")}<span>Benutzer</span></a>
+      <a href="#" class="menu-parent" data-menu-toggle="einstellungen" aria-expanded="${open}">${icon("settings")}<span>Einstellungen</span><span class="menu-caret" aria-hidden="true">▸</span></a>
+      <div class="menu-sub" id="menuSubEinstellungen" ${open ? "" : "hidden"}>${sub.map(([g, title, ic]) => `<a href="#/einstellungen?g=${g}" data-key="einstellungen:${g}">${icon(ic)}<span>${esc(title)}</span></a>`).join("")}</div>`;
+  }
   $("#menu").innerHTML = html;
   if (portal.seeInbound) api("GET", "api/eingang?anzahl=1").then(r => setInboundCount(r.unread)).catch(() => { });
 }
@@ -166,6 +174,10 @@ function route() {
   const q = new URLSearchParams(hash.split("?")[1] || "");
   const active = key === "vorgaenge" ? `vorgaenge:${q.get("f") || "offen"}` : key === "connect" ? `connect:${q.get("b") || "eingang"}` : key === "einstellungen" ? `einstellungen:${q.get("g") || "system"}` : key;
   document.querySelectorAll("#menu a").forEach(a => a.classList.toggle("active", a.dataset.key === active));
+  // Untermenü „Einstellungen“ aufklappen, wenn eine Einstellungsseite offen ist
+  const sub = document.getElementById("menuSubEinstellungen");
+  if (sub && sub.querySelector("a.active")) { sub.hidden = false; document.querySelector("[data-menu-toggle]")?.setAttribute("aria-expanded", "true"); }
+  document.querySelector("[data-menu-toggle]")?.classList.toggle("has-active", !!sub?.querySelector("a.active"));
 }
 
 async function init() {
@@ -173,7 +185,16 @@ async function init() {
   try { if (window.top !== window.self) document.body.classList.add("embedded"); } catch { document.body.classList.add("embedded"); }
   await loadPortal();
   startLive();
-  $("#menu").addEventListener("click", e => { if (e.target.closest("a")) toggleSidebar(false); });
+  $("#menu").addEventListener("click", e => {
+    const t = e.target.closest("[data-menu-toggle]");
+    if (t) {
+      e.preventDefault();
+      const sub = $("#menuSubEinstellungen"), open = sub.hidden;
+      sub.hidden = !open; t.setAttribute("aria-expanded", String(open)); store.set("menu.einstellungen", open);
+      return;
+    }
+    if (e.target.closest("a")) toggleSidebar(false);
+  });
   $("#menuToggle").onclick = () => toggleSidebar(true);
   $("#backdrop").onclick = () => toggleSidebar(false);
   window.addEventListener("hashchange", route);

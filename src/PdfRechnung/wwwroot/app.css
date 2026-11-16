@@ -477,3 +477,10 @@ table.sender-table input { width: 100%; min-width: 160px; }
 .user-pop-i { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 7px 10px; border-radius: 6px; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; text-decoration: none; }
 .user-pop-i:hover { background: var(--accent-soft); color: var(--accent); }
 .user-pop-sep { height: 1px; background: var(--border); margin: 6px 4px; }
+
+/* Untermenü „Einstellungen“ (zugeklappt) */
+.menu a.menu-parent .menu-caret { margin-left: auto; font-size: 11px; opacity: .7; transition: transform .15s; }
+.menu a.menu-parent[aria-expanded="true"] .menu-caret { transform: rotate(90deg); }
+.menu a.menu-parent.has-active { color: #fff; }
+.menu-sub { margin: 2px 0 4px 14px; padding-left: 8px; border-left: 1px solid rgba(255,255,255,.08); }
+.menu-sub a { padding: 7px 10px; font-size: 13px; }

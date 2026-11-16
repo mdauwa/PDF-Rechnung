@@ -31,7 +31,8 @@ const TABS = [
 
 /** Einstellungen im Menü links: Gruppen mit ihren Reitern. */
 const ST_GROUPS = [
-  ["system", "Dienst & Zugang", "settings", ["dienst", "server", "anmeldung", "benutzer"]],
+  ["benutzer", "Benutzer", "users", ["benutzer"]],
+  ["system", "Dienst & Zugang", "settings", ["dienst", "server", "anmeldung"]],
   ["belege", "Drucker & Belege", "doc", ["eingang", "briefpapier", "erechnung", "ablage"]],
   ["email", "E-Mail", "send", ["mail", "mailvorlagen", "regeln", "mapi", "statuslink"]],
   ["versand", "Versand & Partner", "upload", ["versandwege", "kunden", "connect"]],
@@ -61,11 +62,11 @@ async function renderSettings(view) {
   ST.group = grp[0];
   ST.tab = q.get("t") && grp[3].includes(q.get("t")) ? q.get("t") : store.get("st.tab." + grp[0], grp[3][0]);
   if (!grp[3].includes(ST.tab)) ST.tab = grp[3][0];
-  $("#viewTitle").textContent = `Einstellungen – ${grp[1]}`;
+  $("#viewTitle").textContent = grp[0] === "benutzer" ? "Benutzer" : `Einstellungen – ${grp[1]}`;
   view.innerHTML = `<div class="settings">
     <div class="notice info" id="stSetup" hidden></div>
     <div class="notice" id="stMsg" hidden></div>
-    <nav class="tabs" id="stTabs">${stGroupTabs().map(([k, t]) => `<button data-tab="${k}">${t}</button>`).join("")}</nav>
+    <nav class="tabs" id="stTabs" ${stGroupTabs().length < 2 ? "hidden" : ""}>${stGroupTabs().map(([k, t]) => `<button data-tab="${k}">${t}</button>`).join("")}</nav>
     <div id="stBody" class="st-body"><p class="meta">Lade Einstellungen …</p></div>
     <div class="savebar" id="stSave" hidden>
       <span id="stSaveText">Ungespeicherte Änderungen</span>

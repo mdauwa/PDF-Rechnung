@@ -796,6 +796,7 @@ function tabTemplates() {
   const T = ST.s.mailTemplates ||= { items: [], default: "" };
   if (ST.mtEdit != null && T.items[ST.mtEdit]) return templateMask(ST.mtEdit);
   ST.mtEdit = null;
+  const ph = (ST.data.placeholders || []).map(p => `<code>${esc(p)}</code>`).join(" ");
   const rules = ST.s.mailRules?.rules || [];
   const usedBy = name => rules.filter(r => r.template && name && r.template.toLowerCase() === name.toLowerCase()).length;
   const rows = T.items.map((t, i) => `<tr class="clickable" data-st="mt-open" data-i="${i}">

@@ -417,6 +417,7 @@ public sealed class DocumentProcessor
             v.OwnerUserId);
         var rr = MailRuleEngine.Evaluate(ctx, userRules, globalRules);
         m.RuleNotes = new List<string>();
+        m.AppliedRules = rr.Applied.ToList();
 
         // Absender für den Serverversand: @@pf@@ → Regel → Einstellung des Benutzers → Vorlage → Standard
         var owner = v.OwnerUserId is null ? null : _users?.FindById(v.OwnerUserId);
@@ -455,6 +456,11 @@ public sealed class DocumentProcessor
         else if (rr.Route is { } rro) { m.Route = rro.Text; m.RouteReason = rro.Reason; m.RoutePrinter = rr.GotomaxxPrinter?.Text; }
         if (p.InvalidRoute is { } ir) fixes.Add($"!Versandweg „{ir}“ (@@pw@@) ist unbekannt – erlaubt sind direkt, freigabe, outlook, gotomaxx, keine.");
         if (m.Route == MailRoute.None && p.MailEnabled is null) m.Enabled = false;
+        m.RouteEffective = m.Route.Length > 0 ? $"{MailRoute.Text(m.Route)} ({m.RouteReason})"
+            : !m.Enabled ? "keine Mail (@@ml0@@ bzw. Einstellung)"
+            : owner?.SendViaOutlook == true ? $"{owner.Name} sendet selbst über Outlook – kein Autoversand"
+            : o.AutoSend ? $"Autoversand nach {o.AutoSendDelayMinutes} Min. (Einstellung „E-Mail & Versand“)"
+            : "nach Freigabe im Portal (Autoversand ist aus)";
 
         var fileTemplate = p.FileName ?? p.MailFileName ?? o.DefaultFileName;
         var baseValues = Placeholders.Build(v, custom, null, m.FromName ?? o.FromName);

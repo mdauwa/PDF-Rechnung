@@ -155,6 +155,9 @@ public sealed class MapiIntake
             MailRoute.Outlook => MapiMode.Outlook,
             _ => null
         };
+        var why = routed is not null ? v.Mail.RouteReason
+            : device is { MapiMode.Length: > 0 } ? $"MAPI-Einstellung des PCs {device.Name}"
+            : !string.IsNullOrEmpty(user.MapiMode) ? $"MAPI-Vorgabe für {user.Name}" : "MAPI-Standard";
         if (routed is not null)
         {
             _log.LogInformation("MAPI-Mail {Id}: Versandweg {Route} ({Reason}) statt {Mode}", v.Id, v.Mail.Route, v.Mail.RouteReason, mode);
@@ -171,6 +174,10 @@ public sealed class MapiIntake
             hint = "Der Beleg hat Fehler und liegt deshalb im Belegpost-Portal:\n" + (v.Messages.FirstOrDefault(x => x.Level == DocumentChecker.Error)?.Text ?? "");
         var title = string.Join(" ", new[] { v.DocumentType, v.VoucherId }.Where(x => !string.IsNullOrWhiteSpace(x)));
         if (title.Length == 0) title = v.Mail.Subject;
+        var modeText = mode == MapiMode.Outlook && v.Status != VorgangStatus.Error && device is not null ? "in Outlook geöffnet"
+            : mode == MapiMode.Direct && v.Status is VorgangStatus.Ready or VorgangStatus.Warning ? "direkt über den Server versendet"
+            : "im Portal zur Prüfung";
+        _store.Update(v.Id, x => { x.Mail.RouteEffective = $"MAPI: {modeText} ({why}{(hint is null ? "" : " – " + hint.Split('\n')[0])})"; return true; });
 
         switch (mode)
         {

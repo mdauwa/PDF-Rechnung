@@ -447,3 +447,8 @@ td.mt-thumb img { display: block; max-width: 48px; max-height: 28px; object-fit:
 .rte-view { border: 1px solid var(--border); border-radius: 8px; min-height: 0; }
 table.sender-table td { vertical-align: middle; }
 table.sender-table input { width: 100%; min-width: 160px; }
+
+.rules-kv { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rules-kv th { text-align: left; font-weight: 500; color: var(--muted); padding: 7px 8px 7px 16px; width: 38%; vertical-align: top; white-space: nowrap; }
+.rules-kv td { padding: 7px 16px 7px 0; vertical-align: top; word-break: break-word; }
+.rules-kv tr + tr th, .rules-kv tr + tr td { border-top: 1px solid var(--border); }

@@ -55,6 +55,10 @@ public sealed class MailData
     public string? RoutePrinter { get; set; }
     /// <summary>Herkunft von Absender, CC/BCC usw. aus Regeln (Anzeige im Vorgang).</summary>
     public List<string> RuleNotes { get; set; } = new();
+    /// <summary>Angewendete Mail-Regeln („eigene Regel „X““, „Regel „Y““).</summary>
+    public List<string> AppliedRules { get; set; } = new();
+    /// <summary>Was tatsächlich mit der Mail passiert (Versandweg mit Grund) – Anzeige im Vorgang.</summary>
+    public string? RouteEffective { get; set; }
     /// <summary>Platzhalterwerte (eingebaute + @@pv@@) für Vorlage, Signatur und Fußzeile.</summary>
     public Dictionary<string, string> Variables { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>Automatische Textkorrekturen (Umlaute, Sonderzeichen).</summary>

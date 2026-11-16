@@ -280,10 +280,6 @@ function drawVorgang(view, data) {
             <p class="meta">${v.mail.template ? `Mail-Vorlage <b>${esc(v.mail.template)}</b> (${esc(v.mail.templateReason || "")})` : "Ohne Mail-Vorlage (schlichte Mail)"}${v.mail.fromAddress ? ` · Absender ${esc(v.mail.fromName ? v.mail.fromName + " <" + v.mail.fromAddress + ">" : v.mail.fromAddress)}` : ""}
               · <a href="#" id="mPreviewBtn">So sieht die Mail aus</a>
               ${portal.sendViaOutlook && portal.userId && v.mail.enabled && v.status !== "fehler" ? ` · <a href="#" data-a="outlook">In Outlook öffnen</a>` : ""}</p>
-            ${v.mail.signatureName || v.mail.signatureText === "" || v.mail.route || (v.mail.ruleNotes || []).length ? `<p class="meta">${[
-              v.mail.signatureName ? `Signatur <b>${esc(v.mail.signatureName)}</b> (${esc(v.mail.signatureReason || "")})` : v.mail.signatureText === "" ? "ohne Signatur (@@ps@@)" : "",
-              v.mail.route ? `Versandweg <b>${esc({ direkt: "direkt", freigabe: "nach Freigabe", outlook: "über Outlook", gotomaxx: "an gotomaxx", keine: "keine Mail" }[v.mail.route] || v.mail.route)}</b> (${esc(v.mail.routeReason || "")})` : "",
-              ...(v.mail.ruleNotes || []).map(esc)].filter(Boolean).join(" · ")}</p>` : ""}
             <div id="mPreview"></div>
             ${editable ? `<div class="actions"><button class="btn" data-a="mail-save" disabled>Versanddaten speichern</button><span class="meta-inline">Änderungen werden geprüft und bleiben bei „Neu prüfen“ erhalten.</span></div>` : ""}
           </div>
@@ -321,6 +317,8 @@ function drawVorgang(view, data) {
             <p><a href="api/vorgaenge/${encodeURIComponent(v.id)}/text" target="_blank" rel="noopener">Ausgelesenen Text anzeigen</a></p>
           </details>
         </div>
+
+        ${rulesCard(v)}
       </div>
     </div>`;
 
@@ -446,4 +444,29 @@ async function loadTimeline(v) {
     try { await api("POST", `api/vorgaenge/${encodeURIComponent(v.id)}/erp/senden`); toast("In die Warteschlange gestellt."); setTimeout(() => loadTimeline(v), 3000); }
     catch (e) { toast(e.message, false); }
   });
+}
+
+/** Karte „Regeln und Versandweg“: welche Mail-Regeln gegriffen haben und was mit der Mail passiert. */
+function rulesCard(v) {
+  const m = v.mail || {};
+  if (m.plain) return "";
+  const why = t => t ? ` <span class="meta-inline">(${esc(t)})</span>` : "";
+  const notes = (m.ruleNotes || []);
+  const note = re => notes.find(n => re.test(n));
+  const route = { direkt: "direkt versenden", freigabe: "nach Freigabe im Portal", outlook: "über Outlook", gotomaxx: "an gotomaxx", keine: "keine Mail" };
+  const rows = [
+    ["Angewendete Regeln", (m.appliedRules || []).length ? (m.appliedRules).map(esc).join("<br>") : '<span class="meta-inline">keine Regel hat gegriffen</span>'],
+    ["Versandweg", m.routeEffective ? esc(m.routeEffective) : m.route ? `${esc(route[m.route] || m.route)}${why(m.routeReason)}` : "wie eingestellt"],
+    ["Mail-Vorlage", m.template ? `${esc(m.template)}${why(m.templateReason)}` : "ohne Vorlage (schlichte Mail)"],
+    ["Absender", m.fromAddress ? `${esc(m.fromName ? `${m.fromName} <${m.fromAddress}>` : m.fromAddress)}${why(note(/^Absender /)?.replace(/^Absender \S+ /, "").replace(/^aus /, "").replace(/^\(|\)$/g, "") || "Vorlage bzw. Standard")}` : "Standard aus „E-Mail & Versand“"],
+    ["Antwort an", m.replyTo ? `${esc(m.replyTo)}${why(note(/^Antwort an /)?.replace(/^Antwort an \S+ /, "").replace(/^aus /, "").replace(/^\(|\)$/g, "") || "Vorlage")}` : '<span class="meta-inline">–</span>'],
+    ["Signatur", m.signatureName ? `${esc(m.signatureName)}${why(m.signatureReason)}` : m.signatureText === "" ? `keine${why(m.signatureReason)}` : "Signatur der Mail-Vorlage"],
+    ...(note(/^CC /) ? [["CC", `${esc((m.cc || []).join(", "))}${why(note(/^CC /).replace(/^CC aus /, ""))}`]] : []),
+    ...(note(/^BCC /) ? [["BCC", `${esc((m.bcc || []).join(", "))}${why(note(/^BCC /).replace(/^BCC aus /, ""))}`]] : [])
+  ];
+  return `<div class="card">
+      <div class="card-head"><h2>Regeln und Versandweg</h2></div>
+      <table class="kv rules-kv">${rows.map(([k, val]) => `<tr><th>${k}</th><td>${val}</td></tr>`).join("")}</table>
+      <p class="meta">Steuerzeichen im Druck haben immer Vorrang vor Regeln. Regeln bearbeiten: Persönlich → Meine Mail-Regeln bzw. Einstellungen → Regeln &amp; Signaturen.</p>
+    </div>`;
 }

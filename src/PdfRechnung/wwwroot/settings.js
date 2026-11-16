@@ -49,7 +49,7 @@ async function renderSettings(view) {
 
   view.querySelector("#stTabs").onclick = e => {
     const t = e.target.closest("[data-tab]")?.dataset.tab;
-    if (t) { ST.tab = t; ST.mtEdit = null; ST.userEdit = null; store.set("st.tab", t); drawTab(); }
+    if (t) { ST.tab = t; ST.mtEdit = null; ST.userEdit = null; ST.mdEdit = null; store.set("st.tab", t); drawTab(); }
   };
   rteInstall(view);
   view.addEventListener("click", onAction);
@@ -277,11 +277,14 @@ async function onAction(e) {
       case "erp-field-del": ST.s.erp.fields.splice(+btn.dataset.i, 1); markDirty(); drawTab(); break;
       case "erp-check": await erpCall("api/admin/erp/pruefen", "Verbindung wird geprüft …"); break;
       case "md-add": (ST.s.mandanten ||= { items: [] }).items.push({ number: "", name: "", ownErp: false, erpOff: false, erpEndpoint: "", erpVendor: "", erpApplication: "",
-          erpSecureAppId: "", erpRevision: 0, erpUsername: "", inboxFolder: "", pathMappings: [], gotomaxxPrinter: "", exportFolder: "" }); markDirty(); drawTab(); break;
+          erpSecureAppId: "", erpRevision: 0, erpUsername: "", inboxFolder: "", pathMappings: [], gotomaxxPrinter: "", exportFolder: "" });
+        ST.mdEdit = ST.s.mandanten.items.length - 1; markDirty(); drawTab(); window.scrollTo(0, 0); break;
+      case "md-open": ST.mdEdit = +btn.dataset.i; drawTab(); window.scrollTo(0, 0); break;
+      case "md-back": ST.mdEdit = null; drawTab(); break;
       case "md-del": {
         const m = ST.s.mandanten.items[+btn.dataset.i];
         if (!await confirmDialog("Mandant entfernen", `Mandant ${esc(m.number || "(ohne Nummer)")} aus den Einstellungen entfernen? Belege dieses Mandanten gelten danach wie ohne Mandant.`, "Entfernen", true)) break;
-        ST.s.mandanten.items.splice(+btn.dataset.i, 1); markDirty(); drawTab(); break;
+        ST.s.mandanten.items.splice(+btn.dataset.i, 1); ST.mdEdit = null; markDirty(); drawTab(); break;
       }
       case "md-pw-clear": { const m = ST.s.mandanten.items[+btn.dataset.i]; m.erpClearPassword = !m.erpClearPassword; markDirty(); drawTab(); break; }
       case "md-erp-check": {
@@ -1448,52 +1451,70 @@ function tabStatusLink() {
 function tabMandanten() {
   const M = (ST.s.mandanten ||= { items: [] });
   M.items ||= [];
-  const erpMode = m => m.erpOff ? "aus" : m.ownErp ? "eigen" : "";
-  const card = (m, i) => {
-    const P = `mandanten.items.${i}`;
-    const mode = erpMode(m);
-    return `<section class="st-card"><div class="st-card-head"><h3>Mandant ${esc(m.number || "(neu)")}${m.name ? ` – ${esc(m.name)}` : ""}</h3>
-        <button class="icon-btn" data-st="md-del" data-i="${i}" title="Mandant entfernen">✕</button></div>
-      <div class="st-card-body">
-        <div class="grid2">
-          ${field("Mandantennummer", inText(`${P}.number`, "10000"), "Wie im ERP – bei der WebWARE der Wert von <code>/M:</code> (z. B. <code>WWA.EXE 000 /M:10000</code>).")}
-          ${field("Bezeichnung", inText(`${P}.name`, "Firma GmbH"))}
-        </div>
-        <h4>ERP-Rückmeldung</h4>
-        <div class="grid2">
-          ${field("Anbindung", `<select data-md-erp="${i}">
-              <option value="" ${mode === "" ? "selected" : ""}>wie allgemein eingestellt</option>
-              <option value="eigen" ${mode === "eigen" ? "selected" : ""}>eigene SecuredApp für diesen Mandanten</option>
-              <option value="aus" ${mode === "aus" ? "selected" : ""}>für diesen Mandanten nicht zurückschreiben</option></select>`,
-            "Ein WEBWARE-Servicepass greift immer nur auf <b>einen</b> Mandanten zu – für jeden weiteren Mandanten braucht es im ERP eine eigene SecuredApp. Feldzuordnung und Statuscodes gelten für alle Mandanten.")}
-        </div>
-        ${mode === "eigen" ? `<div class="grid3">
-          ${field("SecuredApp-Zugriffs-ID", inText(`${P}.erpSecureAppId`, ST.s.erp?.secureAppId || ""), "Pflicht – die SecuredApp dieses Mandanten.")}
-          ${field("Webservice-Adresse", inText(`${P}.erpEndpoint`, ST.s.erp?.endpoint || "wie allgemein"), "Leer = wie allgemein.")}
-          ${field("Revision", inNum(`${P}.erpRevision`, 0, 9999), "0 = wie allgemein.")}
-          ${field("Hersteller-Hash", inText(`${P}.erpVendor`, "wie allgemein"))}
-          ${field("Anwendungs-Hash", inText(`${P}.erpApplication`, "wie allgemein"))}
-          ${field("Technischer ERP-Benutzer", inText(`${P}.erpUsername`, ST.s.erp?.username || "wie allgemein"), "Leer = Benutzer und Kennwort wie allgemein.")}
-          ${field("Kennwort", `<input type="password" data-path="${P}.erpNewPassword" autocomplete="new-password" placeholder="${m.erpHasPassword ? "gespeichert – leer lassen" : ""}" ${m.erpClearPassword ? "disabled" : ""}>`)}
-        </div>
-        <div class="actions">${m.erpHasPassword ? `<label class="check"><input type="checkbox" data-st="md-pw-clear" data-i="${i}" ${m.erpClearPassword ? "checked" : ""}> gespeichertes Kennwort entfernen</label>` : ""}
-          ${m.number ? `<button class="btn ghost small" data-st="md-erp-check" data-m="${esc(m.number)}">Verbindung prüfen</button>` : ""}</div>` : ""}
-        <h4>Drucker &amp; Eingang</h4>
-        <div class="grid2">
-          ${field("Eigener Eingangsordner (optional)", inText(`${P}.inboxFolder`, "\\\\server\\belegpost\\mandant2"), "PDFs aus diesem Ordner gehören zu diesem Mandanten. Leer = keiner.")}
-          ${field("gotomaxx-Standarddrucker", inText(`${P}.gotomaxxPrinter`, ST.s.gotomaxx?.printer || "wie allgemein"), "Für <code>@@pg@@</code> ohne Druckernamen. Leer = wie allgemein.")}
-          ${field("Pfade aus den Steuerzeichen umsetzen (zusätzlich)", inLines(`${P}.pathMappings`, "K:\\=\\\\server\\WebWARE5\\M2\\"), "Werden vor den allgemeinen Umsetzungen angewendet.")}
-        </div>
-        <h4>Ablage</h4>
-        <div class="grid2">
-          ${field("Versendete Belege ablegen in", inText(`${P}.exportFolder`, ST.s.storage?.exportFolder || "wie allgemein"), "Leer = wie allgemein (Einstellungen → Ablage).")}
-        </div>
-      </div></section>`;
-  };
+  if (ST.mdEdit != null && M.items[ST.mdEdit]) return mandantMask(ST.mdEdit);
+  ST.mdEdit = null;
+  const erpText = m => m.erpOff ? '<span class="badge">aus</span>' : m.ownErp ? `<span class="badge ok">eigene SecuredApp ${esc(m.erpSecureAppId || "")}</span>` : '<span class="meta-inline">wie allgemein</span>';
+  const or = v => v ? esc(v) : '<span class="meta-inline">–</span>';
   return section("Mandanten",
     `<p class="help">Belegpost erkennt den Mandanten am Beleg – in dieser Reihenfolge: Steuerzeichen <code>@@pm10000@@</code> im Druck
       (bei MAPI auch im Mailtext) → Parameter <code>/M:</code> des druckenden Programms (WebWARE <code>wwa.exe</code>, Prozesserkennung unter Drucker &amp; Eingang)
-      → eigener Eingangsordner des Mandanten. Hier stellst du nur ein, was je Mandant anders ist; alles andere (E-Mail, Versand, Benutzer, Regeln, Vorlagen, MAPI) gilt für alle.</p>
-     ${M.items.length ? "" : `<p class="meta">Noch keine Mandanten – ohne Eintrag gelten für alle Belege die allgemeinen Einstellungen. Der erkannte Mandant wird trotzdem beim Vorgang angezeigt.</p>`}`,
-    `<button class="btn ghost small" data-st="md-add">+ Mandant</button>`) + M.items.map(card).join("");
+      → eigener Eingangsordner des Mandanten. Je Mandant stellst du nur ein, was anders ist; alles andere (E-Mail, Versand, Benutzer, Regeln, Vorlagen, MAPI) gilt für alle.</p>
+     ${M.items.length ? `<div class="table-wrap"><table class="list users-compact"><thead><tr>
+        <th>Nummer</th><th>Bezeichnung</th><th>ERP-Rückmeldung</th><th>Eingangsordner</th><th>gotomaxx-Drucker</th><th>Ablage</th><th></th></tr></thead><tbody>
+      ${M.items.map((m, i) => `<tr class="clickable" data-st="md-open" data-i="${i}">
+        <td class="mono"><b>${esc(m.number || "(neu)")}</b></td>
+        <td>${or(m.name)}</td>
+        <td class="nowrap">${erpText(m)}</td>
+        <td>${or(m.inboxFolder)}</td>
+        <td>${or(m.gotomaxxPrinter)}</td>
+        <td>${or(m.exportFolder)}</td>
+        <td class="nowrap"><button class="btn ghost small" data-st="md-open" data-i="${i}">Bearbeiten</button></td></tr>`).join("")}
+      </tbody></table></div>`
+      : `<p class="meta">Noch keine Mandanten – ohne Eintrag gelten für alle Belege die allgemeinen Einstellungen. Der erkannte Mandant wird trotzdem beim Vorgang angezeigt.</p>`}`,
+    `<button class="btn ghost" data-st="md-add">+ Mandant</button>`);
+}
+
+function mandantMask(i) {
+  const m = ST.s.mandanten.items[i];
+  const P = `mandanten.items.${i}`;
+  const mode = m.erpOff ? "aus" : m.ownErp ? "eigen" : "";
+  return `<div class="user-mask-head"><button class="btn ghost" data-st="md-back">← Alle Mandanten</button>
+      <h2>Mandant ${esc(m.number || "(neu)")}${m.name ? ` – ${esc(m.name)}` : ""}</h2>
+      <span class="spacer"></span>
+      <button class="btn ghost danger" data-st="md-del" data-i="${i}">Entfernen</button></div>` +
+    section("Mandant",
+      `<div class="grid2">
+        ${field("Mandantennummer", inText(`${P}.number`, "10000"), "Wie im ERP – bei der WebWARE der Wert von <code>/M:</code> (z. B. <code>WWA.EXE 000 /M:10000</code>).")}
+        ${field("Bezeichnung", inText(`${P}.name`, "Firma GmbH"))}
+      </div>`) +
+    section("ERP-Rückmeldung",
+      `<div class="grid2">
+        ${field("Anbindung", `<select data-md-erp="${i}">
+            <option value="" ${mode === "" ? "selected" : ""}>wie allgemein eingestellt</option>
+            <option value="eigen" ${mode === "eigen" ? "selected" : ""}>eigene SecuredApp für diesen Mandanten</option>
+            <option value="aus" ${mode === "aus" ? "selected" : ""}>für diesen Mandanten nicht zurückschreiben</option></select>`,
+          "Ein WEBWARE-Servicepass greift immer nur auf <b>einen</b> Mandanten zu – für jeden weiteren Mandanten braucht es im ERP eine eigene SecuredApp. Feldzuordnung und Statuscodes gelten für alle Mandanten.")}
+      </div>
+      ${mode === "eigen" ? `<div class="grid3">
+        ${field("SecuredApp-Zugriffs-ID", inText(`${P}.erpSecureAppId`, ST.s.erp?.secureAppId || ""), "Pflicht – die SecuredApp dieses Mandanten.")}
+        ${field("Webservice-Adresse", inText(`${P}.erpEndpoint`, ST.s.erp?.endpoint || "wie allgemein"), "Leer = wie allgemein.")}
+        ${field("Revision", inNum(`${P}.erpRevision`, 0, 9999), "0 = wie allgemein.")}
+        ${field("Hersteller-Hash", inText(`${P}.erpVendor`, "wie allgemein"))}
+        ${field("Anwendungs-Hash", inText(`${P}.erpApplication`, "wie allgemein"))}
+        ${field("Technischer ERP-Benutzer", inText(`${P}.erpUsername`, ST.s.erp?.username || "wie allgemein"), "Leer = Benutzer und Kennwort wie allgemein.")}
+        ${field("Kennwort", `<input type="password" data-path="${P}.erpNewPassword" autocomplete="new-password" placeholder="${m.erpHasPassword ? "gespeichert – leer lassen" : ""}" ${m.erpClearPassword ? "disabled" : ""}>`)}
+      </div>
+      <div class="actions">${m.erpHasPassword ? `<label class="check"><input type="checkbox" data-st="md-pw-clear" data-i="${i}" ${m.erpClearPassword ? "checked" : ""}> gespeichertes Kennwort entfernen</label>` : ""}
+        ${m.number ? `<button class="btn ghost small" data-st="md-erp-check" data-m="${esc(m.number)}">Verbindung prüfen</button>` : ""}</div>` : ""}`) +
+    section("Drucker &amp; Eingang",
+      `<div class="grid2">
+        ${field("Eigener Eingangsordner (optional)", inText(`${P}.inboxFolder`, "\\\\server\\belegpost\\mandant2"), "PDFs aus diesem Ordner gehören zu diesem Mandanten. Leer = keiner.")}
+        ${field("gotomaxx-Standarddrucker", inText(`${P}.gotomaxxPrinter`, ST.s.gotomaxx?.printer || "wie allgemein"), "Für <code>@@pg@@</code> ohne Druckernamen. Leer = wie allgemein.")}
+        ${field("Pfade aus den Steuerzeichen umsetzen (zusätzlich)", inLines(`${P}.pathMappings`, "K:\\=\\\\server\\WebWARE5\\M2\\"), "Werden vor den allgemeinen Umsetzungen angewendet.")}
+      </div>`) +
+    section("Ablage",
+      `<div class="grid2">
+        ${field("Versendete Belege ablegen in", inText(`${P}.exportFolder`, ST.s.storage?.exportFolder || "wie allgemein"), "Leer = wie allgemein (Einstellungen → Ablage).")}
+      </div>`) +
+    `<p class="meta">Gespeichert wird mit „Speichern“ unten.</p>`;
 }

@@ -19,6 +19,17 @@ public sealed class MandantTests : IDisposable
     [InlineData(null, null)]
     public void Mandant_aus_der_Befehlszeile(string? cmd, string? expected) => Assert.Equal(expected, MandantOptions.FromCommandLine(cmd));
 
+    [Fact]
+    public void Vornullen_zaehlen_nicht()
+    {
+        var o = new MandantOptions { Items = { new Mandant { Number = "000001", Name = "Eins" }, new Mandant { Number = "A01" } } };
+        Assert.Equal("Eins", o.Find("1")?.Name);
+        Assert.Equal("Eins", o.Find("0001")?.Name);
+        Assert.NotNull(o.Find("a01"));
+        Assert.Null(o.Find("10"));
+        Assert.Null(o.Find("A1")); // nicht rein numerisch: Vornullen zählen
+    }
+
     private DocumentProcessor Create(MandantOptions md, out DocumentStore store)
     {
         Directory.CreateDirectory(_dir);

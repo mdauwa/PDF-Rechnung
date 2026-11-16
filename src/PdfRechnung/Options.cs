@@ -31,7 +31,19 @@ public sealed class MandantOptions
     public List<Mandant> Items { get; set; } = new();
 
     public Mandant? Find(string? number) =>
-        string.IsNullOrWhiteSpace(number) ? null : Items.FirstOrDefault(m => string.Equals(m.Number.Trim(), number.Trim(), StringComparison.OrdinalIgnoreCase));
+        string.IsNullOrWhiteSpace(number) ? null : Items.FirstOrDefault(m => Same(m.Number, number));
+
+    /// <summary>Gleicher Mandant? Vornullen zählen nicht: /M:1 = /M:000001.</summary>
+    public static bool Same(string? a, string? b) =>
+        a is not null && b is not null && string.Equals(Key(a), Key(b), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Vergleichsform: rein numerisch → ohne Vornullen.</summary>
+    public static string Key(string number)
+    {
+        var t = number.Trim();
+        if (t.Length > 0 && t.All(char.IsAsciiDigit)) { t = t.TrimStart('0'); if (t.Length == 0) t = "0"; }
+        return t;
+    }
 
     /// <summary>Mandantennummer: Buchstaben/Ziffern, 1–20 Zeichen; sonst null.</summary>
     public static string? Normalize(string? s)

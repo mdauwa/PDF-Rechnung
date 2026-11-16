@@ -214,7 +214,7 @@ function drawVorgang(view, data) {
     const route = v.mail.route || "";
     const routeWhy = route ? ` – Versandweg laut ${v.mail.routeReason || "Regel"}` : "";
     const canOutlook = portal.sendViaOutlook && portal.userId && v.mail.enabled && !["verworfen", "inVersand", "fehler"].includes(v.status)
-      && (route === "" || route === "outlook");
+      && (route === "" || route === "outlook") && !(v.deliveries || []).length;
     const canServer = ["bereit", "warnung", "versandfehler", "outlook"].includes(v.status) && v.mail.enabled;
     if (route === "gotomaxx" && portal.gotomaxx && !["inVersand", "verworfen", "gotomaxx", "versendet"].includes(v.status))
       actions.push(`<button class="btn" data-a="gotomaxx" title="Druckt den Beleg auf den gotomaxx-PDFMAILER-Drucker${esc(routeWhy)}">${icon("send")} An gotomaxx übergeben</button>`);
@@ -473,8 +473,12 @@ function rulesCard(v, mandant) {
   const note = re => notes.find(n => re.test(n));
   const route = { direkt: "direkt versenden", wennok: "automatisch, wenn alles ok", freigabe: "nach Freigabe im Portal", outlook: "über Outlook", gotomaxx: "an gotomaxx", keine: "keine Mail" };
   const mdRow = v.mandant ? [["Mandant", `${esc(mandant?.name ? `${mandant.number} – ${mandant.name}` : v.mandant)} <span class="meta-inline">(${esc(v.mandantReason || "")}${mandant && !mandant.configured ? " · nicht eingerichtet – es gelten die allgemeinen Einstellungen" : ""})</span>`]] : [];
+  const stIcon = { ok: '<span class="badge ok">ok</span>', fehler: '<span class="badge missing">Fehler</span>', offen: '<span class="badge">offen</span>' };
+  const cuRows = v.customerName ? [["Kunde", `${esc(v.customerName)} <span class="meta-inline">(${esc(v.customerReason || "")})</span>`],
+    ["Versandwege des Kunden", (v.deliveries || []).length ? v.deliveries.map(d => `${stIcon[d.status] || esc(d.status)} ${esc(d.label)}${d.target ? ` <span class="meta-inline">→ ${esc(d.target)}</span>` : ""}${d.message ? ` <span class="bad">${esc(d.message)}</span>` : ""}`).join("<br>")
+      : '<span class="meta-inline">keine (laut Regel bzw. kein aktiver Versandweg)</span>']] : [];
   const rows = [
-    idRow, ...mdRow,
+    idRow, ...mdRow, ...cuRows,
     ["Angewendete Regeln", (m.appliedRules || []).length ? (m.appliedRules).map(esc).join("<br>") : '<span class="meta-inline">keine Regel hat gegriffen</span>'],
     ["Versandweg", m.routeEffective ? esc(m.routeEffective) : m.route ? `${esc(route[m.route] || m.route)}${why(m.routeReason)}` : "wie eingestellt"],
     ["Mail-Vorlage", m.template ? `${esc(m.template)}${why(m.templateReason)}` : "ohne Vorlage (schlichte Mail)"],

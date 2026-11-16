@@ -19,6 +19,8 @@ const TABS = [
   ["erechnung", "E-Rechnung"],
   ["ablage", "Ablage"],
   ["mandanten", "Mandanten"],
+  ["versandwege", "Versandwege"],
+  ["kunden", "Kunden"],
   ["erp", "ERP-Rückmeldung"],
   ["mapi", "MAPI-Mails"],
   ["statuslink", "Status-Link"],
@@ -79,13 +81,14 @@ function drawTab() {
   const body = $("#stBody");
   if (!ST.s) return;
   const fn = { dienst: tabService, server: tabServer, eingang: tabInbox, briefpapier: tabStationery, mail: tabMail, mailvorlagen: tabTemplates, erechnung: tabInvoice, ablage: tabStorage, benutzer: tabUsers, anmeldung: tabAuth,
-    erp: tabErp, mapi: tabMapi, statuslink: tabStatusLink, regeln: tabRules, mandanten: tabMandanten }[ST.tab] || tabService;
+    erp: tabErp, mapi: tabMapi, statuslink: tabStatusLink, regeln: tabRules, mandanten: tabMandanten, versandwege: tabDelivery, kunden: tabCustomers }[ST.tab] || tabService;
   body.innerHTML = fn();
   if (ST.tab === "benutzer" && !ST.users) loadUsers();
   if (ST.tab === "benutzer" && !ST.devices) loadDevices();
   if (ST.tab === "erp") loadErpStatus();
   if (ST.tab === "mapi") loadMapiStatus();
   if (ST.tab === "eingang") loadPrinterStatus();
+  if (ST.tab === "versandwege") loadDeliveryRuns();
   if (ST.tab === "dienst") loadService();
 }
 
@@ -117,6 +120,7 @@ const section = (title, inner, extra = "") => `<section class="st-card"><div cla
 
 function onInput(e) {
   const el = e.target;
+  if (deliveryInput(el, e)) return;
   if (el.dataset?.mdErp !== undefined) {
     const m = ST.s.mandanten.items[+el.dataset.mdErp];
     m.ownErp = el.value === "eigen"; m.erpOff = el.value === "aus";
@@ -190,6 +194,7 @@ async function onAction(e) {
   const btn = e.target.closest("button") || e.target.closest("input");
   try {
     if (btn && btn.tagName === "BUTTON") btn.disabled = true;
+    if (await deliveryClick(a, btn, e)) return;
     switch (a) {
       case "save": await save(); break;
       case "discard": await loadSettings(); msg(""); break;

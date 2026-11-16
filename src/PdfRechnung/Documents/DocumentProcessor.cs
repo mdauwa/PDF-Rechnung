@@ -201,6 +201,9 @@ public sealed class DocumentProcessor
         if (_customers is null) return;
         var plan = PdfRechnung.Delivery.DeliveryPlanner.Plan(_customers, v);
         PdfRechnung.Delivery.DeliveryPlanner.Apply(v, plan);
+        if (plan.HasChannels && v.Mail.Enabled)
+            v.Mail.RouteEffective = $"Versandwege von {plan.Customer!.Label}: {string.Join(", ", plan.Channels.Select(c => c.Label))}"
+                + (v.Mail.RouteEffective is { Length: > 0 } r && !r.StartsWith("Versandwege von", StringComparison.Ordinal) ? " · " + r : "");
         if (plan.NoDelivery && v.Mail.Enabled)
         {
             v.Mail.Enabled = false;

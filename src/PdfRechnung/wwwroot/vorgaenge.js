@@ -256,8 +256,6 @@ function drawVorgang(view, data) {
       <div class="vd-side">
         <div class="card">
           <div class="card-head"><h2>Status</h2>${badge(v.status)}</div>
-          <p class="meta vd-id">Vorgangsnummer <code id="vdId">${esc(v.id)}</code>
-            <button class="icon-btn" id="vdIdCopy" title="Vorgangsnummer kopieren (z. B. für den ERP-Test unter Einstellungen → ERP-Rückmeldung)">⧉</button></p>
           ${autoInfo}
           ${v.sendError && v.status === "versandfehler" ? `<div class="notice">Versandfehler: ${esc(v.sendError)}</div>` : ""}
           ${v.sentAt ? `<p class="meta">Versendet ${fmtDT(v.sentAt)} von ${esc(v.sentBy || "")}</p>` : ""}
@@ -465,12 +463,16 @@ async function loadTimeline(v) {
 /** Karte „Regeln und Versandweg“: welche Mail-Regeln gegriffen haben und was mit der Mail passiert. */
 function rulesCard(v) {
   const m = v.mail || {};
-  if (m.plain) return "";
+  const idRow = ["Vorgangsnummer", `<span class="vd-id"><code id="vdId">${esc(v.id)}</code>
+      <button class="icon-btn" id="vdIdCopy" title="Vorgangsnummer kopieren (z. B. für den ERP-Test unter Einstellungen → ERP-Rückmeldung)">⧉</button></span>`];
+  if (m.plain) return `<div class="card"><div class="card-head"><h2>Regeln und Versandweg</h2></div>
+      <table class="kv rules-kv"><tr><th>${idRow[0]}</th><td>${idRow[1]}</td></tr></table></div>`;
   const why = t => t ? ` <span class="meta-inline">(${esc(t)})</span>` : "";
   const notes = (m.ruleNotes || []);
   const note = re => notes.find(n => re.test(n));
   const route = { direkt: "direkt versenden", freigabe: "nach Freigabe im Portal", outlook: "über Outlook", gotomaxx: "an gotomaxx", keine: "keine Mail" };
   const rows = [
+    idRow,
     ["Angewendete Regeln", (m.appliedRules || []).length ? (m.appliedRules).map(esc).join("<br>") : '<span class="meta-inline">keine Regel hat gegriffen</span>'],
     ["Versandweg", m.routeEffective ? esc(m.routeEffective) : m.route ? `${esc(route[m.route] || m.route)}${why(m.routeReason)}` : "wie eingestellt"],
     ["Mail-Vorlage", m.template ? `${esc(m.template)}${why(m.templateReason)}` : "ohne Vorlage (schlichte Mail)"],

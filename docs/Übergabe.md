@@ -34,7 +34,7 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
 - **Erst normale PDFs, dann ZUGFeRD (13.11.2026):** Zuerst läuft der komplette Weg ohne E-Rechnung: Drucker, Steuerzeichen entfernen, Briefpapier, Versand. ZUGFeRD kommt erst dazu, wenn das stabil funktioniert.
 - **ERP-Ausgabe der Steuerzeichen:** Dass die Steuerzeichen jetzt gedruckt werden, lag an einer internen ERP-Einstellung. Für das Projekt ist das nicht relevant.
 
-## Stand (fertig, getestet, 130 Tests grün – Commit 988163b; `Y:\Dev\eRechnung\Ausgabe` auf diesem Stand, ohne Mac-ZIP)
+## Stand (fertig, getestet, 136 Tests grün – Commit d8d46ba; `Y:\Dev\eRechnung\Ausgabe` auf diesem Stand, ohne Mac-ZIP)
 
 - **Portal:**
   - Vorgangsliste mit Filtern und Menüzählern
@@ -128,6 +128,12 @@ Ein eigener Ersatz für **gotomaxx PDFMAILER**, ohne Lizenzkosten.
   - Aufträge an den Melder sind persistent (`melder_auftrag`, Übernahme atomar). Nicht abgeholt nach `DeliveryTimeoutHours` → 820.
   - Der Benutzer ändert die Einstellung seines PCs im Melder oder Portal. Der Admin setzt die Vorgabe und kann sie auf alle PCs „überrollen“ (Ereignis `einstellung`); danach darf der Benutzer wieder ändern.
 - **Normale Mail oder Beleg (15.11.2026):** Eine MAPI-Mail ist ein **Beleg**, wenn ein PDF-Anhang oder der Mailtext Belegpost-Steuerzeichen enthält. Alles andere (z. B. „Senden“ aus WordPad/Word/Explorer) ist eine **normale E-Mail** (`MailData.Plain`): keine Prüfung, kein Briefpapier, keine CI-Vorlage, alle Anhänge bleiben Anhänge, nie Autoversand. Sie wird immer als Entwurf in Outlook auf dem PC des Benutzers geöffnet (auch ohne Outlook-Freigabe); ohne zugeordneten Benutzer oder Melder bleibt sie im Portal. Landet eine Mail nicht in Outlook, zeigt die DLL den Grund als Hinweis an. PC-Zuordnung toleriert gekürzte RDP-Clientnamen (`UserStore.SameComputer`); der Mac-Melder meldet den lokalen Hostnamen.
+- **Mail-Regeln und Signaturen (16.11.2026, am Server noch nicht getestet):**
+  - Global: Einstellungen → „Regeln & Signaturen“ (`AppSettings.MailRules`). Je Benutzer: Datei `daten\regeln\<id>.json` (`MailRuleStore`), bearbeitbar unter Persönlich → „Meine Mail-Regeln“ und vom Admin in der Benutzer-Maske (API `/api/meine-regeln[?user=]`).
+  - Regel = Bedingungen (Belegart, Briefpapier, Absender, Empfänger, Kunde, Quelle, Format, Text, global zusätzlich Benutzer; * ?) → Aktionen (Vorlage, Absender, Absendername, Antwort-an, Signatur, Versandweg, gotomaxx-Drucker, CC, BCC, Stopp). Eigene vor globalen, je Aktion erste Regel gewinnt (`MailRuleEngine`). Steuerzeichen übersteuern immer; neue `@@ps…@@` (Signatur, `@@ps@@` = keine) und `@@pw…@@` (Versandweg direkt/freigabe/outlook/gotomaxx/keine).
+  - Signatur: `@@ps@@` → Regel → Benutzer (Briefpapier → Absender → Standard) → global → Vorlage; gespeichert in `MailData.SignatureText`, `MailDesigner.Render(…, signatureOverride)`.
+  - Versandweg: direkt = Autoversand auch wenn global aus; freigabe/outlook = nie automatisch; outlook = Melder-Auftrag beim Eingang (nur mit Outlook-Freigabe); gotomaxx = Weiterleitung; keine = Mail aus.
+- **Benutzerübersicht (16.11.2026):** einzeilige Tabelle (Name, ERP-Nr., E-Mail, Rechte, Sicht, Melder, Anmeldung), Klick öffnet eigene Maske (Person, Rechte, Zuordnung, Sichtbarkeit, MAPI/Melder, Signaturen & Regeln).
 - **Outlook-Versandbestätigung (15.11.2026):**
   - Windows-Melder: Benutzereigenschaft `BelegpostId` am Entwurf; minütliche Suche (DASL) in „Gesendete Elemente“ aller Postfächer, nur wenn Outlook läuft → `/melder/api/vorgang/{id}/gesendet` → 110.
   - Mac: Betreff und Zeit in „Gesendet“ (AppleScript).

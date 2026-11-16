@@ -41,6 +41,8 @@ public sealed class PortalUser
     public List<string> AlsoSees { get; set; } = new();
     /// <summary>Vorgabe des Admins für MAPI-Mails dieses Benutzers ("" = globaler Standard).</summary>
     public string MapiMode { get; set; } = "";
+    /// <summary>Darstellung im Portal: "" = wie das System, "hell", "dunkel". Stellt der Benutzer selbst ein.</summary>
+    public string Theme { get; set; } = "";
 
     /// <summary>Versand über den Server (Autoversand, „Senden“ im Portal): Absender für Belege dieses Benutzers ("" = Vorlage/Standard).</summary>
     public string SendFromAddress { get; set; } = "";
@@ -217,7 +219,7 @@ public sealed class UserStore
             foreach (var u in users)
             {
                 if (string.IsNullOrWhiteSpace(u.Id)) u.Id = Guid.NewGuid().ToString("N")[..12];
-                if (known.TryGetValue(u.Id, out var old)) u.LastLogin = old.LastLogin;
+                if (known.TryGetValue(u.Id, out var old)) { u.LastLogin = old.LastLogin; u.Theme = old.Theme; }
             }
             _data.Users = users;
             Save(_data);

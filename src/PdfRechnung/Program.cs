@@ -313,6 +313,7 @@ app.MapGet("/api/portal", (IOptionsSnapshot<PortalOptions> portal, HttpContext c
         isLocalAdmin = a.IsLocalAdmin,
         canSend = a.CanSend,
         userId = a.UserId,
+        theme = a.UserId is { } tid ? app.Services.GetRequiredService<UserStore>().FindById(tid)?.Theme ?? "" : "",
         sendViaOutlook = a.Outlook,
         gotomaxx = a.Authenticated && gotomaxx.Value.Enabled,
         setupMode = rt.SetupMode,
@@ -321,6 +322,16 @@ app.MapGet("/api/portal", (IOptionsSnapshot<PortalOptions> portal, HttpContext c
         certificateWarning = a.Authenticated ? c.Info?.Warning : null,
         version = typeof(Program).Assembly.GetName().Version?.ToString(3)
     });
+});
+
+// Persönliche Darstellung (hell/dunkel/wie System) – stellt jeder Benutzer selbst ein
+app.MapPut("/api/mein-design", (HttpContext ctx, PortalAccess access, UserStore users, ThemeRequest req) =>
+{
+    var a = access.For(ctx);
+    if (!a.Authenticated) return Results.Json(new { error = "Bitte anmelden." }, statusCode: 401);
+    var theme = req.Theme is "hell" or "dunkel" ? req.Theme : "";
+    if (a.UserId is { } id) users.Update(d => { if (d.Users.FirstOrDefault(u => u.Id == id) is { } u) u.Theme = theme; });
+    return Results.Ok(new { theme });
 });
 
 VorgangApi.Map(app);
@@ -376,3 +387,5 @@ static AppSettings? TryLoad(SettingsStore s)
 }
 
 public partial class Program;
+
+public sealed record ThemeRequest(string? Theme);

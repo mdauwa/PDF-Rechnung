@@ -57,12 +57,44 @@ async function loadPortal() {
   catch { portal = { title: "Belegpost", authenticated: false }; }
   document.title = portal.title;
   $("#portalTitle").textContent = portal.title;
+  if (portal.authenticated && portal.userId && typeof portal.theme === "string") applyTheme(portal.theme, false);
   $("#userInfo").innerHTML = portal.authenticated
-    ? `<div class="user-name">${esc(portal.user)}</div>${portal.login ? `<div class="user-login">${esc(portal.login)}</div>` : ""}
-       <div class="user-foot">${portal.setupMode ? "Einrichtungsmodus · " : ""}<a href="auth/logout">Abmelden</a></div>`
+    ? `<button class="user-btn" id="userBtn" aria-haspopup="true" aria-expanded="false" title="Persönliche Einstellungen">
+         <span class="user-name">${esc(portal.user)}</span>${portal.login ? `<span class="user-login">${esc(portal.login)}</span>` : ""}
+         <span class="user-caret" aria-hidden="true">▾</span></button>
+       <div class="user-pop" id="userPop" hidden>
+         <div class="user-pop-h">Darstellung</div>
+         ${[["", "Wie das System"], ["hell", "Hell"], ["dunkel", "Dunkel"]].map(([k, t]) => `<button class="user-pop-i" data-theme-set="${k}">${themeCurrent() === k ? "✓ " : ""}${t}</button>`).join("")}
+         <div class="user-pop-sep"></div>
+         <a class="user-pop-i" href="auth/logout">Abmelden</a>
+       </div>
+       ${portal.setupMode ? `<div class="user-foot">Einrichtungsmodus</div>` : ""}`
     : (portal.setupMode ? "Einrichtungsmodus" : "");
+  const btn = $("#userBtn");
+  if (btn) {
+    btn.onclick = e => { e.stopPropagation(); const p = $("#userPop"); p.hidden = !p.hidden; btn.setAttribute("aria-expanded", String(!p.hidden)); };
+    $("#userPop").onclick = async e => {
+      const t = e.target.closest("[data-theme-set]"); if (!t) return;
+      applyTheme(t.dataset.themeSet, true);
+      $("#userPop").querySelectorAll("[data-theme-set]").forEach(b => b.textContent = (b.dataset.themeSet === themeCurrent() ? "✓ " : "") + b.textContent.replace(/^✓ /, ""));
+      if (portal.userId) try { await api("PUT", "api/mein-design", { theme: t.dataset.themeSet }); } catch { /* lokal gespeichert */ }
+    };
+  }
   renderMenu();
 }
+
+/* ---------------- Darstellung hell/dunkel ---------------- */
+
+const themeCurrent = () => { try { return localStorage.getItem("belegpost.theme") || ""; } catch { return ""; } };
+function applyTheme(t, save) {
+  const map = { hell: "light", dunkel: "dark" };
+  if (map[t]) document.documentElement.dataset.theme = map[t]; else delete document.documentElement.dataset.theme;
+  try { if (t) localStorage.setItem("belegpost.theme", t); else localStorage.removeItem("belegpost.theme"); } catch { }
+}
+document.addEventListener("click", e => {
+  const p = document.getElementById("userPop");
+  if (p && !p.hidden && !e.target.closest("#userPop") && !e.target.closest("#userBtn")) { p.hidden = true; $("#userBtn")?.setAttribute("aria-expanded", "false"); }
+});
 
 function renderMenu() {
   if (!portal.authenticated) { $("#menu").innerHTML = ""; return; }

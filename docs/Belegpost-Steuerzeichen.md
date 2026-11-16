@@ -41,6 +41,8 @@ Unter Einstellungen → **Regeln & Signaturen** (global) und je Benutzer (Persö
 | `@@mb…@@` Mailtext aus Datei | Textdatei | Datei darf ANSI oder UTF-8 sein (wird erkannt). Dazu Platzhalter, Umlaut-Korrektur und HTML-Mail. Pfade wie `K:\…` werden über die **Pfadzuordnung** auf den Server umgesetzt. |
 | `@@mf…@@` / `@@fn…@@` Dateiname | Dateiname des Anhangs | Platzhalter, Umlaut-Korrektur, unzulässige Zeichen werden ersetzt. |
 | `@@to@@` / `@@aa@@` / `@@cc@@` / `@@bc@@` | Empfänger | Adressen werden geprüft. Ohne Empfänger wird, falls vorhanden, die Käufer-E-Mail aus `@@xi@@` genommen. |
+| `@@sp…@@` SMTP-Profil | Versand über dieses SMTP-Profil | Ist der Wert eine Mailadresse, wird sie zum **Absender** (nach `@@pf@@`, vor Regeln und Benutzer-Einstellung). Bei der Weiterleitung an gotomaxx bleibt es unverändert. |
+| `@@ab@@` `@@ac@@` `@@ad@@` `@@bn@@` | in der gotomaxx-Doku nicht beschrieben (druckt das WebWARE-Standardformular) | ohne Wirkung, keine Warnung; Werte stehen als Hinweis im Vorgang |
 | `@@ma…@@` / `@@mc…@@` Anlagen | Datei / Ordner anhängen | Pfadzuordnung `K:\` → `\\server\…`. Fehlende Dateien erscheinen als Warnung. |
 | `@@ml0@@` / `@@md@@` | ohne Mail / ohne Beleg-Anhang | Werden im Portal angezeigt und können dort geändert werden. |
 | `@@di…@@` PDF-Eigenschaften | Titel, Autor, Thema, Stichwörter | Werden ins Versand-PDF geschrieben. |

@@ -72,3 +72,25 @@ public class StackedCodesTests
         Assert.Equal("10000", p.Mandant);
     }
 }
+
+public class GotomaxxSmtpProfileTests
+{
+    [Fact]
+    public void SMTP_Profil_sp_wird_Absender_und_ab_ac_ad_bn_sind_ohne_Warnung()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "pdfr-sp-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var settings = new SettingsStore(dir);
+            var s = DefaultSettings.Create();
+            var store = new DocumentStore(settings, NullLogger<DocumentStore>.Instance);
+            var proc = new DocumentProcessor(store, new StaticOptions<MailOptions>(s.Mail), new StaticOptions<InvoiceOptions>(s.Invoice), NullLogger<DocumentProcessor>.Instance, settings: settings);
+            var v = proc.Process(TestData.PdfStacked(new[] { "@@spausgangsrechnung@noris.at@@", "@@toa@kunde.at@@", "@@ab@@", "@@ac@@", "@@ad@@", "@@bn000@@" }), "Eingang", "a.pdf");
+            Assert.Equal("ausgangsrechnung@noris.at", v.Mail.FromAddress);
+            Assert.DoesNotContain(v.Messages, m => m.Text.Contains("Unbekanntes Steuerzeichen"));
+            Assert.Contains(v.Messages, m => m.Text.Contains("@@bn000@@"));
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
+    }
+}

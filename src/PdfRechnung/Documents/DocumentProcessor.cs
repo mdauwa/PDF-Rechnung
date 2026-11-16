@@ -405,6 +405,10 @@ public sealed class DocumentProcessor
         v.UpdateStatus();
     }
 
+    /// <summary>gotomaxx-SMTP-Profil (@@sp@@) als Absender, wenn es eine Mailadresse ist.</summary>
+    private static string? SmtpSender(ParsedCodes p) =>
+        p.SmtpProfile?.Trim() is { Length: > 0 } sp && System.Net.Mail.MailAddress.TryCreate(sp, out _) && sp.Contains('@') ? sp : null;
+
     private AppSettings CurrentSettings() => new() { Mail = _mail.CurrentValue, Invoice = _invoice.CurrentValue };
 
     private void Fill(Vorgang v, ParsedCodes p, bool overwriteMail)
@@ -452,7 +456,7 @@ public sealed class DocumentProcessor
         var globalRules = _rules?.CurrentValue;
         var ctx = new MailRuleContext(
             MailRuleEngine.GuessDocumentType(string.IsNullOrEmpty(inv.DocumentTypeCode) ? null : v.DocumentType, p.MailFileName, p.FileName, p.Subject, v.OriginalFileName),
-            stationery, p.Sender?.Trim() ?? o.FromAddress, v.MapiTo.Count > 0 ? v.MapiTo : m.To, v.BuyerId, v.BuyerName, v.Source, p.InvoiceFormat,
+            stationery, p.Sender?.Trim() ?? SmtpSender(p) ?? o.FromAddress, v.MapiTo.Count > 0 ? v.MapiTo : m.To, v.BuyerId, v.BuyerName, v.Source, p.InvoiceFormat,
             string.Join(" ", new[] { v.MapiSubject, p.Subject, p.MailFileName, p.FileName, v.OriginalFileName }.Where(x => !string.IsNullOrWhiteSpace(x))),
             v.OwnerUserId);
         var rr = MailRuleEngine.Evaluate(ctx, userRules, globalRules);
@@ -463,6 +467,7 @@ public sealed class DocumentProcessor
         var owner = v.OwnerUserId is null ? null : _users?.FindById(v.OwnerUserId);
         var own = owner?.SenderFor(v.OperatorNumber) ?? default;
         var sender = p.Sender?.Trim();
+        if (string.IsNullOrEmpty(sender) && SmtpSender(p) is { } sp) { sender = sp; m.RuleNotes.Add($"Absender {sp} aus @@sp@@ (gotomaxx-SMTP-Profil)"); }
         if (string.IsNullOrEmpty(sender) && rr.FromAddress is { } rf) { sender = rf.Text; m.RuleNotes.Add($"Absender {rf.Text} aus {rf.Reason}"); }
         if (string.IsNullOrEmpty(sender) && own.From is { } of) { sender = of; m.RuleNotes.Add($"Absender {of} ({own.Source})"); }
         var (design, reason, warn) = !string.IsNullOrWhiteSpace(p.MailTemplate) || rr.Template is null

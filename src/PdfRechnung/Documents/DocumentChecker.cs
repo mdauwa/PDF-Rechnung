@@ -45,6 +45,8 @@ public static class DocumentChecker
         if (p.SplitAfterPages.Count > 0) W("Der Druckauftrag enthält mehrere Belege (@@nd@@) – das Aufteilen folgt mit dem Druckdienst.");
         if (p.RemovePages.Count > 0) I($"Seite(n) {string.Join(", ", p.RemovePages.Distinct())} sollen entfernt werden (@@rpc@@) – folgt mit dem Druckdienst.");
         if (p.AppendPdfs.Count > 0 || p.EmbedFiles.Count > 0) I("PDFs anhängen/Dateien einbetten (@@af@@/@@ef@@) folgt mit dem Druckdienst.");
+        var undocumented = p.Undocumented.Where(c => c.Value.Trim().Length > 0).Select(c => $"@@{c.Code}{c.Value}@@").Distinct().ToList();
+        if (undocumented.Count > 0) I($"Ohne Wirkung in Belegpost (bei gotomaxx nicht dokumentiert): {string.Join(" ", undocumented)}");
         foreach (var u in p.Unknown.Take(10)) W($"Unbekanntes Steuerzeichen auf Seite {u.Page}: @@{u.Code}{u.Value}@@");
         if (p.Unknown.Count > 10) W($"… und {p.Unknown.Count - 10} weitere unbekannte Steuerzeichen.");
 

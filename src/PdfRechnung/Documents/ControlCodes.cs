@@ -90,6 +90,10 @@ public sealed class ParsedCodes
     public List<ControlCode> Unknown { get; } = new();
     /// <summary>Bewusst ignoriert, weil der Server den Versand übernimmt (z. B. Mailprogramm öffnen).</summary>
     public List<ControlCode> Ignored { get; } = new();
+    /// <summary>Im ERP-Formular gedruckt, Bedeutung bei gotomaxx nicht dokumentiert (@@ab@@ @@ac@@ @@ad@@ @@bn@@) – ohne Wirkung.</summary>
+    public List<ControlCode> Undocumented { get; } = new();
+    /// <summary>@@sp…@@ – gotomaxx: SMTP-Profil (meist die Absenderadresse). Belegpost: Absender, wenn kein @@pf@@.</summary>
+    public string? SmtpProfile { get; set; }
 
     public string? Field(string key) => Fields.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v.Trim() : null;
     public IEnumerable<TableRow> Table(string name) => Rows.Where(r => r.Table.Equals(name, StringComparison.OrdinalIgnoreCase));
@@ -215,6 +219,8 @@ public static partial class ControlCodeParser
             case "md": r.NoAttachment = true; break;
             case "mf": r.MailFileName = t.Length > 0 ? t : null; break;
             case "mo" or "ms" or "mp": r.Ignored.Add(c); break;
+            case "sp": r.SmtpProfile = t.Length > 0 ? t : null; break;
+            case "ab" or "ac" or "ad" or "bn": r.Undocumented.Add(c); break;
 
             // ---------- Bearbeiten ----------
             case "bp": r.StationerySet = true; r.Stationery = t.Length > 0 ? t : null; break;

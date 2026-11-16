@@ -445,3 +445,5 @@ td.mt-thumb img { display: block; max-width: 48px; max-height: 28px; object-fit:
 .rte.source .rte-bar > :not([data-rte-cmd="source"]) { opacity: .35; pointer-events: none; }
 .rte-note { padding: 6px 12px; font-size: 12px; background: #fff7e6; color: #8a5a00; border-top: 1px solid var(--border); }
 .rte-view { border: 1px solid var(--border); border-radius: 8px; min-height: 0; }
+table.sender-table td { vertical-align: middle; }
+table.sender-table input { width: 100%; min-width: 160px; }

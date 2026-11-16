@@ -1018,6 +1018,22 @@ function userMask(i) {
       `${chk("canSend", "Versenden", "darf Versanddaten ändern, senden und verwerfen; sonst nur ansehen")}
        ${chk("sendViaOutlook", "Über Outlook senden", "„Freigeben & in Outlook senden“ öffnet die fertige Mail über den Melder; seine Belege werden nicht automatisch versendet")}
        ${chk("isAdmin", "Administrator", "zusätzlich Einstellungen; sieht alle Belege")}`) +
+    section("Versand über den Server – Absender und Antwortadresse",
+      `<div class="table-wrap"><table class="list sender-table"><thead><tr><th>ERP-Nr.</th><th>Absenderadresse</th><th>Absendername</th><th>Antwort an</th></tr></thead><tbody>
+         <tr><td><b>Vorgabe</b><br><small class="meta-inline">alle Nummern</small></td>
+           <td><input data-us="${i}||fromAddress" value="${esc(u.sendFromAddress || "")}" placeholder="${esc(ST.s.mail?.fromAddress || "aus Vorlage")}"></td>
+           <td><input data-us="${i}||fromName" value="${esc(u.sendFromName || "")}" placeholder="aus Vorlage"></td>
+           <td><input data-us="${i}||replyTo" value="${esc(u.replyTo || "")}" placeholder="aus Vorlage"></td></tr>
+         ${(u.operatorNumbers || []).map(no => { const x = (u.operatorSenders || []).find(o => o.operator === no) || {};
+           return `<tr><td class="mono"><b>${esc(no)}</b></td>
+             <td><input data-us="${i}|${esc(no)}|fromAddress" value="${esc(x.fromAddress || "")}" placeholder="${esc(u.sendFromAddress || "wie Vorgabe")}"></td>
+             <td><input data-us="${i}|${esc(no)}|fromName" value="${esc(x.fromName || "")}" placeholder="${esc(u.sendFromName || "wie Vorgabe")}"></td>
+             <td><input data-us="${i}|${esc(no)}|replyTo" value="${esc(x.replyTo || "")}" placeholder="${esc(u.replyTo || "wie Vorgabe")}"></td></tr>`; }).join("")}
+       </tbody></table></div>
+       <p class="help">Gilt beim Autoversand und bei „Senden“ im Portal für Belege dieses Benutzers – je nach ERP-Nummer, mit der gedruckt wurde (<code>@@pb…@@</code> bzw. wwa.exe);
+         leere Felder übernehmen die Vorgabe, diese die Mail-Vorlage bzw. den Standard. Vorrang haben <code>@@pf@@</code> im Druck und passende Mail-Regeln.
+         Weitere ERP-Nummern unter „Zuordnung gedruckter Belege“ eintragen – sie erscheinen dann hier.
+         Bei Microsoft 365 muss die App für jede Adresse senden dürfen („Senden als“ bzw. Application Access Policy); bei SMTP muss der Server den Absender erlauben.</p>`) +
     section("Zuordnung gedruckter Belege",
       `<div class="grid2">
          ${field("ERP-Bedienernummer(n)", inp("operatorNumbers", (u.operatorNumbers || []).join(", "), "007", 'inputmode="numeric" class="erp-no"'),
@@ -1080,6 +1096,17 @@ function onUsersInput(el, e) {
     if (el.checked) u.alsoSees.push(el.value);
     markUsersDirty(); return true;
   }
+  if (el.dataset.us !== undefined) {
+    const [i, no, f] = el.dataset.us.split("|"), u = ST.users.users[+i];
+    if (!no) u[{ fromAddress: "sendFromAddress", fromName: "sendFromName", replyTo: "replyTo" }[f]] = el.value;
+    else {
+      u.operatorSenders ||= [];
+      let x = u.operatorSenders.find(o => o.operator === no);
+      if (!x) { x = { operator: no, fromAddress: "", fromName: "", replyTo: "" }; u.operatorSenders.push(x); }
+      x[f] = el.value;
+    }
+    markUsersDirty(); return true;
+  }
   if (!el.dataset.u) return false;
   const [i, k] = el.dataset.u.split("|"), u = ST.users.users[+i];
   if (k === "operatorNumbers") {
@@ -1087,6 +1114,8 @@ function onUsersInput(el, e) {
     const bad = u.operatorNumbers.some(x => !/^\d+$/.test(x) || +x > 999);
     el.classList.toggle("invalid", bad);
     el.title = bad ? "Bitte 3 Ziffern, z. B. 007" : "ERP-Bedienernummer (3 Ziffern). Mehrere mit Komma.";
+    if (!bad) u.operatorNumbers = u.operatorNumbers.map(x => x.padStart(3, "0"));
+    if (e.type === "change" && !bad) { markUsersDirty(); drawTab(); return true; } // Zeilen für Absender je ERP-Nr. aktualisieren
   }
   else if (k === "visibility") { u.visibility = el.value; markUsersDirty(); drawTab(); return true; }
   else if (k === "mapiMode") { u.mapiMode = el.value; u._mapiChanged = true; }

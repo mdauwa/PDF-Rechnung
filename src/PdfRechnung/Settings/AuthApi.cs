@@ -142,6 +142,19 @@ public static class AuthApi
                 u.OperatorNumbers = nos.Select(n => UserStore.NormalizeOperator(n) ?? n).Distinct().ToList();
                 u.Visibility = u.Visibility is "auswahl" or "alle" ? u.Visibility : "eigene";
                 u.AlsoSees = (u.AlsoSees ?? new()).Where(id => id != u.Id && list.Any(o => o.Id == id)).Distinct().ToList();
+                u.SendFromAddress = (u.SendFromAddress ?? "").Trim(); u.SendFromName = (u.SendFromName ?? "").Trim(); u.ReplyTo = (u.ReplyTo ?? "").Trim();
+                if (u.SendFromAddress.Length > 0 && !Documents.DocumentChecker.IsMail(u.SendFromAddress)) errors.Add($"„{u.Name}“: Absenderadresse „{u.SendFromAddress}“ ist keine gültige E-Mail-Adresse.");
+                if (u.ReplyTo.Length > 0 && !Documents.DocumentChecker.IsMail(u.ReplyTo)) errors.Add($"„{u.Name}“: Antwortadresse „{u.ReplyTo}“ ist keine gültige E-Mail-Adresse.");
+                // je ERP-Nummer: nur Nummern des Benutzers, leere Einträge weg
+                u.OperatorSenders = (u.OperatorSenders ?? new())
+                    .Select(x => new OperatorSender { Operator = UserStore.NormalizeOperator(x.Operator) ?? "", FromAddress = (x.FromAddress ?? "").Trim(), FromName = (x.FromName ?? "").Trim(), ReplyTo = (x.ReplyTo ?? "").Trim() })
+                    .Where(x => x.Operator.Length > 0 && u.OperatorNumbers.Contains(x.Operator) && (x.FromAddress + x.FromName + x.ReplyTo).Length > 0)
+                    .GroupBy(x => x.Operator).Select(g => g.First()).ToList();
+                foreach (var x in u.OperatorSenders)
+                {
+                    if (x.FromAddress.Length > 0 && !Documents.DocumentChecker.IsMail(x.FromAddress)) errors.Add($"„{u.Name}“, ERP-Nr. {x.Operator}: Absenderadresse „{x.FromAddress}“ ist ungültig.");
+                    if (x.ReplyTo.Length > 0 && !Documents.DocumentChecker.IsMail(x.ReplyTo)) errors.Add($"„{u.Name}“, ERP-Nr. {x.Operator}: Antwortadresse „{x.ReplyTo}“ ist ungültig.");
+                }
             }
             var dupNo = list.SelectMany(u => u.OperatorNumbers.Select(n => (No: UserStore.NormalizeOperator(n), u.Name))).Where(x => x.No is not null)
                 .GroupBy(x => x.No).Where(x => x.Select(y => y.Name).Distinct().Count() > 1)

@@ -133,3 +133,42 @@ public sealed class MailRuleTests : IDisposable
         Assert.Equal(6, e.Count);
     }
 }
+
+public sealed class UserSenderTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "belegpost-absender-" + Guid.NewGuid().ToString("N"));
+    public void Dispose() { try { Directory.Delete(_dir, true); } catch { } }
+
+    [Fact]
+    public void Absender_und_Antwortadresse_des_Benutzers()
+    {
+        Directory.CreateDirectory(_dir);
+        var settings = new SettingsStore(_dir);
+        var users = new UserStore(_dir);
+        users.Replace(new List<PortalUser> { new() { Id = "tanja", Name = "Tanja", OperatorNumbers = { "315", "415" }, SendFromAddress = "t.lutz@firma.at", SendFromName = "Tanja Lutz", ReplyTo = "buchhaltung@firma.at",
+            OperatorSenders = { new OperatorSender { Operator = "415", FromAddress = "office@firma-b.at", ReplyTo = "" } } } });
+        var s = DefaultSettings.Create();
+        var store = new DocumentStore(settings, NullLogger<DocumentStore>.Instance);
+        var global = new MailRuleOptions { Rules = { new MailRule { Name = "Angebote", DocumentTypes = { "Angebot" }, FromAddress = "vertrieb@firma.at" } } };
+        var proc = new DocumentProcessor(store, new StaticOptions<MailOptions>(s.Mail), new StaticOptions<InvoiceOptions>(s.Invoice),
+            NullLogger<DocumentProcessor>.Instance, settings: settings, users: users, rules: new StaticOptions<MailRuleOptions>(global), ruleStore: new MailRuleStore(settings));
+
+        var a = proc.Process(TestData.Pdf(new[] { "@@pb315@@", "@@aakunde@x.at@@", "@@mfRechnung_1@@" }), "Drucker", "a.pdf");
+        Assert.Equal("t.lutz@firma.at", a.Mail.FromAddress);
+        Assert.Equal("Tanja Lutz", a.Mail.FromName);
+        Assert.Equal("buchhaltung@firma.at", a.Mail.ReplyTo);
+
+        var b = proc.Process(TestData.Pdf(new[] { "@@pb315@@", "@@aakunde@x.at@@", "@@mfAngebot_1@@" }), "Drucker", "b.pdf");
+        Assert.Equal("vertrieb@firma.at", b.Mail.FromAddress); // Regel vor Benutzer
+        Assert.Equal("buchhaltung@firma.at", b.Mail.ReplyTo);
+
+        var c = proc.Process(TestData.Pdf(new[] { "@@pb315@@", "@@aakunde@x.at@@", "@@pfich@firma.at@@" }), "Drucker", "c.pdf");
+        Assert.Equal("ich@firma.at", c.Mail.FromAddress);  // Steuerzeichen vor allem
+
+        var d = proc.Process(TestData.Pdf(new[] { "@@pb415@@", "@@aakunde@x.at@@" }), "Drucker", "d.pdf");
+        Assert.Equal("office@firma-b.at", d.Mail.FromAddress);   // je ERP-Nummer
+        Assert.Equal("Tanja Lutz", d.Mail.FromName);             // leer = Vorgabe
+        Assert.Equal("buchhaltung@firma.at", d.Mail.ReplyTo);
+        Assert.Contains(d.Mail.RuleNotes, n => n.Contains("ERP-Nr. 415"));
+    }
+}

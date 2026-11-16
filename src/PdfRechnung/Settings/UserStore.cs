@@ -5,6 +5,15 @@ using System.Text.Json.Serialization;
 namespace PdfRechnung.Settings;
 
 /// <summary>Portal-Benutzer – angelegt in der Oberfläche, Anmeldung über Microsoft Entra ID (E-Mail = Anmeldename).</summary>
+/// <summary>Absender/Antwortadresse für eine ERP-Bedienernummer eines Benutzers.</summary>
+public sealed class OperatorSender
+{
+    public string Operator { get; set; } = "";
+    public string FromAddress { get; set; } = "";
+    public string FromName { get; set; } = "";
+    public string ReplyTo { get; set; } = "";
+}
+
 public sealed class PortalUser
 {
     public string Id { get; set; } = "";
@@ -32,6 +41,24 @@ public sealed class PortalUser
     public List<string> AlsoSees { get; set; } = new();
     /// <summary>Vorgabe des Admins für MAPI-Mails dieses Benutzers ("" = globaler Standard).</summary>
     public string MapiMode { get; set; } = "";
+
+    /// <summary>Versand über den Server (Autoversand, „Senden“ im Portal): Absender für Belege dieses Benutzers ("" = Vorlage/Standard).</summary>
+    public string SendFromAddress { get; set; } = "";
+    public string SendFromName { get; set; } = "";
+    /// <summary>Antwortadresse („Antwort an“) für Belege dieses Benutzers ("" = Vorlage/Standard).</summary>
+    public string ReplyTo { get; set; } = "";
+    /// <summary>Abweichender Absender/Antwortadresse je ERP-Bedienernummer (z. B. 000 = Firma A, 301 = Firma B). Leere Felder = Vorgabe oben.</summary>
+    public List<OperatorSender> OperatorSenders { get; set; } = new();
+
+    /// <summary>Absender, Name und Antwortadresse für eine ERP-Nummer: Eintrag der Nummer, sonst die Vorgabe des Benutzers.</summary>
+    public (string? From, string? Name, string? ReplyTo, string? Source) SenderFor(string? operatorNumber)
+    {
+        static string? N(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+        var no = UserStore.NormalizeOperator(operatorNumber);
+        var e = no is null ? null : OperatorSenders.FirstOrDefault(x => UserStore.NormalizeOperator(x.Operator) == no);
+        return (N(e?.FromAddress) ?? N(SendFromAddress), N(e?.FromName) ?? N(SendFromName), N(e?.ReplyTo) ?? N(ReplyTo),
+            e is not null && (N(e.FromAddress) ?? N(e.FromName) ?? N(e.ReplyTo)) is not null ? $"ERP-Nr. {no} von {Name}" : $"Benutzer {Name}");
+    }
 
     public IEnumerable<string> AllLogins() =>
         (Email is null ? Logins : Logins.Prepend(Email)).Where(l => !string.IsNullOrWhiteSpace(l)).Select(l => l.Trim());

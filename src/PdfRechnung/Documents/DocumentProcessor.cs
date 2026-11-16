@@ -411,15 +411,19 @@ public sealed class DocumentProcessor
         var userRules = _ruleStore?.Get(v.OwnerUserId);
         var globalRules = _rules?.CurrentValue;
         var ctx = new MailRuleContext(
-            MailRuleEngine.GuessDocumentType(v.DocumentType, p.MailFileName, p.FileName, p.Subject, v.OriginalFileName),
+            MailRuleEngine.GuessDocumentType(string.IsNullOrEmpty(inv.DocumentTypeCode) ? null : v.DocumentType, p.MailFileName, p.FileName, p.Subject, v.OriginalFileName),
             stationery, p.Sender?.Trim() ?? o.FromAddress, m.To, v.BuyerId, v.BuyerName, v.Source, p.InvoiceFormat,
             string.Join(" ", new[] { p.Subject, p.MailFileName, p.FileName, v.OriginalFileName }.Where(x => !string.IsNullOrWhiteSpace(x))),
             v.OwnerUserId);
         var rr = MailRuleEngine.Evaluate(ctx, userRules, globalRules);
         m.RuleNotes = new List<string>();
 
+        // Absender für den Serverversand: @@pf@@ → Regel → Einstellung des Benutzers → Vorlage → Standard
+        var owner = v.OwnerUserId is null ? null : _users?.FindById(v.OwnerUserId);
+        var own = owner?.SenderFor(v.OperatorNumber) ?? default;
         var sender = p.Sender?.Trim();
         if (string.IsNullOrEmpty(sender) && rr.FromAddress is { } rf) { sender = rf.Text; m.RuleNotes.Add($"Absender {rf.Text} aus {rf.Reason}"); }
+        if (string.IsNullOrEmpty(sender) && own.From is { } of) { sender = of; m.RuleNotes.Add($"Absender {of} ({own.Source})"); }
         var (design, reason, warn) = !string.IsNullOrWhiteSpace(p.MailTemplate) || rr.Template is null
             ? MailDesigner.Select(Templates, p.MailTemplate, stationery, sender ?? o.FromAddress)
             : MailDesigner.Select(Templates, rr.Template.Text, stationery, sender ?? o.FromAddress, rr.Template.Reason);
@@ -427,8 +431,9 @@ public sealed class DocumentProcessor
         m.TemplateReason = reason;
         if (warn is not null) fixes.Add("!" + warn);
         m.FromAddress = !string.IsNullOrWhiteSpace(sender) ? sender : !string.IsNullOrWhiteSpace(design?.FromAddress) ? design!.FromAddress.Trim() : null;
-        m.FromName = rr.FromName?.Text ?? (!string.IsNullOrWhiteSpace(design?.FromName) ? design!.FromName.Trim() : null);
-        m.ReplyTo = rr.ReplyTo?.Text ?? (!string.IsNullOrWhiteSpace(design?.ReplyTo) ? design!.ReplyTo.Trim() : null);
+        m.FromName = rr.FromName?.Text ?? own.Name ?? (!string.IsNullOrWhiteSpace(design?.FromName) ? design!.FromName.Trim() : null);
+        m.ReplyTo = rr.ReplyTo?.Text ?? own.ReplyTo ?? (!string.IsNullOrWhiteSpace(design?.ReplyTo) ? design!.ReplyTo.Trim() : null);
+        if (rr.ReplyTo is null && own.ReplyTo is { } ownReply) m.RuleNotes.Add($"Antwort an {ownReply} ({own.Source})");
         if (rr.FromName is { } fnr) m.RuleNotes.Add($"Absendername aus {fnr.Reason}");
         if (rr.ReplyTo is { } rtr) m.RuleNotes.Add($"Antwort an {rtr.Text} aus {rtr.Reason}");
         // CC/BCC aus Regeln nur, wenn keine gedruckt wurden

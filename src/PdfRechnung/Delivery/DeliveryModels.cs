@@ -28,14 +28,14 @@ public static class ChannelContent
 {
     /// <summary>
     /// pdf = Versand-PDF · xml = E-Rechnungs-XML · beide = PDF + XML · anlagen = die Anlagen des Belegs (@@ma@@/@@mc@@, z. B. EDI-, XML- oder andere Dateien)
-    /// · pdf+anlagen · alles = PDF + XML + Anlagen.
+    /// · pdf+anlagen · alles = PDF + XML + Anlagen · connect = ERP Suite Connect XML (Webshop-Schnittstelle: Abruf in den Connect-Eingang, Senden aus dem Connect-Ausgang).
     /// </summary>
-    public const string Pdf = "pdf", Xml = "xml", Both = "beide", Attachments = "anlagen", PdfAttachments = "pdf+anlagen", Everything = "alles";
-    public static readonly string[] All = { Pdf, Xml, Both, Attachments, PdfAttachments, Everything };
+    public const string Pdf = "pdf", Xml = "xml", Both = "beide", Attachments = "anlagen", PdfAttachments = "pdf+anlagen", Everything = "alles", Connect = "connect";
+    public static readonly string[] All = { Pdf, Xml, Both, Attachments, PdfAttachments, Everything, Connect };
     public static string Text(string? c) => c switch
     {
         Xml => "E-Rechnungs-XML", Both => "PDF und XML", Attachments => "Anlagen des Belegs (EDI, XML, …)",
-        PdfAttachments => "PDF und Anlagen", Everything => "PDF, XML und Anlagen", _ => "PDF"
+        PdfAttachments => "PDF und Anlagen", Everything => "PDF, XML und Anlagen", Connect => "ERP Suite Connect XML", _ => "PDF"
     };
     public static bool HasPdf(string? c) => c is Pdf or Both or PdfAttachments or Everything or "" or null;
     public static bool HasXml(string? c) => c is Xml or Both or Everything;

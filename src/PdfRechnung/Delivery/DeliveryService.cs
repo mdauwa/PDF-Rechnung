@@ -17,7 +17,8 @@ public static class DeliveryPlanner
         if (customers is null || v.Mail.Plain) return DeliveryPlan.None;
         var (c, why) = customers.Find(v);
         if (c is null) return DeliveryPlan.None;
-        var active = c.Channels.Where(x => x.Enabled).ToList();
+        // Versandwege für die Webshop-Schnittstelle (ERP Suite Connect XML) verschicken keine Belege
+        var active = c.Channels.Where(x => x.Enabled && x.Settings.Content != ChannelContent.Connect).ToList();
         var ctx = new MailRuleContext(v.DocumentType, v.Stationery, v.Mail.FromAddress, v.Mail.To.Concat(v.MapiTo).ToList(), v.BuyerId, v.BuyerName,
             v.Source, v.Invoice.FormatCode ?? v.FormatName, $"{v.Mail.Subject} {v.Mail.FileName} {v.OriginalFileName}", v.OwnerUserId);
         foreach (var r in c.Rules.Where(r => r.Enabled))
@@ -69,6 +70,8 @@ public sealed class DeliveryService
     /// <summary>Die Dateien des Belegs für einen Versandweg (PDF, XML oder beides).</summary>
     public async Task<List<DeliveryFile>> FilesAsync(Vorgang v, ChannelSettings s, CancellationToken ct)
     {
+        if (s.Content == ChannelContent.Connect)
+            throw new InvalidOperationException("„ERP Suite Connect XML“ wird nicht aus Belegen erzeugt – dieser Versandweg holt bzw. sendet nur die Dateien der Webshop-Schnittstelle (Abruf/Ausgangsordner).");
         var files = new List<DeliveryFile>();
         var baseName = MailTemplate.SafeFileName(string.IsNullOrWhiteSpace(s.FileName) ? v.Mail.FileName : MailTemplate.Apply(s.FileName, v));
         if (ChannelContent.HasPdf(s.Content))

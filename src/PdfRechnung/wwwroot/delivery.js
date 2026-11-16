@@ -6,7 +6,7 @@
    ========================================================= */
 
 const CH_TEXT = { mail: "E-Mail", ftp: "FTP", ftps: "FTPS", sftp: "SFTP", as2: "AS2", gotomaxx: "gotomaxx-Drucker", exite: "eXite (FTPS)" };
-const CONTENT_TEXT = { pdf: "PDF", xml: "E-Rechnungs-XML", beide: "PDF und XML", anlagen: "Anlagen des Belegs (EDI, XML, …)", "pdf+anlagen": "PDF und Anlagen", alles: "PDF, XML und Anlagen" };
+const CONTENT_TEXT = { pdf: "PDF", xml: "E-Rechnungs-XML", beide: "PDF und XML", anlagen: "Anlagen des Belegs (EDI, XML, …)", "pdf+anlagen": "PDF und Anlagen", alles: "PDF, XML und Anlagen", connect: "ERP Suite Connect XML" };
 
 /**
  * Felder eines Versandwegs. bind(path) liefert das Attribut für die Bindung (global: data-path, Kunde: data-cu).
@@ -36,6 +36,7 @@ function channelFields(c, P, bind, own) {
     out += `<div class="grid3">
       ${sel("content", "Inhalt", own ? [["", "wie global"], ...contents] : contents, t === "exite" ? "eXite erwartet XML (ebInterface) oder EDIFACT." : "XML erst, wenn Belegpost die E-Rechnung selbst erzeugt.", true)}
       ${txt("fileName", "Dateiname (ohne Endung)", own ? "wie global" : "{Belegart}_{Belegnummer}", "Leer = Dateiname des Belegs.")}
+      ${c.content === "connect" ? `<p class="help">ERP Suite Connect XML: der Abruf legt die Dateien in den Connect-Eingangsordner, der Ausgang sendet aus dem Connect-Ausgangsordner (Einstellungen → ERP Suite Connect) – solange unten nichts anderes eingetragen ist. Belege werden über diesen Versandweg nicht verschickt.</p>` : ""}
       ${["anlagen", "pdf+anlagen", "alles"].includes(c.content) ? txt("attachmentPattern", "Welche Anlagen", "*.edi; *.xml", "Leer = alle Anlagen (@@ma@@/@@mc@@).") : ""}
     </div>`;
   }

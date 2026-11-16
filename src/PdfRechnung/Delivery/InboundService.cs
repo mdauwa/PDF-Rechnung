@@ -34,10 +34,24 @@ public sealed class InboundService : BackgroundService
     private InboundJob? _job; // laufender Abruf (unter _gate)
     private List<string> _held = new(); // im letzten Ausgangslauf zurückgehalten (Prüffehler)
 
+    private readonly IOptionsMonitor<Connect.ConnectOptions>? _connect;
+
     public InboundService(IOptionsMonitor<DeliveryOptions> opt, CustomerStore customers, Settings.SettingsStore settings, ILogger<InboundService> log,
-        InboundLog? book = null)
+        InboundLog? book = null, IOptionsMonitor<Connect.ConnectOptions>? connect = null)
     {
-        _opt = opt; _customers = customers; _settings = settings; _log = log; _book = book;
+        _opt = opt; _customers = customers; _settings = settings; _log = log; _book = book; _connect = connect;
+    }
+
+    /// <summary>Inhalt „ERP Suite Connect XML“: leere Ordner kommen aus Einstellungen → ERP Suite Connect.</summary>
+    private ChannelSettings WithConnect(ChannelSettings s)
+    {
+        if (s.Content != ChannelContent.Connect || _connect?.CurrentValue is not { } c) return s;
+        if (string.IsNullOrWhiteSpace(s.InboundTarget) && !string.IsNullOrWhiteSpace(c.InFolder)) s.InboundTarget = c.InFolder;
+        if (string.IsNullOrWhiteSpace(s.OutboxFolder) && !string.IsNullOrWhiteSpace(c.OutFolder)) s.OutboxFolder = c.OutFolder;
+        if (string.IsNullOrWhiteSpace(s.OutboxArchive) && !string.IsNullOrWhiteSpace(c.OutArchive)) s.OutboxArchive = c.OutArchive;
+        if (string.IsNullOrWhiteSpace(s.InboundPattern)) s.InboundPattern = "*.xml";
+        if (string.IsNullOrWhiteSpace(s.OutboxPattern)) s.OutboxPattern = "*.xml";
+        return s;
     }
 
     public IReadOnlyList<InboundRun> Runs() => _runs.Values.OrderBy(r => r.Label).ToList();
@@ -49,13 +63,13 @@ public sealed class InboundService : BackgroundService
         var list = new List<InboundJob>();
         foreach (var g in o.Channels)
         {
-            var s = ChannelSettings.Merge(null, g);
+            var s = WithConnect(ChannelSettings.Merge(null, g));
             if (Active(s)) list.Add(new InboundJob("global-" + g.Type, $"{ChannelType.Text(g.Type)} (global)", s));
         }
         foreach (var c in _customers.All().Where(c => c.Active))
             foreach (var ch in c.Channels.Where(x => x.Enabled))
             {
-                var s = ChannelSettings.Merge(o.Global(ch.Settings.Type), ch.Settings);
+                var s = WithConnect(ChannelSettings.Merge(o.Global(ch.Settings.Type), ch.Settings));
                 if (Active(s)) list.Add(new InboundJob($"kunde-{c.Id}-{ch.Id}", $"{c.Label}: {ch.Label}", s, c.Id, c.Label));
             }
         return list.GroupBy(j => Identity(j.Settings)).Select(g => g.First()).ToList();

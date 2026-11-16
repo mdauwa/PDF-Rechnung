@@ -169,3 +169,14 @@ ul.erp-jobs small { display: block; color: var(--muted); font-size: 12px; word-b
 
 img.st-bmp { width: 16px; height: 16px; vertical-align: middle; margin-right: 6px; image-rendering: pixelated; }
 .list.mini input.erp-no { width: 64px; font-family: Consolas, monospace; text-align: center; }
+
+/* Auf- und zuklappbare Karten (Versandwege) */
+details.fold > summary { cursor: pointer; list-style: none; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary .fold-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+details.fold > summary .fold-title::before { content: "▸"; color: var(--muted); font-size: 12px; transition: transform .15s; }
+details.fold[open] > summary .fold-title::before { transform: rotate(90deg); }
+details.fold:not([open]) > summary { border-bottom: 0; }
+.fold-info { color: var(--muted); font-size: 12px; display: inline-flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.fold-tools { margin-top: 0; margin-bottom: 8px; }
+.fold-all { justify-content: flex-end; }

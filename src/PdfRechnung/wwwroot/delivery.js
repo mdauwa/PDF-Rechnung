@@ -110,6 +110,27 @@ function channelFields(c, P, bind, own) {
   return out;
 }
 
+/** Auf- und zuklappbare Karte; Standard zugeklappt, der Zustand bleibt beim Neuzeichnen erhalten. */
+function foldCard(key, title, info, body) {
+  const open = (ST.dlOpen ||= new Set()).has(key);
+  return `<details class="st-card fold" data-fold="${esc(key)}" ${open ? "open" : ""}>
+    <summary class="st-card-head"><span class="fold-title"><h3>${title}</h3>${info ? `<span class="fold-info">${info}</span>` : ""}</span></summary>
+    <div class="st-card-body">${body}</div></details>`;
+}
+
+/** Kurzinfo für die zugeklappte Zeile. */
+function channelInfo(c, own) {
+  const b = [];
+  if (c.host || c.url || c.user) b.push(esc(c.url || [c.user, c.host].filter(Boolean).join("@")));
+  else if (c.printer) b.push(esc(c.printer));
+  else if (c.type === "mail" && (c.to || []).length) b.push(esc(c.to.join(", ")));
+  if (c.content && c.content !== "pdf") b.push(esc(CONTENT_TEXT[c.content] || c.content));
+  if (c.inboundEnabled === "ja") b.push('<span class="badge ok">Abruf</span>');
+  if (c.outboxFolder) b.push('<span class="badge">Ausgangsordner</span>');
+  if (!b.length) b.push(`<span class="meta-inline">${own ? "wie global" : "nicht eingerichtet"}</span>`);
+  return b.join(" ");
+}
+
 /* ---------------- Tab: Versandwege (global) ---------------- */
 
 function tabDelivery() {
@@ -119,7 +140,8 @@ function tabDelivery() {
     `<p class="help">Hier stehen die <b>globalen</b> Einstellungen je Versandweg. Beim Kunden (Einstellungen → Kunden) wählst du die Versandwege aus
        und übersteuerst nur, was für ihn anders ist – leere Felder gelten wie hier. Ohne Kunden-Eintrag wird wie bisher per E-Mail versendet.</p>
      <div id="dlRuns"><p class="meta">Lade Abrufe …</p></div>`) +
-    D.channels.map((c, i) => section(esc(CH_TEXT[c.type] || c.type),
+    `<div class="actions fold-all"><button class="btn ghost small" data-st="fold-all" data-open="1">alle aufklappen</button><button class="btn ghost small" data-st="fold-all" data-open="0">alle zuklappen</button></div>` +
+    D.channels.map((c, i) => foldCard("g-" + c.type, esc(CH_TEXT[c.type] || c.type), channelInfo(c, false),
       channelFields(c, `delivery.channels.${i}`, bind, false) +
       `<div class="actions"><button class="btn ghost small" data-st="dl-test" data-type="${esc(c.type)}">Verbindung testen</button>
         <span class="meta-inline">prüft die gespeicherte Einstellung</span></div>`)).join("");
@@ -173,19 +195,19 @@ function customerMask() {
   const t = (k, label, ph = "", help = "") => field(label, `<input ${bind(k)} value="${esc(c[k] ?? "")}" placeholder="${esc(ph)}">`, help);
   const mand = (ST.s?.mandanten?.items || []).filter(m => m.number);
   const chOpts = Object.entries(CH_TEXT);
-  const channels = c.channels.map((ch, j) => `<section class="st-card"><div class="st-card-head">
-        <h3>${esc(ch.name || CH_TEXT[ch.settings.type])}</h3>
-        <span class="spacer"></span>
-        <label class="check"><input type="checkbox" ${bind(`channels.${j}.enabled`)} ${ch.enabled ? "checked" : ""}> aktiv</label>
-        ${ch.id ? `<button class="btn ghost small" data-st="cu-test" data-ch="${esc(ch.id)}">Verbindung testen</button>` : ""}
-        <button class="icon-btn" data-st="cu-ch-del" data-j="${j}" title="Versandweg entfernen">✕</button></div>
-      <div class="st-card-body">
+  const channels = c.channels.map((ch, j) => foldCard(`c-${c.id || "neu"}-${ch.id || j}`,
+      esc(ch.name || CH_TEXT[ch.settings.type]),
+      `<span class="badge">${esc(CH_TEXT[ch.settings.type])}</span>${ch.enabled ? "" : ' <span class="badge partial">aus</span>'} ${channelInfo(ch.settings, true)}`,
+      `<div class="actions fold-tools">
+          <label class="check"><input type="checkbox" ${bind(`channels.${j}.enabled`)} ${ch.enabled ? "checked" : ""}> aktiv</label>
+          ${ch.id ? `<button class="btn ghost small" data-st="cu-test" data-ch="${esc(ch.id)}">Verbindung testen</button>` : ""}
+          <span class="spacer"></span>
+          <button class="btn ghost small danger" data-st="cu-ch-del" data-j="${j}">Versandweg entfernen</button></div>
         <div class="grid3">
           ${field("Versandweg", `<select ${bind(`channels.${j}.settings.type`, "", true)}>${chOpts.map(([k, tx]) => `<option value="${k}" ${ch.settings.type === k ? "selected" : ""}>${tx}</option>`).join("")}</select>`)}
           ${field("Bezeichnung", `<input ${bind(`channels.${j}.name`)} value="${esc(ch.name || "")}" placeholder="${esc(CH_TEXT[ch.settings.type])}">`, "z. B. „Buchhaltung“ oder „EDI“.")}
         </div>
-        ${channelFields(ch.settings, `channels.${j}.settings`, bind, true)}
-      </div></section>`).join("");
+        ${channelFields(ch.settings, `channels.${j}.settings`, bind, true)}`)).join("");
   const ruleRow = (r, k) => `<tr>
       <td><input ${bind(`rules.${k}.name`)} value="${esc(r.name || "")}" placeholder="Regel ${k + 1}"></td>
       <td><input ${bind(`rules.${k}.documentTypes`, "lines")} value="${esc((r.documentTypes || []).join(", "))}" placeholder="egal"></td>
@@ -262,7 +284,12 @@ async function deliveryClick(a, btn, e) {
       if (!await confirmDialog("Kunde löschen", `Kunde „${esc(c.name || c.number)}“ mit seinen Versandwegen und Regeln löschen?`, "Löschen", true)) return true;
       await api("DELETE", "api/admin/kunden/" + encodeURIComponent(c.id));
       ST.cust.items = ST.cust.items.filter(x => x.id !== c.id); ST.custEdit = null; ST.custDirty = false; drawTab(); return true;
-    case "cu-ch-add": c.channels.push(newChannel()); ST.custDirty = true; drawTab(); return true;
+    case "cu-ch-add": c.channels.push(newChannel()); (ST.dlOpen ||= new Set()).add(`c-${c.id || "neu"}-${c.channels.length - 1}`); ST.custDirty = true; drawTab(); return true;
+    case "fold-all": {
+      const open = btn.dataset.open === "1";
+      document.querySelectorAll("details.fold").forEach(d => { d.open = open; (ST.dlOpen ||= new Set())[open ? "add" : "delete"](d.dataset.fold); });
+      return true;
+    }
     case "cu-ch-del": c.channels.splice(+btn.dataset.j, 1); ST.custDirty = true; drawTab(); return true;
     case "cu-rule-add": (c.rules ||= []).push({ name: "", enabled: true, documentTypes: [], formats: [], sources: [], stationeries: [], recipients: [], textContains: "", channels: [], noDelivery: false }); ST.custDirty = true; drawTab(); return true;
     case "cu-rule-del": c.rules.splice(+btn.dataset.k, 1); ST.custDirty = true; drawTab(); return true;
@@ -294,4 +321,11 @@ function deliveryInput(el, e) {
 
 function updateCustSave() {
   const b = document.querySelector('[data-st="cu-save"]'); if (b) b.disabled = !ST.custDirty;
+}
+
+/** Auf-/Zuklappen merken (Ereignis „toggle“ steigt nicht auf – daher im Erfassungsmodus). */
+function trackFold(e) {
+  const d = e.target;
+  if (!(d instanceof HTMLDetailsElement) || !d.classList.contains("fold")) return;
+  (ST.dlOpen ||= new Set())[d.open ? "add" : "delete"](d.dataset.fold);
 }

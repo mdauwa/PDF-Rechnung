@@ -55,6 +55,7 @@ async function renderSettings(view) {
   };
   rteInstall(view);
   view.addEventListener("click", onAction);
+  view.addEventListener("toggle", trackFold, true);
   view.addEventListener("input", onInput);
   view.addEventListener("change", onInput);
 

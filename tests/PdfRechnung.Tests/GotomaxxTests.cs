@@ -69,7 +69,7 @@ public sealed class GotomaxxTests : IDisposable
     public async Task Beleg_mit_pg_wird_ohne_Portal_Steuerzeichen_an_gotomaxx_gedruckt()
     {
         var (store, proc, service, printer) = Create(new GotomaxxOptions { Enabled = true, Printer = "PDFMAILER" });
-        var v = proc.Process(TestData.Pdf(new[] { "@@pb007@@", "@@pi55@@", "@@pgPDFMAILER Rechnung@@", "@@aakunde@firma.at@@", "@@edAngebot 1@@" }), "Eingang", "a.pdf");
+        var v = proc.Process(TestData.Pdf(new[] { "@@pb007@@", "@@pi0NR00000055@@", "@@pgPDFMAILER Rechnung@@", "@@aakunde@firma.at@@", "@@edAngebot 1@@" }), "Eingang", "a.pdf");
         Assert.Equal(VorgangStatus.Sending, v.Status);
         Assert.Equal(GotomaxxService.Channel, v.SendChannel);
         Assert.Equal("martin", v.OwnerUserId); // Zuordnung im Portal bleibt

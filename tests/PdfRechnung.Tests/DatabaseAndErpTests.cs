@@ -37,8 +37,8 @@ public sealed class DatabaseAndErpTests : IDisposable
     public void Vorgang_liegt_in_der_Datenbank_mit_Belegindex_Zeitstrahl_und_Sichtbarkeit()
     {
         var (store, proc, _, _) = Create();
-        var v = proc.Process(TestData.Pdf(new[] { "@@pb7@@", "@@pi0012345@@", "@@xiVOUCHER_ID=R-1@@", "@@toa@kunde.at@@" }), "Eingang", "a.pdf");
-        Assert.Equal("12345", v.ErpIndex);
+        var v = proc.Process(TestData.Pdf(new[] { "@@pb7@@", "@@pi0NR00012345@@", "@@xiVOUCHER_ID=R-1@@", "@@toa@kunde.at@@" }), "Eingang", "a.pdf");
+        Assert.Equal("0NR00012345", v.ErpIndex);
         Assert.Equal("martin", v.OwnerUserId);
         var ev = store.Events(v.Id);
         Assert.Equal(StatusCode.Erfasst, ev[0].Code);
@@ -52,7 +52,7 @@ public sealed class DatabaseAndErpTests : IDisposable
         Assert.Single(store.Query(new VorgangFilter { SeeAll = true, Text = "r-1" }));
         Assert.Empty(store.Query(new VorgangFilter { SeeAll = true, Text = "gibtsnicht" }));
         Assert.Equal(1, store.CountByStatus(new VorgangFilter { SeeAll = true })[v.Status]);
-        Assert.Single(store.ByErpIndex("12345"));
+        Assert.Single(store.ByErpIndex("0NR00012345"));
 
         // Statuswechsel → Zeitstrahl; zweiter Versand = 120
         store.Update(v.Id, x => { x.Status = VorgangStatus.Sent; x.SentAt = DateTimeOffset.Now; x.SendChannel = "Mail"; return true; });
@@ -109,7 +109,7 @@ public sealed class DatabaseAndErpTests : IDisposable
     public void Status_Link_zeigt_nur_Status_und_Belegnummer()
     {
         var (store, proc, _, _) = Create();
-        var v = proc.Process(TestData.Pdf(new[] { "@@pi555@@", "@@xiVOUCHER_ID=R-9@@", "@@togeheim@kunde.at@@", "@@xiBUYER_NAME=Geheimkunde@@" }), "Eingang", "b.pdf");
+        var v = proc.Process(TestData.Pdf(new[] { "@@pi0NR00000555@@", "@@xiVOUCHER_ID=R-9@@", "@@togeheim@kunde.at@@", "@@xiBUYER_NAME=Geheimkunde@@" }), "Eingang", "b.pdf");
         var opt = new StatusLinkOptions { AllowedNetworks = { "127.0.0.0/8" } };
         var svc = new StatusLinkService(store.Db, store, new StaticOptions<StatusLinkOptions>(opt), new StaticOptions<PortalOptions>(new PortalOptions { PublicUrl = "https://bp.firma.at:5444" }),
             new StaticOptions<ServerOptions>(new ServerOptions()));
@@ -246,13 +246,13 @@ public sealed class DatabaseAndErpTests : IDisposable
     public void Warteschlange_pro_Belegindex_zaehlt_der_neueste_Status()
     {
         var (store, proc, _, settings) = Create();
-        var v = proc.Process(TestData.Pdf(new[] { "@@pi777@@", "@@toa@kunde.at@@" }), "Eingang", "c.pdf");
+        var v = proc.Process(TestData.Pdf(new[] { "@@pi0NR00000777@@", "@@toa@kunde.at@@" }), "Eingang", "c.pdf");
         var erp = new ErpFeedbackService(store.Db, store, settings, new StaticOptions<ErpOptions>(new ErpOptions()), new EmptyServices(),
             NullLogger<ErpFeedbackService>.Instance);
         var t0 = DateTimeOffset.Now;
-        erp.Enqueue("777", v.Id, StatusCode.WartetFreigabe, t0);
-        erp.Enqueue("777", v.Id, StatusCode.Versendet, t0.AddSeconds(5));
-        erp.Enqueue("777", v.Id, StatusCode.AnOutlook, t0.AddSeconds(1)); // älter → gleich ersetzt
+        erp.Enqueue("0NR00000777", v.Id, StatusCode.WartetFreigabe, t0);
+        erp.Enqueue("0NR00000777", v.Id, StatusCode.Versendet, t0.AddSeconds(5));
+        erp.Enqueue("0NR00000777", v.Id, StatusCode.AnOutlook, t0.AddSeconds(1)); // älter → gleich ersetzt
         var jobs = erp.Jobs(null, v.Id);
         Assert.Equal(ErpJobStatus.Open, jobs.Single(j => j.Code == StatusCode.Versendet).Status);
         Assert.All(jobs.Where(j => j.Code != StatusCode.Versendet), j => Assert.Equal(ErpJobStatus.Superseded, j.Status));
@@ -301,7 +301,7 @@ public sealed class DatabaseAndErpTests : IDisposable
 
         var msg = new MapiMessage
         {
-            Subject = "Rechnung R-77", Body = "Sehr geehrte Damen und Herren,\r\nanbei die Rechnung.\r\n@@pi4711@@",
+            Subject = "Rechnung R-77", Body = "Sehr geehrte Damen und Herren,\r\nanbei die Rechnung.\r\n@@pi0NR41261010@@",
             ClientName = "PC-BUERO",
             Recipients = { new() { Type = "to", Address = "SMTP:kunde@firma.at" }, new() { Type = "cc", Address = "chef@firma.at" } },
             Attachments =
@@ -320,7 +320,7 @@ public sealed class DatabaseAndErpTests : IDisposable
         Assert.Equal(new[] { "chef@firma.at" }, v.Mail.Cc);
         Assert.Equal("Rechnung R-77", v.Mail.Subject);
         Assert.DoesNotContain("@@", v.Mail.Body);
-        Assert.Equal("4711", v.ErpIndex);
+        Assert.Equal("0NR41261010", v.ErpIndex);
         Assert.Single(v.Mail.Attachments);
         Assert.True(File.Exists(v.Mail.Attachments[0]));
 
@@ -468,4 +468,20 @@ public sealed class DatabaseAndErpTests : IDisposable
         store.Update(v.Id, x => { x.SendChannel = "Outlook"; x.OutlookConfirmedAt = DateTimeOffset.Now; x.SentAt = DateTimeOffset.Now; x.Status = VorgangStatus.Sent; return true; });
         Assert.Equal(StatusCode.VersendetOutlook, store.Get(v.Id)!.StatusCode);
     }
+}
+
+public class ErpIndexFormatTests
+{
+    [Theory]
+    [InlineData("0NR41261010", "0NR41261010")]
+    [InlineData(" aAR00000001 ", "aAR00000001")]
+    [InlineData("ZNL12345678", "ZNL12345678")]
+    [InlineData("12345", null)]
+    [InlineData("0XR41261010", null)]      // Archiv nur A oder N
+    [InlineData("0NR4126101", null)]       // zu kurz
+    [InlineData("0NR412610100", null)]     // zu lang
+    [InlineData("0NR4126101A", null)]      // Belegnummer nur Ziffern
+    [InlineData("0nR41261010", null)]      // Archiv groß
+    public void Belegindex_11_Zeichen(string input, string? expected)
+        => Assert.Equal(expected, PdfRechnung.Documents.ControlCodeParser.NormalizeErpIndex(input));
 }

@@ -34,7 +34,7 @@ public static class DocumentChecker
             W($"Platzhalter ohne Wert: {string.Join(", ", v.Mail.MissingPlaceholders.Select(x => "{" + x + "}"))} – mit @@pv{v.Mail.MissingPlaceholders[0]}=…@@ übergeben oder einen Ersatztext angeben: {{{v.Mail.MissingPlaceholders[0]}|…}}.", "body");
         if (v.Mail.Template is not null) I($"Mail-Vorlage „{v.Mail.Template}“ ({v.Mail.TemplateReason}).");
         if (!string.IsNullOrWhiteSpace(v.Mail.FromAddress) && !IsMail(v.Mail.FromAddress)) E($"Ungültige Absenderadresse: {v.Mail.FromAddress}", "from");
-        if (p.InvalidErpIndex is { } badIdx) W($"Belegindex „{badIdx}“ (@@pi@@) ist ungültig – erwartet wird eine Zahl, z. B. @@pi12345@@. Der Status wird nicht ins ERP zurückgeschrieben.");
+        if (p.InvalidErpIndex is { } badIdx) W($"Belegindex „{badIdx}“ (@@pi@@) ist ungültig – erwartet werden 11 Zeichen: Zeitraum, Archiv (A/N), Belegart und 8-stellige Belegnummer, z. B. @@pi0NR41261010@@. Der Status wird nicht ins ERP zurückgeschrieben.");
         if (p.InvalidOperatorNumber is { } bad) W($"Bedienernummer „{bad}“ (@@pb@@) ist ungültig – erwartet werden 3 Ziffern, z. B. @@pb007@@.");
         else if (p.OperatorNumber is { } no && v.OwnerUserId is null) W($"Bedienernummer {no} ist keinem Benutzer zugeordnet (Einstellungen → Benutzer → ERP-Bediener-Nr.).");
         else if (p.OperatorNumber is null && string.IsNullOrWhiteSpace(p.PrintUser) && v.ProcessOperator is { } pno && v.OwnerUserId is null)

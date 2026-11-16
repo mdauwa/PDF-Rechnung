@@ -97,14 +97,19 @@ public sealed class ParsedCodes
 /// </summary>
 public static partial class ControlCodeParser
 {
-    /// <summary>Belegindex: nur Ziffern (1–18 Stellen), Vornullen werden entfernt; sonst null.</summary>
+    /// <summary>
+    /// Belegindex (BELNDX) der WEBWARE: immer 11 Zeichen, z. B. <c>0NR41261010</c> =
+    /// Zeitraum (0–9, A–Z, a–z) + Archiv (A = Archiv, N = Normal) + Belegart (z. B. R = WA-Rechnung) + 8-stellige Belegnummer.
+    /// Groß-/Kleinschreibung zählt (der Zeitraum unterscheidet a und A); sonst null.
+    /// </summary>
     public static string? NormalizeErpIndex(string? s)
     {
         var t = s?.Trim();
-        if (string.IsNullOrEmpty(t) || t.Length > 18 || !t.All(char.IsAsciiDigit)) return null;
-        var n = t.TrimStart('0');
-        return n.Length == 0 ? null : n;
+        return t is not null && ErpIndexRegex().IsMatch(t) ? t : null;
     }
+
+    [GeneratedRegex(@"^[0-9A-Za-z][AN][0-9A-Za-z][0-9]{8}$", RegexOptions.CultureInvariant)]
+    private static partial Regex ErpIndexRegex();
 
     [GeneratedRegex(@"@@(?<code>[A-Za-z<]{2})(?<value>.*?)@@", RegexOptions.CultureInvariant)]
     private static partial Regex CodeRegex();

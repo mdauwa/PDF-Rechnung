@@ -106,7 +106,7 @@ public static class ErpApi
         {
             if (!req.Confirm) return Results.BadRequest(new { error = "Bitte das Testschreiben bestätigen." });
             var belndx = ControlCodeParser.NormalizeErpIndex(req.ErpIndex);
-            if (belndx is null) return Results.BadRequest(new { error = "Belegindex muss eine Zahl sein." });
+            if (belndx is null) return Results.BadRequest(new { error = "Der Belegindex hat 11 Zeichen: Zeitraum, Archiv (A/N), Belegart und 8-stellige Belegnummer, z. B. 0NR41261010." });
             var o = opt.CurrentValue;
             var v = (req.VorgangId is { Length: > 0 } id ? store.Get(id) : null) ?? store.ByErpIndex(belndx).FirstOrDefault()
                 ?? store.Query(new VorgangFilter { SeeAll = true, Limit = 1 }).FirstOrDefault();

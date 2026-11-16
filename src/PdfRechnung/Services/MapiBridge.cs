@@ -117,7 +117,7 @@ public sealed class MapiIntake
             x.Mail.Enabled = true;
             x.Mail.Edited = true; // „Neu prüfen“ überschreibt die MAPI-Daten nicht
             if (pdfIndex < 0) { x.Mail.NoDocument = true; x.DocumentType = "E-Mail"; }
-            if (x.ErpIndex is null && m.Body is not null && System.Text.RegularExpressions.Regex.Match(m.Body, @"@@pi\s*(\d{1,18})@@") is { Success: true } pi)
+            if (x.ErpIndex is null && m.Body is not null && System.Text.RegularExpressions.Regex.Match(m.Body, @"@@pi\s*([0-9A-Za-z]{11})\s*@@") is { Success: true } pi)
                 x.ErpIndex = ControlCodeParser.NormalizeErpIndex(pi.Groups[1].Value);
             if (extras.Count > 0)
             {

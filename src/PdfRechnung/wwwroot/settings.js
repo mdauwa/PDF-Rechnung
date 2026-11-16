@@ -1269,7 +1269,7 @@ function tabErp() {
   const pv = ST.erpPreview;
   return section("ERP-Anbindung (WEBWARE-Webservices)",
     `${inCheck("erp.enabled", "Status versendeter Belege ins ERP zurückschreiben (BELEG.PUT)")}
-     <p class="help">Nur Belege mit Belegindex <code>@@pi12345@@</code> werden zurückgeschrieben. Jeder Statuswechsel landet sofort in einer Warteschlange;
+     <p class="help">Nur Belege mit Belegindex <code>@@pi0NR41261010@@</code> werden zurückgeschrieben. Jeder Statuswechsel landet sofort in einer Warteschlange;
        ist das ERP nicht erreichbar, wird später erneut versucht – der Versand wird nie aufgehalten.</p>
      <div class="grid2">
        ${field("Adresse (HTTPS)", inText("erp.endpoint", "https://erp.firma.at/WWSVC/"), "Mit abschließendem /. Den Servernamen verwenden, der zum Zertifikat passt (nicht localhost).")}
@@ -1311,7 +1311,7 @@ function tabErp() {
       `<div class="grid3">
         ${field("Vorgang (leer = neuester)", `<input id="erpPvId" placeholder="Vorgangsnummer" value="${esc(pv?.vorgang || "")}">`)}
         ${field("Statuscode", `<select id="erpPvCode"><option value="">aktueller Status</option>${(ST.data.statusCodes || []).map(c => `<option value="${c.code}" ${pv?.code === c.code ? "selected" : ""}>${c.code} – ${esc(c.text)}</option>`).join("")}</select>`)}
-        ${field("Belegindex für Testschreiben", `<input id="erpTestIdx" placeholder="z. B. 12345" inputmode="numeric">`)}
+        ${field("Belegindex für Testschreiben", `<input id="erpTestIdx" placeholder="z. B. 0NR41261010" maxlength="11" spellcheck="false">`)}
        </div>
        <div class="actions"><button class="btn ghost" data-st="erp-preview">Vorschau</button><button class="btn ghost" data-st="erp-test">Testschreiben …</button></div>
        ${pv ? `<p class="meta">${esc(pv.beleg)} · ${esc(pv.code)} ${esc(pv.codeText)}${pv.write ? "" : " · <b>dieser Status wird nicht geschrieben</b>"}</p>

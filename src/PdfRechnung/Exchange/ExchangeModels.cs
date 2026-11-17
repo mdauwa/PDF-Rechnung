@@ -146,12 +146,17 @@ public sealed class WorkflowStep
     public string Name { get; set; } = "";
     /// <summary>vorher (vor Import/Export) | nachher (nach dem Import) | nachErfolg (nur wenn der Import fehlerfrei war)</summary>
     public string When { get; set; } = "nachher";
-    /// <summary>ERP-Programmteil, z. B. „AUSWERT“ (wie beim ERP-Aufruf).</summary>
-    public string Program { get; set; } = "";
-    /// <summary>Name des Workflows bzw. der Auswertung.</summary>
+    /// <summary>Programmbereich wie beim ERP-Aufruf (PHXFramework _ERPSuiteProgrammBereich): 00 CRM, 01 Warenwirtschaft, 02 ReportCenter,
+    /// 03 Datenimport, 04 Datenexport, 05 Beleggenerator, 06 Kasse, 07 Finanzbuchhaltung, 08 Anlagenbuchhaltung.</summary>
+    public string Program { get; set; } = "01";
+    /// <summary>Modulnummer bzw. Name des Workflows/der Auswertung.</summary>
     public string Workflow { get; set; } = "";
-    /// <summary>Freie Zusatzparameter (optional).</summary>
+    /// <summary>Sonderparameter (optional), werden angehängt.</summary>
     public string Arguments { get; set; } = "";
+    /// <summary>ERP nach dem Workflow schließen (/CLOSE).</summary>
+    public bool Close { get; set; } = true;
+    /// <summary>Höchstlaufzeit in Minuten, danach wird der Workflow beendet (0 = 60).</summary>
+    public int MaxMinutes { get; set; }
 }
 
 public sealed class StandortGruppe

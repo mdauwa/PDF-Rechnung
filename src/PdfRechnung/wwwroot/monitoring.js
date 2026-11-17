@@ -205,10 +205,12 @@ function fvStandort(i) {
       ${t.workflows.map((w, k) => { const W = (...p) => T("workflows", k, ...p); return `<div class="grid3 fv-wf">
           ${field("Name", fvText(W("name"), "Tagesabschluss"))}
           ${field("Wann", sel(W("when"), [["vorher", "vor Import/Export"], ["nachher", "nach dem Import"], ["nachErfolg", "nur nach fehlerfreiem Import"]]))}
-          ${field("Programmteil", fvText(W("program"), "z. B. AUSWERT"))}
-          ${field("Workflow / Auswertung", fvText(W("workflow"), "Name im ERP"))}
-          ${field("Zusatzparameter", fvText(W("arguments"), "optional"))}
-          <div class="field"><span class="lbl">&nbsp;</span><span>${inCheck(W("enabled"), "aktiv")}
+          ${field("Programmbereich", sel(W("program"), [["01", "01 Warenwirtschaft"], ["02", "02 ReportCenter"], ["03", "03 Datenimport"], ["04", "04 Datenexport"],
+            ["05", "05 Beleggenerator"], ["06", "06 Kassensystem"], ["07", "07 Finanzbuchhaltung"], ["08", "08 Anlagenbuchhaltung"], ["00", "00 CRM/OfficePlaner"]]))}
+          ${field("Modul / Workflow / Auswertung", fvText(W("workflow"), "Modulnummer bzw. Name im ERP"))}
+          ${field("Sonderparameter", fvText(W("arguments"), "optional"))}
+          ${field("Höchstlaufzeit (Minuten)", inNum(W("maxMinutes"), 0, 1440), "0 = 60 Minuten.")}
+          <div class="field"><span class="lbl">&nbsp;</span><span>${inCheck(W("enabled"), "aktiv")} ${inCheck(W("close"), "ERP danach schließen (/CLOSE)")}
             <button class="btn ghost small danger" data-st="fv-del-wf" data-j="${j}" data-k="${k}">Entfernen</button></span></div></div>`; }).join("")}
       <div class="actions"><button class="btn ghost small" data-st="fv-add-wf" data-j="${j}">Workflow/Auswertung hinzufügen</button>
         <button class="btn ghost small danger" data-st="fv-del-task" data-j="${j}">Aufgabe entfernen</button></div>
@@ -311,7 +313,7 @@ async function monitorClick(a, btn, e) {
   switch (a) {
     case "fv-add-task": c.tasks.push({ name: "", enabled: true, import: true, specialFiles: true, export: true, closeErp: false, schedule: { mode: "zeiten", times: "19:00" }, workflows: [] }); break;
     case "fv-del-task": c.tasks.splice(+d.j, 1); break;
-    case "fv-add-wf": c.tasks[+d.j].workflows.push({ enabled: true, name: "", when: "nachher", program: "", workflow: "", arguments: "" }); break;
+    case "fv-add-wf": c.tasks[+d.j].workflows.push({ enabled: true, name: "", when: "nachher", program: "01", workflow: "", arguments: "", close: true, maxMinutes: 0 }); break;
     case "fv-del-wf": c.tasks[+d.j].workflows.splice(+d.k, 1); break;
     case "fv-add-c": c[d.list].push(d.list === "exports" ? { folder: "", pattern: "*.dta", to: "" } : { pattern: "", target: "", closeErp: false, backup: true }); break;
     case "fv-del-c": c[d.list].splice(+d.k, 1); break;

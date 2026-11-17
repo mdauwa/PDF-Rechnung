@@ -14,12 +14,19 @@ public static class DocumentChecker
         void W(string text, string? field = null) => m.Add(new CheckMessage(Warning, text, field));
         void I(string text, string? field = null) => m.Add(new CheckMessage(Info, text, field));
 
+        // Versand über gotomaxx (nach Freigabe): gotomaxx erstellt die E-Rechnung und versendet selbst
+        var viaGotomaxx = v.Mail.Route == MailRoute.Gotomaxx || (!string.IsNullOrEmpty(v.GotomaxxPrinter) && v.Status != VorgangStatus.Gotomaxx);
+
         // ---------- Versand ----------
         if (v.Mail.Enabled)
         {
             var viaCustomer = v.Deliveries.Count > 0;
             var customerMail = v.Deliveries.Any(d => d.Type == PdfRechnung.Delivery.ChannelType.Mail);
-            if (v.Mail.To.Count == 0 && !viaCustomer) E("Kein E-Mail-Empfänger (@@to@@) – bitte im Versand eintragen.", "to");
+            if (v.Mail.To.Count == 0 && !viaCustomer)
+            {
+                if (viaGotomaxx) W("Kein E-Mail-Empfänger (@@to@@/@@aa@@) – gotomaxx braucht ihn aus dem Beleg oder seinem Profil.", "to");
+                else E("Kein E-Mail-Empfänger (@@to@@) – bitte im Versand eintragen.", "to");
+            }
             if (viaCustomer) I($"Versand über die Versandwege von {v.CustomerName}: {string.Join(", ", v.Deliveries.Select(d => d.Label))}.");
             foreach (var a in v.Mail.To.Concat(v.Mail.Cc).Concat(v.Mail.Bcc))
                 if (!IsMail(a)) E($"Ungültige E-Mail-Adresse: {a}", "to");
@@ -64,6 +71,7 @@ public static class DocumentChecker
 
         var fmt = InvoiceFormat.Find(p.InvoiceFormat);
         if (fmt is null) E($"Unbekanntes E-Rechnungsformat „{p.InvoiceFormat}“.");
+        else if (!fmt.Supported && viaGotomaxx) I($"{fmt.Name}: Die E-Rechnung erstellt gotomaxx bei der Übergabe.");
         else if (!fmt.Supported) E($"{fmt.Name} wird noch nicht unterstützt – die E-Rechnung kann noch nicht erzeugt werden.");
 
         var profile = ERechnungProfile.For(p.InvoiceFormat);
@@ -82,7 +90,8 @@ public static class DocumentChecker
             if (l.Price is null) W($"Position {id}: Einzelpreis fehlt.");
             else if (l.Price < 0) E($"Position {id}: Einzelpreis ist negativ – EN 16931 erwartet einen positiven Preis (negative Menge verwenden).");
             if (l.VatPercent is null) E($"Position {id}: Steuersatz fehlt.");
-            if (l.UnitText is null) W($"Position {id}: Mengeneinheit fehlt – es wird „Stück“ (H87) angenommen.");
+            if (l.UnitPlaceholder is not null) W($"Position {id}: Mengeneinheit ist der nicht ersetzte ERP-Platzhalter „{l.UnitPlaceholder}“ – bitte in der ERP-Vorlage (Druckmanagement, ITEM_UNIT) das Einheitenfeld zuordnen. Bis dahin wird „Stück“ (H87) angenommen.");
+            else if (l.UnitText is null) W($"Position {id}: Mengeneinheit fehlt – es wird „Stück“ (H87) angenommen.");
             else if (l.UnitCode is null) W($"Position {id}: Mengeneinheit „{l.UnitText}“ ist keinem UN/ECE-Code zugeordnet (Einstellungen → E-Rechnung → Einheiten).");
             if (l.Quantity is { } q && l.Price is { } pr && l.Total is { } t)
             {

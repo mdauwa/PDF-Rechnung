@@ -301,6 +301,11 @@ public sealed class GotomaxxOptions
     public string Printer { get; set; } = "";
     /// <summary>Jeden Beleg weiterleiten (außer mit @@pg0@@) – sonst nur Belege mit @@pg@@.</summary>
     public bool Always { get; set; }
+    /// <summary>
+    /// Erst nach Freigabe im Portal übergeben: Der Beleg wird geprüft und wartet, bis jemand „An gotomaxx übergeben“ klickt.
+    /// Sonst wird sofort weitergeleitet (ohne Belegpost-Prüfung).
+    /// </summary>
+    public bool ApproveFirst { get; set; }
     /// <summary>In der Windows-Sitzung des Benutzers am Server drucken (gotomaxx verarbeitet den Auftrag dort wie einen ERP-Druck).</summary>
     public bool UserSession { get; set; } = true;
     /// <summary>Ist der Benutzer nicht angemeldet, druckt der Dienst selbst.</summary>

@@ -30,6 +30,8 @@ public sealed class InvoiceLine
     public decimal? Quantity { get; set; }
     public string? UnitText { get; set; }
     public string? UnitCode { get; set; }
+    /// <summary>Mengeneinheit kam als nicht ersetzter Platzhalter der ERP-Vorlage (z. B. „_MENGENEINHEIT_“).</summary>
+    public string? UnitPlaceholder { get; set; }
     public decimal? BaseQuantity { get; set; }
     public decimal? Price { get; set; }
     public decimal? Allowance { get; set; }
@@ -108,6 +110,9 @@ public sealed class InvoiceData
         foreach (var r in p.Table("ITEM_DETAILS"))
         {
             var unit = r.Get("ITEM_UNIT");
+            // Nicht ersetzter Platzhalter der ERP-Vorlage (z. B. „_MENGENEINHEIT_“) = keine Einheit
+            string? placeholder = null;
+            if (unit is not null && System.Text.RegularExpressions.Regex.IsMatch(unit, @"^_[A-Za-zÄÖÜäöüß0-9_]+_$")) { placeholder = unit; unit = null; }
             string? code = null;
             if (unit is not null)
                 code = units.TryGetValue(unit, out var c) ? c : IsUneceCode(unit) ? unit.ToUpperInvariant() : null;
@@ -120,6 +125,7 @@ public sealed class InvoiceData
                 Quantity = n(r.Get("ITEM_QUANTITY")),
                 UnitText = unit,
                 UnitCode = code,
+                UnitPlaceholder = placeholder,
                 BaseQuantity = n(r.Get("ITEM_PRICE_BASE_QUANTITY")),
                 Price = n(r.Get("ITEM_GROSS_PRICE")) ?? n(r.Get("ITEM_NET_PRICE")),
                 Allowance = n(r.Get("ITEM_ALLOWANCE_AMOUNT")),

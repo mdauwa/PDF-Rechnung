@@ -92,6 +92,20 @@ public class ControlCodeTests
     }
 
     [Fact]
+    public void Nicht_ersetzter_Einheiten_Platzhalter_wird_als_fehlend_erkannt()
+    {
+        var codes = TestData.InvoiceCodes.Select(c => c.Replace("ITEM_UNIT=Std", "ITEM_UNIT=_MENGENEINHEIT_")).ToArray();
+        var p = ControlCodeParser.Parse(string.Join("\n", codes));
+        var inv = InvoiceData.From(p, DefaultSettings.Units);
+        Assert.Null(inv.Lines[0].UnitText);
+        Assert.Equal("_MENGENEINHEIT_", inv.Lines[0].UnitPlaceholder);
+        var v = new Vorgang { Mail = new MailData { To = { "a@b.at" }, Subject = "x" }, Invoice = inv };
+        var m = DocumentChecker.Check(v, p, DefaultSettings.Create());
+        Assert.Contains(m, x => x.Text.Contains("nicht ersetzte ERP-Platzhalter „_MENGENEINHEIT_“"));
+        Assert.DoesNotContain(m, x => x.Text.Contains("keinem UN/ECE-Code"));
+    }
+
+    [Fact]
     public void Pruefung_findet_Summenabweichung_und_fehlenden_Empfaenger()
     {
         var codes = TestData.InvoiceCodes.Select(c => c.Replace("GROSS_AMOUNT=150,00", "GROSS_AMOUNT=151,00")).Where(c => !c.StartsWith("@@to")).ToArray();

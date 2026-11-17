@@ -742,6 +742,7 @@ function gotomaxxSection() {
       ${field("Höchstdauer eines Drucks (Sekunden)", inNum("gotomaxx.timeoutSeconds", 10, 900))}
     </div>
     ${inCheck("gotomaxx.always", "Jeden Beleg weiterleiten (außer mit <code>@@pg0@@</code>) – sonst nur Belege mit <code>@@pg@@</code>")}
+    ${inCheck("gotomaxx.approveFirst", "Erst nach Freigabe im Portal übergeben – der Beleg wird geprüft und wartet, bis jemand „An gotomaxx übergeben“ klickt")}
     ${inCheck("gotomaxx.userSession", "In der Windows-Sitzung des Benutzers am Server drucken (empfohlen – gotomaxx verarbeitet den Auftrag dann wie einen Druck aus dem ERP)")}
     ${inCheck("gotomaxx.serviceFallback", "Ist der Benutzer nicht angemeldet, druckt der Dienst selbst")}
     <div class="grid2">

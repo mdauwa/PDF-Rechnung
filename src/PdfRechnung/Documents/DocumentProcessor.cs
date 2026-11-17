@@ -345,6 +345,20 @@ public sealed class DocumentProcessor
             }
         }
         if (target is "" && MandantOf(v) is { GotomaxxPrinter.Length: > 0 } gm) target = gm.GotomaxxPrinter.Trim(); // Standarddrucker des Mandanten
+        if (target is { } waitFor && o.ApproveFirst)
+        {
+            // Erst prüfen und auf Freigabe warten – „An gotomaxx übergeben“ im Portal druckt dann auf diesen Drucker
+            v.GotomaxxPrinter = waitFor;
+            v.Mail.Route = MailRoute.Gotomaxx;
+            v.Mail.RouteReason = why!.Replace("Weiterleitung an ", "");
+            v.Mail.RouteEffective = $"{MailRoute.Text(MailRoute.Gotomaxx)} nach Freigabe ({v.Mail.RouteReason})";
+            v.Messages = DocumentChecker.Check(v, p, CurrentSettings()).Concat(v.Messages.Where(m => m.Field == "mapi")).ToList();
+            v.Messages.Insert(0, new CheckMessage(DocumentChecker.Info,
+                $"Wartet auf Freigabe – danach Übergabe an den gotomaxx-Drucker „{(waitFor.Length > 0 ? waitFor : o.Printer)}“ ({why})."));
+            v.History.Add(new HistoryEntry(DateTimeOffset.Now, by, "gotomaxx", $"{why} – wartet auf Freigabe im Portal"));
+            v.UpdateStatus();
+            return false;
+        }
         if (target is { } printer)
         {
             v.Messages = v.Messages.Where(m => m.Field == "mapi").ToList();

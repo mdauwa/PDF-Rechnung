@@ -103,9 +103,18 @@ public static class PdfPrinter
         format.FormatFlags |= StringFormatFlags.NoWrap | StringFormatFlags.NoClip;
         var step = size * 100f / 72f * 1.25f;
         var y = 1f;
+        // Sehr lange Zeilen (z. B. @@xr@@ mit Positionstext) würden über den Seitenrand ragen und dort abgeschnitten:
+        // solche Zeilen kleiner drucken, damit sie ganz auf die Seite passen.
+        var maxWidth = Math.Max(50f, g.VisibleClipBounds.Width - 4f);
         foreach (var t in lines)
         {
-            g.DrawString(t, font, brush, 1f, y, format);
+            var w = g.MeasureString(t, font, int.MaxValue, format).Width;
+            if (w > maxWidth)
+            {
+                using var small = new Font("Arial", Math.Max(0.3f, size * maxWidth / w * 0.98f), GraphicsUnit.Point);
+                g.DrawString(t, small, brush, 1f, y, format);
+            }
+            else g.DrawString(t, font, brush, 1f, y, format);
             y += step;
         }
     }

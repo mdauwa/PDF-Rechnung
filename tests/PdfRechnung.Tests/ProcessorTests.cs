@@ -36,8 +36,14 @@ public sealed class ProcessorTests : IDisposable
         Assert.Equal(new[] { "einkauf@kunde.at" }, v.Mail.To);
         Assert.Equal("Rechnung_R2026-0815", v.Mail.FileName);
         Assert.Equal("Sehr geehrte Damen und Herren,\n\nanbei Ihre Rechnung.", v.Mail.Body);
-        // ZUGFeRD-Erzeugung folgt erst → Fehler, kein Autoversand
+        // Briefpapier fehlt → Fehler, kein Autoversand
         Assert.Equal(VorgangStatus.Error, v.Status);
+        // ZUGFeRD 2 Comfort erzeugt: XML abgelegt, im Versand-PDF eingebettet, gültig
+        Assert.Equal("ZUGFeRD 2 Comfort (EN 16931)", v.EInvoiceProfile);
+        Assert.NotNull(store.FilePath(v.Id, DocumentStore.XmlFile));
+        Assert.Contains(v.Messages, m => m.Text.Contains("erzeugt und geprüft") && m.Text.EndsWith("gültig."));
+        Assert.DoesNotContain(v.Messages, m => m.Text.StartsWith("E-Rechnung:") && m.Level == DocumentChecker.Error);
+        Assert.Equal(File.ReadAllBytes(store.FilePath(v.Id, DocumentStore.XmlFile)!), FacturX.Extract(File.ReadAllBytes(store.FilePath(v.Id, DocumentStore.SendFile)!)));
         // Versand-PDF ohne Steuerzeichen
         var send = store.FilePath(v.Id, DocumentStore.SendFile);
         Assert.NotNull(send);

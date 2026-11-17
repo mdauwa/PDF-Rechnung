@@ -180,7 +180,7 @@ public sealed class DocumentProcessor
             v.Stationery = r.StationeryName;
             v.RemovedCodes = r.RemovedCodes;
             v.LayoutMessages = r.Messages;
-            return r.Pdf;
+            return EInvoice(v, r.Pdf);
         }
         catch (Exception ex)
         {
@@ -188,6 +188,45 @@ public sealed class DocumentProcessor
             v.Stationery = null; v.RemovedCodes = 0;
             v.LayoutMessages = new() { new CheckMessage(DocumentChecker.Error, "Das Versand-PDF konnte nicht erzeugt werden: " + ex.Message) };
             return null;
+        }
+    }
+
+    /// <summary>
+    /// E-Rechnung erzeugen, wenn Belegpost das angeforderte Format kann: CII-XML aus den Rechnungsdaten, mit den
+    /// KoSIT-/EN-16931-Regeln geprüft. ZUGFeRD: XML ins Versand-PDF eingebettet; XRechnung: XML als eigene Datei.
+    /// Nicht bei Weiterleitung an gotomaxx (dort erzeugt gotomaxx die E-Rechnung).
+    /// </summary>
+    private byte[] EInvoice(Vorgang v, byte[] pdf)
+    {
+        v.EInvoiceProfile = null; v.PendingEInvoice = null;
+        var fmt = InvoiceFormat.Find(v.FormatCode ?? v.Invoice.FormatCode);
+        var profile = CiiWriter.ProfileFor(fmt?.Code);
+        if (fmt is null || profile is null || v.Mail.Route == MailRoute.Gotomaxx) return pdf;
+        try
+        {
+            var xml = CiiWriter.Write(v.Invoice, new CiiWriter.Options(profile, v.Mail.To.FirstOrDefault()));
+            var rep = Edi.EdiValidation.Validate(xml, DocumentStore.XmlFile);
+            foreach (var i in rep.Issues.Where(i => i.Level is Edi.EdiReport.Fehler or Edi.EdiReport.Warnung))
+                v.LayoutMessages.Add(new CheckMessage(i.Level == Edi.EdiReport.Fehler ? DocumentChecker.Error : DocumentChecker.Warning,
+                    $"E-Rechnung: {i.Text}"));
+            var errors = rep.Issues.Count(i => i.Level == Edi.EdiReport.Fehler);
+            v.LayoutMessages.Add(new CheckMessage(DocumentChecker.Info, errors == 0
+                ? $"{fmt.Name} erzeugt und geprüft ({rep.Scenario ?? "EN 16931"}): gültig."
+                : $"{fmt.Name} erzeugt, die Prüfung meldet {errors} Fehler."));
+            v.EInvoiceProfile = fmt.Name;
+            v.PendingEInvoice = xml;
+            if (fmt.Kind == "zugferd")
+            {
+                var title = string.Join(" ", new[] { InvoiceData.DocumentTypeName(v.Invoice.DocumentTypeCode), v.VoucherId }.Where(x => !string.IsNullOrWhiteSpace(x)));
+                return FacturX.Embed(pdf, xml, "EN 16931", title);
+            }
+            return pdf;
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "E-Rechnung für {Id} konnte nicht erzeugt werden", v.Id);
+            v.LayoutMessages.Add(new CheckMessage(DocumentChecker.Error, $"{fmt.Name} konnte nicht erzeugt werden: {ex.Message}"));
+            return pdf;
         }
     }
 
@@ -428,6 +467,7 @@ public sealed class DocumentProcessor
             AssignOwner(v, p, v.Source == "Upload" ? v.OwnerUserId : null);
             Fill(v, p, overwriteMail: !v.Mail.Edited);
             _store.WriteFile(id, DocumentStore.SendFile, Compose(v, original, p));
+            _store.WriteFile(id, DocumentStore.XmlFile, v.PendingEInvoice);
             if (v.Deliveries.All(d => d.Status != "ok")) { v.Deliveries.Clear(); PlanDelivery(v); }
             v.Messages = DocumentChecker.Check(v, p, CurrentSettings());
             if (v.Status is VorgangStatus.SendError) v.Status = VorgangStatus.Warning;

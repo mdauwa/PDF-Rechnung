@@ -82,7 +82,7 @@ public class ControlCodeTests
     [Fact]
     public void Pruefung_meldet_nicht_unterstuetztes_Format_und_fehlende_Steuernummer_nicht()
     {
-        var p = Parse();
+        var p = ControlCodeParser.Parse(string.Join("\n", TestData.InvoiceCodes.Select(c => c.Replace("zugferd2.comfort", "zugferd2.extended"))));
         var v = new Vorgang { Mail = new MailData { To = { "einkauf@kunde.at" }, Subject = "x" }, Invoice = InvoiceData.From(p, DefaultSettings.Units) };
         var s = DefaultSettings.Create(); s.Mail.Enabled = true;
         var m = DocumentChecker.Check(v, p, s);

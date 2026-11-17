@@ -187,6 +187,9 @@ public sealed class SendService
             var pdf = _store.FilePath(v.Id, DocumentStore.SendFile);
             if (pdf is null) return (null, "Das Versand-PDF fehlt – bitte „Neu prüfen“.");
             mail.Attachments.Add((MailTemplate.SafeFileName(v.Mail.FileName) + ".pdf", await File.ReadAllBytesAsync(pdf, ct), "application/pdf"));
+            // XRechnung: die XML ist die Rechnung, das PDF nur die Sichtkopie (bei ZUGFeRD steckt die XML im PDF)
+            if (InvoiceFormat.Find(v.FormatCode ?? v.Invoice.FormatCode)?.Kind == "xrechnung" && _store.FilePath(v.Id, DocumentStore.XmlFile) is { } xml)
+                mail.Attachments.Add((MailTemplate.SafeFileName(v.Mail.FileName) + ".xml", await File.ReadAllBytesAsync(xml, ct), "application/xml"));
         }
         foreach (var a in v.Mail.Attachments)
         {
@@ -227,6 +230,7 @@ public sealed class SendService
                 var target = Path.Combine(folder, name + ".pdf");
                 if (File.Exists(target)) target = Path.Combine(folder, $"{name}_{v.Id}.pdf");
                 File.Copy(pdf, target);
+                if (_store.FilePath(id, DocumentStore.XmlFile) is { } xml) File.Copy(xml, Path.ChangeExtension(target, ".xml"), overwrite: true);
             }
         }
         catch (Exception ex) { _log.LogWarning(ex, "Export von {Id} nach {Folder} fehlgeschlagen", id, folder); }

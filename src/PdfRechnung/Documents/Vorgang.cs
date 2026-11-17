@@ -144,6 +144,10 @@ public sealed class Vorgang
     public int RemovedCodes { get; set; }
     /// <summary>Meldungen beim Erzeugen des Versand-PDFs (Briefpapier, Ränder) – Teil der Prüfung.</summary>
     public List<CheckMessage> LayoutMessages { get; set; } = new();
+    /// <summary>Von Belegpost erzeugte E-Rechnung (CII): Profil, z. B. „ZUGFeRD 2 Comfort (EN 16931)“; null = keine.</summary>
+    public string? EInvoiceProfile { get; set; }
+    /// <summary>Gerade erzeugte XML, wird beim Speichern als <c>rechnung.xml</c> abgelegt.</summary>
+    [System.Text.Json.Serialization.JsonIgnore] public byte[]? PendingEInvoice { get; set; }
 
     public MailData Mail { get; set; } = new();
     public InvoiceData Invoice { get; set; } = new();

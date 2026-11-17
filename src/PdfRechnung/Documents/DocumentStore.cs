@@ -28,7 +28,7 @@ public sealed record VorgangFilter
 /// </summary>
 public sealed class DocumentStore
 {
-    public const string PdfFile = "beleg.pdf", SendFile = "versand.pdf", TextFile = "text.txt", MetaFile = "meta.json";
+    public const string PdfFile = "beleg.pdf", SendFile = "versand.pdf", TextFile = "text.txt", MetaFile = "meta.json", XmlFile = "rechnung.xml";
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -306,6 +306,7 @@ public sealed class DocumentStore
         Directory.CreateDirectory(dir);
         File.WriteAllBytes(Path.Combine(dir, PdfFile), pdf);
         if (sendPdf is not null) File.WriteAllBytes(Path.Combine(dir, SendFile), sendPdf);
+        if (v.PendingEInvoice is not null) File.WriteAllBytes(Path.Combine(dir, XmlFile), v.PendingEInvoice);
         File.WriteAllText(Path.Combine(dir, TextFile), text);
         var events = new List<VorgangEvent> { new(v.Id, v.CreatedAt, StatusCode.Erfasst, v.Source, v.OwnerName ?? v.PrintUser, null) };
         if (StatusCode.FromVorgang(v, false) is { } code)

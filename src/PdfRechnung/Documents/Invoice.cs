@@ -6,14 +6,15 @@ public sealed record InvoiceFormat(string Code, string Name, string Kind, bool S
     /// <summary>Alle Formate, die die ERP-Vorlage (SEBELK) anfordern kann.</summary>
     public static readonly IReadOnlyList<InvoiceFormat> All = new[]
     {
-        new InvoiceFormat("gotomaxx.invoice.zugferd2.comfort", "ZUGFeRD 2 Comfort (EN 16931)", "zugferd", false),
+        new InvoiceFormat("gotomaxx.invoice.zugferd2.comfort", "ZUGFeRD 2 Comfort (EN 16931)", "zugferd", true),
         new InvoiceFormat("gotomaxx.invoice.zugferd2.extended", "ZUGFeRD 2 Extended", "zugferd", false),
         new InvoiceFormat("gotomaxx.invoice.zugferd.basic", "ZUGFeRD 1 Basic", "zugferd", false),
         new InvoiceFormat("gotomaxx.invoice.zugferd.comfort", "ZUGFeRD 1 Comfort", "zugferd", false),
         new InvoiceFormat("gotomaxx.invoice.zugferd.extended", "ZUGFeRD 1 Extended", "zugferd", false),
         new InvoiceFormat("gotomaxx.invoice.xrechnung.ubl", "XRechnung (UBL)", "xrechnung", false),
-        new InvoiceFormat("gotomaxx.invoice.xrechnung2.cii", "XRechnung 2 (CII)", "xrechnung", false),
-        new InvoiceFormat("gotomaxx.invoice.xrechnung3.cii", "XRechnung 3 (CII)", "xrechnung", false),
+        new InvoiceFormat("gotomaxx.invoice.xrechnung2.cii", "XRechnung 3 (CII, angefordert als XRechnung 2)", "xrechnung", true),
+        new InvoiceFormat("gotomaxx.invoice.xrechnung3.cii", "XRechnung 3 (CII)", "xrechnung", true),
+        new InvoiceFormat("gotomaxx.invoice.xrechnung3.ubl", "XRechnung 3 (UBL)", "xrechnung", false),
         new InvoiceFormat("gotomaxx.invoice.peppol.bis3.ubl", "Peppol BIS Billing 3", "peppol", false),
     };
 

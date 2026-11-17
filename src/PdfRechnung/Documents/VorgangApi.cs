@@ -96,6 +96,7 @@ public static class VorgangApi
             {
                 vorgang = v,
                 hasSendPdf = store.FilePath(id, DocumentStore.SendFile) is not null,
+                hasXml = store.FilePath(id, DocumentStore.XmlFile) is not null,
                 // Anlagen, die im Vorgang liegen (z. B. normale E-Mail): Name und Größe zum Herunterladen
                 anlagen = Anlagen(store, v).Select(x => new { nr = x.Nr, name = x.Name, size = x.Size }),
                 mandant = cfg.GetSection("Mandanten").Get<MandantOptions>()?.Find(v.Mandant) is { } md
@@ -105,6 +106,15 @@ public static class VorgangApi
                 autoSendAt = mail.Enabled && mail.AutoSend && v.SendAttempts == 0 && (v.Status == VorgangStatus.Ready || (mail.AutoSendWithWarnings && v.Status == VorgangStatus.Warning))
                     ? v.CreatedAt.AddMinutes(Math.Max(0, mail.AutoSendDelayMinutes)) : (DateTimeOffset?)null
             });
+        });
+
+        g.MapGet("/{id}/xml", (string id, DocumentStore store) =>
+        {
+            var v = store.Get(id);
+            var path = v is null ? null : store.FilePath(id, DocumentStore.XmlFile);
+            if (path is null) return Results.NotFound();
+            var name = MailTemplate.SafeFileName(string.IsNullOrWhiteSpace(v!.Mail.FileName) ? v.VoucherId ?? id : v.Mail.FileName) + ".xml";
+            return Results.File(path, "application/xml", name);
         });
 
         g.MapGet("/{id}/pdf", (string id, bool? download, string? variant, DocumentStore store) =>

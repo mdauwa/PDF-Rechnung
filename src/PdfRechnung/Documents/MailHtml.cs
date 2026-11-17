@@ -84,7 +84,7 @@ public static partial class MailHtml
     public static string Sanitize(string? html)
     {
         if (string.IsNullOrWhiteSpace(html)) return "";
-        var s = html.Replace("\r\n", "\n");
+        var s = StripControlChars(html).Replace("\r\n", "\n");
         // Kommentare inkl. bedingter Office-Kommentare <!--[if gte mso 9]> … <![endif]-->
         s = Regex.Replace(s, @"<!--\[if[\s\S]*?<!\[endif\]-->", "", RegexOptions.IgnoreCase);
         s = Regex.Replace(s, @"<!--[\s\S]*?-->", "");
@@ -126,7 +126,8 @@ public static partial class MailHtml
     /// </summary>
     public static string ForStorage(string? value, string dataDirectory)
     {
-        if (!IsHtml(value)) return value ?? "";
+        value = StripControlCodes(StripControlChars(value ?? ""));
+        if (!IsHtml(value)) return value;
         var clean = Sanitize(value);
         clean = Regex.Replace(clean, @"src=""(data:image/(png|jpe?g|gif);base64,([A-Za-z0-9+/=\s]+))""", m =>
         {
@@ -141,6 +142,17 @@ public static partial class MailHtml
         }, RegexOptions.IgnoreCase);
         return Regex.Replace(clean, @"<img[^>]*src=""""[^>]*>", "");
     }
+
+    [GeneratedRegex(@"[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u200B\u200C\u2060\uFEFF\u00AD]")]
+    private static partial Regex ControlChars();
+    [GeneratedRegex(@"@@[A-Za-z]{2}[^@\r\n]{0,500}@@|\$\$[A-Za-z]{2}[^$\r\n]{0,500}\$\$")]
+    private static partial Regex ControlCodes();
+
+    /// <summary>Steuer- und unsichtbare Zeichen entfernen (z. B. aus eingelesenen Dateien oder kopiertem Text); Zeilenumbrüche und Tabs bleiben.</summary>
+    public static string StripControlChars(string s) => string.IsNullOrEmpty(s) ? s : ControlChars().Replace(s, "");
+
+    /// <summary>ERP-/gotomaxx-Steuerzeichen (@@xx…@@ bzw. $$xx…$$) entfernen – gehören nicht in Signaturen und Mailtexte.</summary>
+    public static string StripControlCodes(string s) => string.IsNullOrEmpty(s) ? s : ControlCodes().Replace(s, "");
 
     /// <summary>Bild ablegen (Name = Prüfsumme, gleiche Bilder nur einmal). Liefert den Dateinamen.</summary>
     public static string SaveImage(byte[] bytes, string ext, string dataDirectory)
@@ -186,6 +198,7 @@ public static partial class MailHtml
     public static string EmbedImages(string html, string? dataDirectory, List<InlineImage> images)
     {
         if (string.IsNullOrEmpty(html)) return html;
+        html = MailImages.Insert(html, dataDirectory); // {Bild:Name} aus der Bildverwaltung
         var n = images.Count;
         html = Regex.Replace(html, @"src=""(?:[^""]*/)?" + Regex.Escape(UrlPrefix) + @"([A-Za-z0-9_\-]+\.(png|jpg|jpeg|gif))""", m =>
         {
@@ -217,6 +230,7 @@ public static partial class MailHtml
     public static string ToText(string? content)
     {
         if (string.IsNullOrWhiteSpace(content)) return "";
+        content = MailImages.Strip(content);
         if (!IsHtml(content)) return content.Replace("**", "");
         var s = content.Replace("\r\n", "\n").Replace("\n", " ");
         s = Regex.Replace(s, @"<a\b[^>]*href=""(?:mailto:|tel:)?([^""]+)""[^>]*>([\s\S]*?)</a>", m =>

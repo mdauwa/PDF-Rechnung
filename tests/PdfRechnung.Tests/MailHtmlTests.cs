@@ -71,4 +71,59 @@ public sealed class MailHtmlTests : IDisposable
         Assert.Contains("www.erpaustria.com", r.Text);
         Assert.DoesNotContain("<p>", r.Text);
     }
+
+    // 1×1-PNG
+    private static readonly byte[] Png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+
+    [Fact]
+    public void Eingelesene_Signatur_wird_von_Steuerzeichen_bereinigt()
+    {
+        var raw = "<p>Mit freundlichen\u0007 Grüßen\u200B</p><p>@@xtRechnung@@Max\u0000 Muster$$pu007$$</p>";
+        var h = MailHtml.ForStorage(raw, _dir);
+        Assert.DoesNotContain("@@", h); Assert.DoesNotContain("$$", h);
+        Assert.False(h.Contains('\u0007') || h.Contains('\u0000') || h.Contains('\u200B'), "Steuerzeichen übrig");
+        Assert.Contains("Mit freundlichen Grüßen", h);
+        Assert.Contains("Max Muster", h);
+        Assert.Equal("Zeile 1\nZeile 2", MailHtml.ForStorage("Zeile 1\u0001\nZeile 2", _dir)); // Text ohne HTML: Umbrüche bleiben
+    }
+
+    [Fact]
+    public void Bildvariable_wird_aus_der_Bildverwaltung_eingebettet()
+    {
+        MailImages.Put(_dir, "Logo", Png, null);
+        Assert.Equal((1, 1), MailImages.Size(Png));
+        var sig = "<p>Gruß</p><p>{Bild:Logo|150}</p><p>{Bild:Gibtsnicht}</p>";
+        var r = MailDesigner.Render(null, "Hallo", new Dictionary<string, string>(), MailDesigner.Directory(_dir), null, sig);
+        Assert.Single(r.Images);
+        Assert.Contains("cid:" + r.Images[0].ContentId, r.Html);
+        Assert.Contains("width=\"150\"", r.Html);
+        Assert.DoesNotContain("{Bild:", r.Html);
+        Assert.DoesNotContain("{Bild:", r.Text);
+
+        // Austauschen unter gleichem Namen: Breite bleibt, Datei wechselt
+        var gif = new byte[] { (byte)'G', (byte)'I', (byte)'F', (byte)'8', (byte)'9', (byte)'a', 2, 0, 3, 0, 0, 0, 0 };
+        var e = MailImages.Put(_dir, "logo", gif, null);
+        Assert.Equal("logo", e.Name); Assert.EndsWith(".gif", e.File);
+        Assert.Single(MailImages.Load(_dir));
+        Assert.Throws<ArgumentException>(() => MailImages.Put(_dir, "Mit Leerzeichen", Png, null));
+        Assert.NotNull(MailImages.Update(_dir, "logo", "Firmenlogo", 200));
+        Assert.Equal(200, MailImages.Find(_dir, "firmenlogo")!.Width);
+        Assert.True(MailImages.Remove(_dir, "Firmenlogo"));
+        Assert.Empty(MailImages.Load(_dir));
+    }
+
+    [Fact]
+    public void Mitarbeiter_Platzhalter_aus_dem_Besitzer()
+    {
+        var v = new Vorgang { OwnerName = "Max Beispiel", OwnerEmail = "max@example.com", PrintUser = @"FIRMA\mbeispiel" };
+        var d = Placeholders.Build(v, null);
+        Assert.Equal("Max Beispiel", d["Mitarbeiter"]);
+        Assert.Equal("max@example.com", d["MitarbeiterEmail"]);
+        Assert.Equal("mbeispiel", Placeholders.Build(new Vorgang { PrintUser = @"FIRMA\mbeispiel" }, null)["Mitarbeiter"]);
+
+        // mailto-Link mit Platzhalter übersteht das Speichern und wird beim Versand ersetzt
+        var stored = MailHtml.ForStorage("<p><a href=\"mailto:{MitarbeiterEmail}\">{MitarbeiterEmail}</a></p>", _dir);
+        var html = MailHtml.ToMailHtml(stored, d, "#1f5fbf");
+        Assert.Contains("href=\"mailto:max@example.com\"", html);
+    }
 }

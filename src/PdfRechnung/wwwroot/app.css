@@ -528,3 +528,15 @@ table.sender-table input { width: 100%; min-width: 160px; }
 .check-list { display: flex; flex-direction: column; align-items: flex-start; gap: .45rem; padding-top: .35rem; }
 .check-list .check { white-space: normal; color: var(--text); }
 .check-list input[type="checkbox"] { width: auto; margin: 0; padding: 0; flex: none; }
+
+/* Einstellungen → Bilder */
+.img-upload { display: grid; grid-template-columns: 220px 140px minmax(200px, 1fr) auto; gap: 12px; align-items: start; margin: 8px 0 16px; }
+.img-list { table-layout: fixed; width: 100%; }
+.img-list td { vertical-align: middle; }
+.img-list input[type="text"], .img-list input[type="number"] { width: 100%; box-sizing: border-box; }
+.img-list .img-act { white-space: nowrap; text-align: right; }
+.img-list .img-var { word-break: break-all; }
+.img-list .img-act .btn { margin-left: 4px; }
+.img-thumb img { max-width: 80px; max-height: 48px; display: block; background: repeating-conic-gradient(#eee 0 25%, #fff 0 50%) 0 0 / 10px 10px; }
+.img-var { font-size: 12px; }
+@media (max-width: 900px) { .img-upload { grid-template-columns: 1fr; } }

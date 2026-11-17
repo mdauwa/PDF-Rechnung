@@ -18,7 +18,83 @@ const RTE_DROP = new Set(["SCRIPT", "STYLE", "HEAD", "TITLE", "META", "LINK", "X
 const RTE_FONTS = [["", "Schrift"], ["Arial, Helvetica, sans-serif", "Arial"], ["Calibri, Arial, sans-serif", "Calibri"], ["Segoe UI, Arial, sans-serif", "Segoe UI"],
   ["Verdana, Geneva, sans-serif", "Verdana"], ["Tahoma, Geneva, sans-serif", "Tahoma"], ["Georgia, serif", "Georgia"], ["Times New Roman, serif", "Times New Roman"]];
 const RTE_SIZES = [["", "Größe"], ["11px", "klein"], ["13px", "etwas kleiner"], ["15px", "normal"], ["18px", "groß"], ["22px", "sehr groß"]];
-const RTE_PLACEHOLDERS = ["Belegart", "Belegnummer", "Belegdatum", "Kunde", "Kundennummer", "Betrag", "Waehrung", "Dateiname", "Absender", "Datum"];
+const RTE_PLACEHOLDERS = ["Belegart", "Belegnummer", "Belegdatum", "Kunde", "Kundennummer", "Betrag", "Waehrung", "Dateiname", "Absender", "Datum", "Mitarbeiter", "MitarbeiterEmail"];
+
+/** Bilder der Bildverwaltung ({Bild:Name}) – einmal pro Seite geladen, dann in alle Platzhalter-Auswahlen eingetragen. */
+let RTE_IMAGES = null, rteImagesLoading = null;
+function rteLoadImages(force = false) {
+  if (rteImagesLoading && !force) return rteImagesLoading;
+  rteImagesLoading = fetch("api/mailbilder-katalog", { cache: "no-store", credentials: "same-origin" })
+    .then(r => r.ok ? r.json() : []).catch(() => [])
+    .then(list => { RTE_IMAGES = Array.isArray(list) ? list : []; rteFillImageOptions(); return RTE_IMAGES; });
+  return rteImagesLoading;
+}
+const rteImageOptions = () => (RTE_IMAGES || []).length
+  ? `<optgroup label="Bilder (Bildverwaltung)">${RTE_IMAGES.map(i => `<option value="Bild:${esc(i.name)}">{Bild:${esc(i.name)}}</option>`).join("")}</optgroup>` : "";
+function rteFillImageOptions(root = document) {
+  root.querySelectorAll('select[data-rte-cmd="placeholder"]').forEach(sel => {
+    sel.querySelector("optgroup.rte-img")?.remove();
+    const html = rteImageOptions(); if (!html) return;
+    sel.insertAdjacentHTML("beforeend", html.replace("<optgroup ", '<optgroup class="rte-img" '));
+  });
+}
+
+/* ---------- Signatur/Text aus Datei (Outlook-Signatur .htm, .html, .txt) ---------- */
+
+/** Text einer Datei mit passender Zeichenkodierung lesen (BOM, <meta charset>, sonst UTF-8 bzw. Windows-1252). */
+async function rteReadText(file) {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  if (buf[0] === 0xFF && buf[1] === 0xFE) return new TextDecoder("utf-16le").decode(buf.subarray(2));
+  if (buf[0] === 0xFE && buf[1] === 0xFF) return new TextDecoder("utf-16be").decode(buf.subarray(2));
+  if (buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) return new TextDecoder("utf-8").decode(buf.subarray(3));
+  const head = new TextDecoder("latin1").decode(buf.subarray(0, 4096));
+  const cs = /charset\s*=\s*["']?([\w-]+)/i.exec(head)?.[1];
+  if (cs) { try { return new TextDecoder(cs.toLowerCase()).decode(buf); } catch { /* unbekannt → unten */ } }
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(buf); }
+  catch { return new TextDecoder("windows-1252").decode(buf); }
+}
+
+/** Steuerzeichen und ERP-Steuercodes entfernen. Liefert { text, removed }. */
+function rteStripControl(t) {
+  let removed = 0;
+  t = String(t || "")
+    .replace(/@@[A-Za-z]{2}[^@\r\n]{0,500}@@|\$\$[A-Za-z]{2}[^$\r\n]{0,500}\$\$/g, () => { removed++; return ""; })
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u200B\u200C\u2060\uFEFF\u00AD]/g, () => { removed++; return ""; });
+  return { text: t, removed };
+}
+
+/** Bild-Datei → data:-URL. */
+const rteDataUrl = f => new Promise((ok, fail) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => fail(r.error); r.readAsDataURL(f); });
+
+/**
+ * Ausgewählte Dateien einlesen: eine .htm/.html/.txt-Datei, dazu optional die Bilder aus dem Ordner „…-Dateien“/„…_files“
+ * (Outlook legt Signaturbilder dort ab). Liefert { html, removed, lostImages, name }.
+ */
+async function rteImportFiles(files) {
+  files = [...files];
+  const doc = files.find(f => /\.(html?|txt)$/i.test(f.name));
+  if (!doc) throw new Error("Bitte eine .htm-, .html- oder .txt-Datei wählen (Outlook-Signaturen liegen unter %APPDATA%\\Microsoft\\Signatures).");
+  const imgs = new Map();
+  for (const f of files) if (/^image\/(png|jpeg|gif)$/.test(f.type) || /\.(png|jpe?g|gif)$/i.test(f.name)) imgs.set(f.name.toLowerCase(), f);
+  const { text, removed } = rteStripControl(await rteReadText(doc));
+  let html;
+  if (/\.txt$/i.test(doc.name) && !rteIsHtml(text)) html = rteFromText(text);
+  else {
+    // Bildverweise (relativ auf den Signaturordner) mit den mit ausgewählten Bildern auflösen
+    const parsed = new DOMParser().parseFromString(text, "text/html");
+    for (const img of parsed.querySelectorAll("img")) {
+      const src = img.getAttribute("src") || "";
+      if (/^(https:|data:|cid:)/i.test(src) || src.includes("api/mailbilder/")) continue;
+      let base = src.split(/[\\/]/).pop().split(/[?#]/)[0];
+      try { base = decodeURIComponent(base); } catch { /* egal */ }
+      const f = imgs.get(base.toLowerCase());
+      if (f && f.size <= 2 * 1024 * 1024) img.setAttribute("src", await rteDataUrl(f));
+    }
+    html = parsed.documentElement.outerHTML;
+  }
+  const c = rteClean(html);
+  return { html: c.html, removed, lostImages: c.lostImages, name: doc.name };
+}
 
 /** Enthält der Wert HTML aus dem Editor? */
 const rteIsHtml = s => /<\s*\/?\s*(p|div|br|span|table|tr|td|img|b|strong|i|em|u|a|font|ul|ol|li|h[1-6]|hr|blockquote)\b/i.test(s || "");
@@ -103,7 +179,9 @@ function rteValue(el) {
 
 /** Ein Feld mit Werkzeugleiste. attrs = Attribute für das bearbeitbare Feld (z. B. data-path="…"). */
 function rteHtml(value, attrs, opts = {}) {
-  const ph = opts.placeholders || (typeof ST !== "undefined" && ST.data?.placeholders?.length ? ST.data.placeholders : RTE_PLACEHOLDERS);
+  const ph = (opts.placeholders || (typeof ST !== "undefined" && ST.data?.placeholders?.length ? ST.data.placeholders : RTE_PLACEHOLDERS))
+    .map(p => String(p).replace(/^\{|\}$/g, "")); // Server liefert „{Name}“
+  if (!RTE_IMAGES) rteLoadImages();
   const btn = (cmd, label, title, extra = "") => `<button type="button" class="rte-btn" data-rte-cmd="${cmd}" title="${title}" ${extra}>${label}</button>`;
   return `<div class="rte${opts.small ? " small" : ""}">
     <div class="rte-bar">
@@ -119,7 +197,8 @@ function rteHtml(value, attrs, opts = {}) {
       ${btn("link", "🔗", "Link einfügen")}
       <label class="rte-btn" title="Bild einfügen (PNG, JPG, GIF – höchstens 2 MB)">🖼<input type="file" accept="image/png,image/jpeg,image/gif" data-rte-cmd="image" hidden></label>
       ${btn("imgWidth", "↔", "Breite des gewählten Bildes")}
-      <select data-rte-cmd="placeholder" title="Platzhalter einfügen"><option value="">{…}</option>${ph.map(p => `<option value="${esc(p)}">{${esc(p)}}</option>`).join("")}</select>
+      <select data-rte-cmd="placeholder" title="Platzhalter oder Bild aus der Bildverwaltung einfügen"><option value="">{…}</option>${ph.map(p => `<option value="${esc(p)}">{${esc(p)}}</option>`).join("")}${rteImageOptions().replace("<optgroup ", '<optgroup class="rte-img" ')}</select>
+      <label class="rte-btn" title="Aus Datei laden: Outlook-Signatur (.htm) oder Text (.txt). Bilder aus dem Ordner „…-Dateien“ einfach mit auswählen.">📂<input type="file" multiple accept=".htm,.html,.txt,image/png,image/jpeg,image/gif" data-rte-cmd="file" hidden></label>
       <span class="rte-sep"></span>
       ${btn("removeFormat", "⌫", "Formatierung entfernen")}${btn("source", "&lt;/&gt;", "HTML anzeigen/bearbeiten")}
     </div>
@@ -134,7 +213,7 @@ function rteChanged(area) { area.dispatchEvent(new Event("input", { bubbles: tru
 /** Bild hochladen → URL (api/mailbilder/…). */
 async function rteUpload(blob) {
   if (blob.size > 2 * 1024 * 1024) throw new Error("Das Bild ist größer als 2 MB.");
-  const res = await fetch("api/mailbilder", { method: "POST", body: blob, credentials: "same-origin", headers: { "Content-Type": blob.type || "application/octet-stream" } });
+  const res = await fetch("api/mailbilder", { method: "POST", body: blob, credentials: "same-origin", headers: { "Content-Type": blob.type || "application/octet-stream", "X-Requested-With": "Belegpost" } });
   const j = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(j.error || `Hochladen fehlgeschlagen (${res.status})`);
   return j.url;
@@ -168,7 +247,9 @@ function rteInstall(root = document) {
     if (cmd === "link") {
       const url = prompt("Adresse des Links (https://…, mailto:… oder tel:…):", "https://");
       if (!url || url === "https://") return;
-      const href = /^(https?:|mailto:|tel:)/i.test(url) ? url : (url.includes("@") ? "mailto:" + url : "https://" + url);
+      const href = /^(https?:|mailto:|tel:)/i.test(url) ? url
+        : /^\{[^{}]*(mail|email)[^{}]*\}$/i.test(url.trim()) ? "mailto:" + url.trim()   // z. B. {MitarbeiterEmail}
+        : (url.includes("@") ? "mailto:" + url : "https://" + url);
       if (document.getSelection().isCollapsed) rteInsertHtml(`<a href="${esc(href)}" target="_blank">${esc(url)}</a>`);
       else document.execCommand("createLink", false, href);
     } else if (cmd === "imgWidth") {
@@ -192,6 +273,22 @@ function rteInstall(root = document) {
       const f = el.files[0]; el.value = ""; if (!f) return;
       try { const url = await rteUpload(f); rteInsertHtml(`<img src="${esc(url)}" alt="" style="max-width:100%;height:auto">`); }
       catch (x) { rteNote(box, x.message); }
+    } else if (cmd === "file") {
+      const files = [...el.files]; el.value = ""; if (!files.length) return;
+      try {
+        const r = await rteImportFiles(files);
+        const hasContent = !!rteValue(area);
+        const replace = !hasContent || await (typeof confirmDialog === "function"
+          ? confirmDialog("Aus Datei laden", `Den bisherigen Inhalt durch „${esc(r.name)}“ ersetzen?<br><small>Abbrechen fügt den Inhalt stattdessen an der Cursorposition ein.</small>`, "Ersetzen")
+          : Promise.resolve(confirm("Bisherigen Inhalt ersetzen?")));
+        area.focus();
+        if (replace) area.innerHTML = r.html || "<p><br></p>"; else rteInsertHtml(r.html);
+        await rteUploadInlineImages(area);
+        const notes = [`„${r.name}“ übernommen und bereinigt.`];
+        if (r.removed) notes.push(`${r.removed} Steuerzeichen bzw. ERP-Steuercodes entfernt.`);
+        if (r.lostImages) notes.push(`${r.lostImages} Bild(er) fehlen – bitte die Bilder aus dem Ordner „${r.name.replace(/\.[^.]+$/, "")}-Dateien“ mit auswählen oder über 🖼 einfügen.`);
+        rteNote(box, notes.join(" "));
+      } catch (x) { rteNote(box, x.message); }
     } else if (cmd === "placeholder") {
       if (el.value) rteInsertHtml(esc(`{${el.value}}`)); el.value = "";
     } else if (cmd === "fontName") {

@@ -31,7 +31,9 @@ public sealed class SendService
         if (v.Mail.Plain) return new RenderedMail("", v.Mail.Body, new List<InlineImage>()); // normale E-Mail: Text wie übergeben
         var design = v.Mail.Template is null ? null
             : templates.Items.FirstOrDefault(x => string.Equals(x.Name, v.Mail.Template, StringComparison.OrdinalIgnoreCase));
-        var values = v.Mail.Variables.Count > 0 ? v.Mail.Variables : Placeholders.Build(v, null, MailTemplate.SafeFileName(v.Mail.FileName) + ".pdf");
+        // gespeicherte Werte (aus der Verarbeitung) gehen vor; neue Platzhalter (z. B. {Mitarbeiter}) auch für ältere Vorgänge
+        var values = Placeholders.Build(v, null, MailTemplate.SafeFileName(v.Mail.FileName) + ".pdf");
+        foreach (var (k, val) in v.Mail.Variables) values[k] = val;
         return MailDesigner.Render(design, v.Mail.Body, values, MailDesigner.Directory(dataDirectory), MailFacts.From(v), v.Mail.SignatureText);
     }
 

@@ -447,6 +447,7 @@ public sealed class DocumentProcessor
             ?? _users?.FindByPrintName(v.PrintUser);
         v.OwnerUserId = owner?.Id ?? fallbackUserId;
         v.OwnerName = owner?.Name;
+        v.OwnerEmail = owner?.Email;
     }
 
     /// <summary>Prüfung wiederholen (z. B. nach geänderten Einstellungen oder Versanddaten).</summary>

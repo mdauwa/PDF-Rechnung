@@ -87,6 +87,8 @@ public sealed class Vorgang
     /// <summary>Portal-Benutzer, dem der Beleg gehört (aus Druck-Benutzer, @@pu@@ oder Upload).</summary>
     public string? OwnerUserId { get; set; }
     public string? OwnerName { get; set; }
+    /// <summary>E-Mail-Adresse des Besitzers (für {MitarbeiterEmail} in Signaturen).</summary>
+    public string? OwnerEmail { get; set; }
     /// <summary>ERP-Bedienernummer aus @@pb@@ (3-stellig).</summary>
     public string? OperatorNumber { get; set; }
     /// <summary>Betreff und Empfänger, die das ERP per MAPI übergeben hat (für die Mail-Regeln; haben Vorrang vor Steuerzeichen).</summary>

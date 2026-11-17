@@ -77,7 +77,53 @@ public static class MailRulesApi
             var path = Path.Combine(MailHtml.ImageDirectory(settings.DataDirectory), name);
             return File.Exists(path) ? Results.File(path, MailDesigner.ImageType(path)) : Results.NotFound();
         });
+
+        // ---------- Bildverwaltung: globale Bilder für {Bild:Name} ----------
+        // Lesen darf jeder Angemeldete (Auswahl im Editor), ändern nur Administratoren.
+        app.MapGet("/api/mailbilder-katalog", (HttpContext ctx, PortalAccess access, SettingsStore settings) =>
+        {
+            if (!access.For(ctx).Authenticated) return Results.Unauthorized();
+            var dir = MailHtml.ImageDirectory(settings.DataDirectory);
+            return Results.Ok(MailImages.Load(settings.DataDirectory).Select(e =>
+            {
+                var path = Path.Combine(dir, e.File);
+                var size = File.Exists(path) ? MailImages.Size(File.ReadAllBytes(path)) : null;
+                return new
+                {
+                    name = e.Name, file = e.File, width = e.Width, url = MailHtml.UrlPrefix + e.File, variable = "{Bild:" + e.Name + "}",
+                    pixelWidth = size?.W, pixelHeight = size?.H, bytes = File.Exists(path) ? new FileInfo(path).Length : 0, missing = !File.Exists(path)
+                };
+            }));
+        });
+        app.MapPost("/api/mailbilder-katalog", async (HttpContext ctx, PortalAccess access, SettingsStore settings) =>
+        {
+            if (!access.For(ctx).IsAdmin) return Results.Json(new { error = "Nur Administratoren dürfen Bilder verwalten." }, statusCode: 403);
+            var name = ctx.Request.Query["name"].ToString().Trim();
+            int? width = int.TryParse(ctx.Request.Query["width"], out var w) ? w : null;
+            using var ms = new MemoryStream();
+            await ctx.Request.Body.CopyToAsync(ms);
+            if (ms.Length > MailHtml.MaxImageBytes) return Results.BadRequest(new { error = "Das Bild ist größer als 2 MB." });
+            try { var e = MailImages.Put(settings.DataDirectory, name, ms.ToArray(), width); return Results.Ok(new { e.Name, e.File, e.Width }); }
+            catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
+        });
+        app.MapPut("/api/mailbilder-katalog/{name}", (string name, MailImageUpdate body, HttpContext ctx, PortalAccess access, SettingsStore settings) =>
+        {
+            if (!access.For(ctx).IsAdmin) return Results.Json(new { error = "Nur Administratoren dürfen Bilder verwalten." }, statusCode: 403);
+            try
+            {
+                var e = MailImages.Update(settings.DataDirectory, name, (body.Name ?? name).Trim(), body.Width);
+                return e is null ? Results.NotFound(new { error = "Bild nicht gefunden." }) : Results.Ok(new { e.Name, e.File, e.Width });
+            }
+            catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
+        });
+        app.MapDelete("/api/mailbilder-katalog/{name}", (string name, HttpContext ctx, PortalAccess access, SettingsStore settings) =>
+        {
+            if (!access.For(ctx).IsAdmin) return Results.Json(new { error = "Nur Administratoren dürfen Bilder verwalten." }, statusCode: 403);
+            return MailImages.Remove(settings.DataDirectory, name) ? Results.Ok(new { ok = true }) : Results.NotFound(new { error = "Bild nicht gefunden." });
+        });
     }
+
+    public sealed record MailImageUpdate(string? Name, int? Width);
 
     /// <summary>Eigener Benutzer oder – für Administratoren – der per ?user= gewählte.</summary>
     private static (PortalUser? User, IResult? Error) Target(HttpContext ctx, PortalAccess access, UserStore users)

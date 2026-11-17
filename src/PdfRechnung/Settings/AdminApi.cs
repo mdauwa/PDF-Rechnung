@@ -379,7 +379,8 @@ public static class AdminApi
             var sample = new PdfRechnung.Documents.Vorgang
             {
                 DocumentType = "Rechnung", VoucherId = "RE-2026-0815", VoucherDate = DateTime.Today.ToString("dd.MM.yyyy"),
-                BuyerName = "Muster GmbH", BuyerId = "10042", GrossAmount = 1234.56m, Currency = "EUR"
+                BuyerName = "Muster GmbH", BuyerId = "10042", GrossAmount = 1234.56m, Currency = "EUR",
+                OwnerName = "Max Beispiel", OwnerEmail = "max.beispiel@example.com"
             };
             sample.Mail.FileName = "Rechnung RE-2026-0815";
             var custom = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Anrede"] = "Sehr geehrte Frau Muster", ["Ansprechpartner"] = "Max Beispiel" };

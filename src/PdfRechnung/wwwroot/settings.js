@@ -17,6 +17,7 @@ const TABS = [
   ["mail", "E-Mail & Versand"],
   ["mailvorlagen", "Mail-Vorlagen"],
   ["regeln", "Regeln & Signaturen"],
+  ["bilder", "Bilder"],
   ["erechnung", "E-Rechnung"],
   ["ablage", "Ablage"],
   ["mandanten", "Mandanten"],
@@ -38,7 +39,7 @@ const ST_GROUPS = [
   ["benutzer", "Benutzer", "users", ["benutzer"]],
   ["system", "Dienst & Zugang", "settings", ["dienst", "server", "anmeldung", "benachrichtigung", "api"]],
   ["belege", "Drucker & Belege", "doc", ["eingang", "gotomaxx", "briefpapier", "erechnung", "ablage"]],
-  ["email", "E-Mail", "send", ["mail", "mailvorlagen", "regeln", "mapi", "statuslink"]],
+  ["email", "E-Mail", "send", ["mail", "mailvorlagen", "regeln", "bilder", "mapi", "statuslink"]],
   ["versand", "Versand & Partner", "upload", ["versandwege", "kunden", "filialverbund", "connect"]],
   ["erp", "ERP & Mandanten", "inbox", ["erp", "mandanten"]]
 ];
@@ -114,7 +115,7 @@ function drawTab() {
   const body = $("#stBody");
   if (!ST.s) return;
   const fn = { dienst: tabService, server: tabServer, eingang: tabInbox, gotomaxx: tabGotomaxx, briefpapier: tabStationery, mail: tabMail, mailvorlagen: tabTemplates, erechnung: tabInvoice, ablage: tabStorage, benutzer: tabUsers, anmeldung: tabAuth,
-    erp: tabErp, mapi: tabMapi, statuslink: tabStatusLink, regeln: tabRules, mandanten: tabMandanten, versandwege: tabDelivery, kunden: tabCustomers, connect: tabConnect,
+    erp: tabErp, mapi: tabMapi, statuslink: tabStatusLink, regeln: tabRules, bilder: tabImages, mandanten: tabMandanten, versandwege: tabDelivery, kunden: tabCustomers, connect: tabConnect,
     benachrichtigung: tabAlerts, api: tabApi, filialverbund: tabFilialverbund }[ST.tab] || tabService;
   body.innerHTML = fn();
   if (ST.tab === "benutzer" && !ST.users) loadUsers();
@@ -159,6 +160,7 @@ function onInput(e) {
   const el = e.target;
   if (deliveryInput(el, e)) return;
   if (monitorInput(el, e)) return;
+  if (imagesInput(el, e)) return;
   if (el.dataset?.mdErp !== undefined) {
     const m = ST.s.mandanten.items[+el.dataset.mdErp];
     m.ownErp = el.value === "eigen"; m.erpOff = el.value === "aus";
@@ -234,6 +236,7 @@ async function onAction(e) {
     if (btn && btn.tagName === "BUTTON") btn.disabled = true;
     if (await deliveryClick(a, btn, e)) return;
     if (await monitorClick(a, btn, e)) return;
+    if (await imagesClick(a, btn, e)) return;
     switch (a) {
       case "save": await save(); break;
       case "discard": await loadSettings(); msg(""); break;

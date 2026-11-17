@@ -16,7 +16,7 @@ public static partial class Placeholders
     private static partial Regex Pattern();
 
     /// <summary>Eingebaute Platzhalter (immer verfügbar).</summary>
-    public static readonly string[] BuiltIn = { "Belegart", "Belegnummer", "Belegdatum", "Kunde", "Kundennummer", "Betrag", "Waehrung", "Dateiname", "Absender", "Datum" };
+    public static readonly string[] BuiltIn = { "Belegart", "Belegnummer", "Belegdatum", "Kunde", "Kundennummer", "Betrag", "Waehrung", "Dateiname", "Absender", "Datum", "Mitarbeiter", "MitarbeiterEmail" };
 
     public static Dictionary<string, string> Build(Vorgang v, IReadOnlyDictionary<string, string>? custom, string? fileName = null, string? sender = null)
     {
@@ -31,7 +31,10 @@ public static partial class Placeholders
             ["Waehrung"] = v.Currency ?? "",
             ["Dateiname"] = fileName ?? "",
             ["Absender"] = sender ?? "",
-            ["Datum"] = DateTime.Now.ToString("dd.MM.yyyy", CultureInfo.GetCultureInfo("de-AT"))
+            ["Datum"] = DateTime.Now.ToString("dd.MM.yyyy", CultureInfo.GetCultureInfo("de-AT")),
+            // Mitarbeiter = Besitzer des Belegs (Portal-Benutzer); ohne Zuordnung der druckende Benutzer
+            ["Mitarbeiter"] = v.OwnerName ?? v.PrintUser?.Split('\\').Last() ?? "",
+            ["MitarbeiterEmail"] = v.OwnerEmail ?? ""
         };
         d["Währung"] = d["Waehrung"];
         if (custom is not null)

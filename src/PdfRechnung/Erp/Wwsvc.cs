@@ -270,6 +270,18 @@ public sealed class ErpServicePassManager
         return null;
     }
 
+    /// <summary>Belege suchen (BELEG.GET mit beliebigen Suchparametern, z. B. Belegart und Belegnummer).</summary>
+    public async Task<List<JsonElement>> FindDocumentsAsync(IReadOnlyDictionary<string, string> search, CancellationToken ct, int maxLines = 5)
+    {
+        var r = await ExecAsync("BELEG.GET", new Dictionary<string, string>(search), ct, maxLines: maxLines);
+        if (!r.Succeeded) throw new ErpException(r.Status == 401 ? "SessionLoginRequired" : "QueryRejected", r.Status, r.ResultStatus, r.ErrorCode);
+        var list = new List<JsonElement>();
+        if (r.Body.TryGetProperty("BELEGLISTE", out var bl) && bl.ValueKind == JsonValueKind.Object
+            && bl.TryGetProperty("BELEG", out var items) && items.ValueKind == JsonValueKind.Array)
+            foreach (var it in items.EnumerateArray()) list.Add(it.Clone());
+        return list;
+    }
+
     /// <summary>Felder im Belegkopf setzen (BELEG.PUT). Absolute Werte – eine Wiederholung ist unkritisch.</summary>
     public async Task WriteDocumentAsync(string belndx, IReadOnlyDictionary<string, string> fields, CancellationToken ct)
     {

@@ -215,6 +215,20 @@ public sealed class ErpFeedbackService : BackgroundService
         _store.StatusChanged += OnStatusChanged;
     }
 
+    /// <summary>Vorgangs-Kennung für Belege ohne Vorgang (gotomaxx-Protokoll).</summary>
+    public const string ExternalPrefix = "gx:";
+    /// <summary>Liefert für „gx:…“ einen vorübergehenden Vorgang mit den Belegdaten (wird in Program.cs gesetzt).</summary>
+    public static Func<string, Vorgang?>? ExternalVorgang { get; set; }
+
+    /// <summary>Status eines Rückmeldeauftrags (für das gotomaxx-Protokoll).</summary>
+    public (string Status, string? Message)? JobState(long id)
+    {
+        using var c = _db.Open();
+        using var cmd = BelegpostDb.Cmd(c, "SELECT status, meldung FROM erp_auftrag WHERE id=@i", ("@i", id));
+        using var r = cmd.ExecuteReader();
+        return r.Read() ? (r.GetString(0), r.IsDBNull(1) ? null : r.GetString(1)) : null;
+    }
+
     /// <summary>Letzter Zustand der Verbindung für die Oberfläche.</summary>
     public string? LastError { get; private set; }
     public DateTimeOffset? LastSuccess { get; private set; }
@@ -293,8 +307,10 @@ public sealed class ErpFeedbackService : BackgroundService
 
     private async Task ProcessAsync(ErpJob job, CancellationToken ct)
     {
-        var v = _store.Get(job.VorgangId);
-        if (v is null) { Finish(job.Id, ErpJobStatus.Discarded, "Vorgang gelöscht.", null); return; }
+        // „gx:…“ = Beleg aus dem gotomaxx-Protokoll ohne Vorgang (direkt aus dem ERP gedruckt)
+        var external = job.VorgangId.StartsWith(ExternalPrefix, StringComparison.Ordinal);
+        var v = external ? ExternalVorgang?.Invoke(job.VorgangId) : _store.Get(job.VorgangId);
+        if (v is null) { Finish(job.Id, ErpJobStatus.Discarded, external ? "Protokolleintrag nicht mehr vorhanden." : "Vorgang gelöscht.", null); return; }
         var o = OptionsFor(v);
         if (!o.Enabled) { Finish(job.Id, ErpJobStatus.Discarded, $"ERP-Rückmeldung für Mandant {v.Mandant} ist aus.", null); return; }
         try
@@ -306,7 +322,7 @@ public sealed class ErpFeedbackService : BackgroundService
                 current = await manager.ReadDocumentAsync(job.ErpIndex, ct);
                 if (current is null) throw new ErpException("DocumentNotFound");
             }
-            var ev = _store.Events(v.Id).LastOrDefault(e => e.Code == job.Code);
+            var ev = external ? null : _store.Events(v.Id).LastOrDefault(e => e.Code == job.Code);
             var link = StatusLinkUrl(v);
             var fields = ErpFieldBuilder.Build(o, new ErpValueContext(v, job.Code, job.EventAt, ev?.Channel, link),
                 f => current is { } cur && cur.TryGetProperty(f, out var x) ? x.ToString() : null);
@@ -320,7 +336,7 @@ public sealed class ErpFeedbackService : BackgroundService
                 Finish(job.Id, ErpJobStatus.Done, null, fields);
             }
             else Finish(job.Id, ErpJobStatus.Done, "Keine Felder für diesen Status.", fields);
-            _store.AddNote(v.Id, StatusCode.ErpBestaetigt, "ERP", "ERP-Rückmeldung", ErpFieldBuilder.ErpCode(o, job.Code));
+            if (!external) _store.AddNote(v.Id, StatusCode.ErpBestaetigt, "ERP", "ERP-Rückmeldung", ErpFieldBuilder.ErpCode(o, job.Code));
             LastSuccess = DateTimeOffset.Now;
             LastError = null;
             _db.Audit("ERP-Rückmeldung", "BELEG.PUT", job.ErpIndex, string.Join(", ", fields.Select(f => $"{f.Key}={f.Value}")));

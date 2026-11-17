@@ -82,7 +82,7 @@ public sealed class EventHub
                         var json = System.Text.Json.JsonSerializer.Serialize(new
                         {
                             seq = e.Seq, at = e.At, kind = e.Kind, id = e.DocumentId, title = e.Title, status = e.Status, text = e.Text, mail = e.Mail,
-                            path = "/#/vorgang?id=" + Uri.EscapeDataString(e.DocumentId)
+                            path = e.DocumentId.StartsWith("#/") ? "/" + e.DocumentId : "/#/vorgang?id=" + Uri.EscapeDataString(e.DocumentId)
                         });
                         await ctx.Response.WriteAsync($"id: {e.Seq}\nevent: beleg\ndata: {json}\n\n", ct);
                     }

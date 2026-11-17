@@ -117,6 +117,7 @@ builder.Services.Configure<PdfRechnung.Delivery.DeliveryOptions>(builder.Configu
 builder.Services.Configure<PdfRechnung.Connect.ConnectOptions>(builder.Configuration.GetSection("Connect"));
 builder.Services.Configure<PdfRechnung.Monitoring.AlertOptions>(builder.Configuration.GetSection("Alerts"));
 builder.Services.Configure<ValidationOptions>(builder.Configuration.GetSection("Validation"));
+builder.Services.Configure<PdfRechnung.Documents.GotomaxxLogOptions>(builder.Configuration.GetSection("GotomaxxLog"));
 builder.Services.Configure<PdfRechnung.Exchange.FilialverbundOptions>(builder.Configuration.GetSection("Filialverbund"));
 builder.Services.AddSingleton<MailRuleStore>();
 builder.Services.AddSingleton(sp => new RuntimeControl(sp.GetRequiredService<IHostApplicationLifetime>(), isService));
@@ -163,6 +164,8 @@ builder.Services.AddSingleton<StatusLinkService>();
 builder.Services.AddSingleton<StatusLinkLimiter>();
 builder.Services.AddSingleton<PdfRechnung.Erp.ErpFeedbackService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PdfRechnung.Erp.ErpFeedbackService>());
+builder.Services.AddSingleton<PdfRechnung.Documents.GotomaxxLogService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<PdfRechnung.Documents.GotomaxxLogService>());
 
 // ---- HTTPS: eigenes PFX oder automatisch erzeugtes, selbst signiertes Zertifikat ----
 var certs = new CertificateProvider(store, machineKeys: isService && OperatingSystem.IsWindows());
@@ -324,6 +327,8 @@ app.MapGet("/api/portal", (IOptionsSnapshot<PortalOptions> portal, HttpContext c
         isAdmin = a.IsAdmin,
         seeInbound = a.SeeInbound,
         seeOutbound = a.SeeOutbound,
+        gotomaxxLog = (a.SeeOutbound || a.UserId is not null) && app.Services.GetRequiredService<IOptionsMonitor<PdfRechnung.Documents.GotomaxxLogOptions>>().CurrentValue.Enabled
+            ? app.Services.GetRequiredService<PdfRechnung.Documents.GotomaxxLogService>().ProfileNames() : null,
         filialverbund = (a.SeeInbound || a.SeeOutbound) && app.Services.GetRequiredService<IOptionsMonitor<PdfRechnung.Exchange.FilialverbundOptions>>().CurrentValue.Enabled,
         connect = (a.SeeInbound || a.SeeOutbound) && app.Services.GetRequiredService<IOptionsMonitor<PdfRechnung.Connect.ConnectOptions>>().CurrentValue.Enabled,
         isLocalAdmin = a.IsLocalAdmin,
@@ -363,6 +368,7 @@ PdfRechnung.Delivery.As2Receiver.Map(app);
 PdfRechnung.Delivery.InboundApi.Map(app);
 PdfRechnung.Delivery.OutboundApi.Map(app);
 PdfRechnung.Api.ApiV1.Map(app);
+PdfRechnung.Documents.GotomaxxLogApi.Map(app);
 PdfRechnung.Api.AdminMonitoringApi.Map(app);
 PdfRechnung.Edi.ToolsApi.Map(app);
 PdfRechnung.Connect.ConnectApi.Map(app);

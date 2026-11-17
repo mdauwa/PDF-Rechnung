@@ -24,6 +24,8 @@ public sealed class AppSettings
     public PdfRechnung.Delivery.DeliveryOptions Delivery { get; set; } = new();
     /// <summary>ERP Suite Connect (Webshop-Schnittstelle): Ordner anzeigen und Dateien prüfen.</summary>
     public PdfRechnung.Connect.ConnectOptions Connect { get; set; } = new();
+    /// <summary>gotomaxx-Protokoll einlesen und zurückmelden.</summary>
+    public PdfRechnung.Documents.GotomaxxLogOptions GotomaxxLog { get; set; } = new();
     /// <summary>Prüfung von E-Rechnungen: eigene Stufe je Regel.</summary>
     public ValidationOptions Validation { get; set; } = new();
     /// <summary>Benachrichtigung bei Problemen ohne Reaktion.</summary>

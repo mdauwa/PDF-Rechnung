@@ -106,6 +106,9 @@ function renderMenu() {
     + (portal.seeInbound ? `<a href="#/eingang" data-key="eingang">${icon("download")}<span>Eingang</span><span class="menu-count" data-count="eingang"></span></a>` : "")
     + (portal.seeOutbound ? `<a href="#/ausgang" data-key="ausgang">${icon("upload")}<span>Ausgang</span></a>` : "")
     + (portal.filialverbund ? `<a href="#/filialverbund" data-key="filialverbund">${icon("users")}<span>Filialverbund</span></a>` : "");
+  if (portal.gotomaxxLog) html += `<div class="menu-group">Gotomaxx</div>`
+    + (portal.gotomaxxLog.length ? portal.gotomaxxLog.map(p => `<a href="#/gotomaxx?d=${encodeURIComponent(p)}" data-key="gotomaxx:${esc(p)}">${icon("send")}<span>${esc(p)}</span></a>`).join("")
+      : `<a href="#/gotomaxx" data-key="gotomaxx:">${icon("send")}<span>noch keine Einträge</span></a>`);
   if (portal.connect) html += `<div class="menu-group">ERP Suite Connect</div>`
     + (portal.seeInbound ? `<a href="#/connect?b=eingang" data-key="connect:eingang">${icon("download")}<span>Eingang</span></a>` : "")
     + (portal.seeOutbound ? `<a href="#/connect?b=ausgang" data-key="connect:ausgang">${icon("upload")}<span>Ausgang</span></a>` : "");
@@ -155,6 +158,7 @@ const VIEWS = {
   eingang: { title: "Eingang", render: v => renderEingang(v) },
   ausgang: { title: "Ausgang", render: v => renderAusgang(v) },
   filialverbund: { title: "Filialverbund", render: v => renderFilialverbund(v) },
+  gotomaxx: { title: "gotomaxx", render: v => renderGotomaxx(v) },
   pruefen: { title: "Dokument validieren", render: v => renderPruefen(v) },
   connect: { title: "ERP Suite Connect", render: v => renderConnect(v) }
 };
@@ -181,13 +185,14 @@ function route() {
   if (key === "eingang" && !portal.seeInbound) key = "vorgaenge";
   if (key === "ausgang" && !portal.seeOutbound) key = "vorgaenge";
   if (key === "filialverbund" && !portal.filialverbund) key = "vorgaenge";
+  if (key === "gotomaxx" && !portal.gotomaxxLog) key = "vorgaenge";
   if (key === "connect" && !portal.connect) key = "vorgaenge";
   const v = VIEWS[key] || VIEWS.vorgaenge;
   $("#viewTitle").textContent = v.title;
   v.render(view);
 
   const q = new URLSearchParams(hash.split("?")[1] || "");
-  const active = key === "vorgaenge" ? `vorgaenge:${q.get("f") || "offen"}` : key === "connect" ? `connect:${q.get("b") || "eingang"}` : key === "einstellungen" ? `einstellungen:${q.get("g") || "system"}` : key;
+  const active = key === "vorgaenge" ? `vorgaenge:${q.get("f") || "offen"}` : key === "connect" ? `connect:${q.get("b") || "eingang"}` : key === "gotomaxx" ? `gotomaxx:${q.get("d") || ""}` : key === "einstellungen" ? `einstellungen:${q.get("g") || "system"}` : key;
   document.querySelectorAll("#menu a").forEach(a => a.classList.toggle("active", a.dataset.key === active));
   // Untermenü „Einstellungen“ aufklappen, wenn eine Einstellungsseite offen ist
   const sub = document.getElementById("menuSubEinstellungen");
@@ -232,6 +237,7 @@ function startLive() {
   live.onerror = () => setLive(false);
   live.addEventListener("beleg", e => {
     let ev; try { ev = JSON.parse(e.data); } catch { return; }
+    if (ev.kind === "hinweis") { toast(`${ev.title}${ev.text ? " – " + ev.text : ""}`); return; }
     if (ev.kind && !["neu", "test"].includes(ev.kind)) return; // Aufträge/Einstellungen sind nur für den Melder
     const target = "#/vorgang?id=" + encodeURIComponent(ev.id);
     const auto = store.get("live.auto", true);

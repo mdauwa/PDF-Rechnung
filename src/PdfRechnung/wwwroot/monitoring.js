@@ -273,6 +273,10 @@ async function monitorClick(a, btn, e) {
   const F = ST.s?.filialverbund;
   const d = e.target.closest("[data-st]")?.dataset || {};
   switch (a) {
+    case "gx-read": {
+      if (ST.dirty) { msg("Bitte zuerst speichern."); return true; }
+      const r = await api("POST", "api/admin/gotomaxx-protokoll/lesen"); msg(r.message, r.ok); return true;
+    }
     case "rl-add": ST.s.validation.ruleLevels.push({ rule: "", level: "warnung", note: "" }); markDirty(); drawTab(); return true;
     case "rl-del": ST.s.validation.ruleLevels.splice(+d.i, 1); markDirty(); drawTab(); return true;
     case "mon-reload": MON.status = null; drawTab(); await loadMonStatus(); return true;

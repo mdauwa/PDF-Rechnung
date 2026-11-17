@@ -213,6 +213,13 @@ public sealed class TrayContext : ApplicationContext
             if (!string.IsNullOrEmpty(e.Text)) ToastWindow.Show("Einstellung geändert", e.Text, ToastWindow.Kinds.Info, null, seconds: 8);
             return;
         }
+        // Hinweis vom Server (z. B. gotomaxx hat einen Beleg nicht versendet): nur melden, nichts automatisch öffnen
+        if (e.Kind == "hinweis")
+        {
+            ToastWindow.Show(e.Title.Length > 0 ? e.Title : "Hinweis", e.Text ?? "", e.Status is "fehler" or "versandfehler" ? ToastWindow.Kinds.Bad : ToastWindow.Kinds.Info,
+                () => OpenPath(e.Path), "Im Portal", 15);
+            return;
+        }
         var kind = e.Status switch
         {
             "fehler" or "versandfehler" => ToastWindow.Kinds.Bad,

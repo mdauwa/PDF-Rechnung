@@ -226,6 +226,33 @@ public sealed class BelegpostDb
             rechner TEXT,
             info TEXT,
             adresse TEXT);
+        """,
+        // 7: gotomaxx-Protokoll (usage_*.dat von PDFMAILER) – je Eintrag mit Zuordnung zum Beleg und ERP-Rückmeldung
+        """
+        CREATE TABLE gotomaxx_protokoll(
+            nr INTEGER PRIMARY KEY AUTOINCREMENT,
+            datei TEXT NOT NULL COLLATE NOCASE,
+            eintrag_id INTEGER NOT NULL,
+            profil TEXT NOT NULL,
+            benutzer TEXT,
+            rechner TEXT,
+            quelle TEXT,
+            zeit INTEGER NOT NULL,
+            status INTEGER NOT NULL,
+            aktionen TEXT,
+            fehler TEXT,
+            belegart TEXT,
+            belegnr TEXT,
+            vorgang_id TEXT,
+            belndx TEXT,
+            erp_status TEXT,
+            erp_meldung TEXT,
+            erp_auftrag INTEGER,
+            erp_versuche INTEGER NOT NULL DEFAULT 0,
+            besitzer TEXT,
+            gemeldet INTEGER,
+            UNIQUE(datei, eintrag_id));
+        CREATE INDEX ix_gx_profil_zeit ON gotomaxx_protokoll(profil, zeit);
         """
     };
 

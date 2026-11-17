@@ -642,7 +642,40 @@ function tabInbox() {
          der Benutzernummer aus deren Befehlszeile zu – wie <code>@@pb000@@</code>. <b>Steuerzeichen im Druck (<code>@@pb@@</code>, <code>@@pu@@</code>) haben Vorrang.</b>
          Drucken zwei Benutzer im selben Moment, bekommt der Vorgang eine Warnung.</p>
        <div id="printerOrigin"></div>`) +
-    section("Weiterleitung an gotomaxx PDFMAILER", gotomaxxSection());
+    section("Weiterleitung an gotomaxx PDFMAILER", gotomaxxSection()) +
+    section("gotomaxx-Protokoll einlesen und ans ERP melden", gotomaxxLogSection());
+}
+
+function gotomaxxLogSection() {
+  ST.s.gotomaxxLog ||= {};
+  const L = ST.s.gotomaxxLog;
+  L.typeMap ||= [{ text: "Rechnung", code: "R" }, { text: "Lieferschein", code: "L" }, { text: "Auftrag", code: "A" }, { text: "Angebot", code: "N" }, { text: "Bestellung", code: "b" }, { text: "Gutschrift", code: "G" }];
+  return `${inCheck("gotomaxxLog.enabled", "Protokolle von gotomaxx PDFMAILER laufend einlesen – Menügruppe „Gotomaxx“ mit jedem Drucker")}
+    <p class="help">Belegpost liest alle <code>usage_*.dat</code> (SQLite) aus dem Protokollordner – immer aus einer Kopie, gotomaxx wird nicht verändert.
+      Je Eintrag: Dokument, Windows-Benutzer, Rechner, ob gespeichert/gedruckt/gemailt wurde oder welcher Fehler auftrat.
+      Belege, die Belegpost an gotomaxx übergeben hat, bekommen ihr Ergebnis im Vorgang (versendet bzw. Fehler 840) und melden über die ERP-Rückmeldung.
+      Direkt aus dem ERP gedruckte Belege: Belegpost errät den Belegindex aus dem Dokumentnamen und prüft ihn im ERP (BELEG.GET).</p>
+    <div class="grid3">
+      ${field("Protokollordner", inText("gotomaxxLog.folder", "C:\\ProgramData\\gotomaxx\\pdfmailer6"), "Leer = C:\\ProgramData\\gotomaxx\\pdfmailer6")}
+      ${field("Lesen alle … Sekunden", inNum("gotomaxxLog.intervalSeconds", 15, 3600))}
+      ${field("Beim ersten Lesen … Tage zurück", inNum("gotomaxxLog.importDays", 1, 365))}
+    </div>
+    <h4>Benutzer informieren</h4>
+    ${inCheck("gotomaxxLog.notifyUsers", "Nicht versendete Belege dem Benutzer melden, der gedruckt hat (Melder und Portal)")}
+    ${inCheck("gotomaxxLog.notifyUserMail", "zusätzlich per E-Mail an den Benutzer")}
+    <p class="help">Der Windows-Benutzer aus dem Protokoll wird über „Zuordnung gedruckter Belege“ beim Benutzer zugeordnet (Windows-/ERP-Benutzer bzw. Anmeldename).
+      Benutzer ohne Recht „Ausgang sehen“ sehen unter Gotomaxx nur ihre eigenen (und freigegebenen) Drucke.</p>
+    <h4>ERP-Rückmeldung für direkt gedruckte Belege</h4>
+    ${inCheck("gotomaxxLog.erpFeedback", "Ergebnis ans ERP melden (versendet bzw. gotomaxx-Fehler, Felder wie in der ERP-Rückmeldung)")}
+    ${inCheck("gotomaxxLog.lookupErp", "Belegindex aus dem Dokumentnamen erraten und im ERP prüfen")}
+    <div class="grid3">
+      ${field("Anfang des Belegindex", inText("gotomaxxLog.indexPrefix", "0N"), "Wenn er nicht im Dokumentnamen steht, z. B. „(0NA)“.")}
+      ${field("Suchreihenfolge der Belegart", inText("gotomaxxLog.searchOrder", "R, L, A, N, b"), "Wenn die Belegart nicht im Namen steht: Rechnung, Lieferschein, Auftrag, Angebot, Bestellung.")}
+      ${field("Mandant", inText("gotomaxxLog.mandant", "leer = allgemeine ERP-Verbindung"))}
+    </div>
+    ${field("Belegart und -nummer im Dokumentnamen (regulärer Ausdruck, Gruppen art und nr)", inText("gotomaxxLog.titlePattern", "Standard"), "Leer = Standard, z. B. „WA-Auftrag (alle Belege) - 20241001 (0NA)“ → Nummer 20241001, Index 0NA20241001.")}
+    <div class="grid3">${L.typeMap.map((m, i) => `${field(i ? "" : "Wort im Namen", inText(`gotomaxxLog.typeMap.${i}.text`, "Rechnung"))}${field(i ? "" : "Belegart", inText(`gotomaxxLog.typeMap.${i}.code`, "R"))}<div></div>`).join("")}</div>
+    <div class="actions"><button class="btn ghost" data-st="gx-read">Jetzt lesen</button></div>`;
 }
 
 function extraPrintersSection() {

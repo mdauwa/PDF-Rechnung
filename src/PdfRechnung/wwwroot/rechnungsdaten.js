@@ -67,16 +67,18 @@ function drawRechnungsdaten(view) {
       ${msgs.length ? `<ul class="rd-msgs">${msgs.map(m => `<li><span class="badge ${m.level === "fehler" ? "missing" : m.level === "warnung" ? "partial" : ""}">${m.level === "fehler" ? "Fehler" : m.level === "warnung" ? "Warnung" : "Hinweis"}</span> ${esc(m.text)}</li>`).join("")}</ul>` : '<p class="meta">Keine Meldungen.</p>'}
     </div>
     <div class="rd-groups">${groups.map(g => `<div class="card"><h3>${esc(g)}</h3>${r.fields.filter(f => f.group === g).map(field).join("")}</div>`).join("")}</div>
-    <div class="card"><h3>Positionen</h3>
-      <div class="table-wrap"><table class="list rd-lines"><thead><tr><th>Pos</th><th>Art.-Nr.</th><th>Bezeichnung / Beschreibung</th><th class="num">Menge</th><th>Einheit</th><th class="num">Preis</th><th class="num">USt</th><th>Kategorie</th><th class="num">Betrag</th></tr></thead>
+    <div class="card rd-card"><h3>Positionen</h3>
+      <div class="table-wrap"><table class="list rd-lines">
+        <colgroup><col style="width:3.5em"><col style="width:8em"><col><col style="width:5em"><col style="width:10.5em"><col style="width:6.5em"><col style="width:4em"><col style="width:8.5em"><col style="width:6.5em"></colgroup>
+        <thead><tr><th>Pos</th><th>Art.-Nr.</th><th>Bezeichnung / Beschreibung</th><th class="num">Menge</th><th>Einheit</th><th class="num">Preis</th><th class="num">USt</th><th>Kategorie</th><th class="num">Betrag</th></tr></thead>
       <tbody>${r.lines.map(l => `<tr class="${l.corrected ? "rd-corr" : ""}" data-rd-line="${l.index}">
         <td>${esc(l.lineId || l.index + 1)}</td>
-        <td><input data-rl="sellerId" value="${esc(l.sellerId || "")}" style="width:8em" ${dis}></td>
-        <td><input data-rl="name" value="${esc(l.name || "")}" ${dis}><textarea data-rl="description" rows="1" placeholder="Beschreibung" ${dis}>${esc(l.description || "")}</textarea></td>
+        <td><input data-rl="sellerId" value="${esc(l.sellerId || "")}" ${dis}></td>
+        <td><input data-rl="name" value="${esc(l.name || "")}" placeholder="Bezeichnung" ${dis}><textarea data-rl="description" rows="2" placeholder="Beschreibung" ${dis}>${esc(l.description || "")}</textarea></td>
         <td class="num">${num(l.quantity, 0)}</td>
         <td>${rdSelect("unit", l.unitCode || "", [["", "– wählen –"], ...RD_UNITS.map(([k, t]) => [k, `${k} – ${t}`])], dis).replace('data-rd="unit"', 'data-rl="unitCode"')}
-          <small class="meta">gedruckt: ${esc(l.unitText || "–")}</small></td>
-        <td class="num">${num(l.price)}${l.baseQuantity && l.baseQuantity != 1 ? `<small>je ${num(l.baseQuantity, 0)}</small>` : ""}</td>
+          <small class="rd-printed" title="gedruckt: ${esc(l.unitText || "–")}">gedruckt: ${esc(l.unitText || "–")}</small></td>
+        <td class="num">${num(l.price)}${l.baseQuantity && l.baseQuantity != 1 ? `<small class="rd-printed">je ${num(l.baseQuantity, 0)}</small>` : ""}</td>
         <td class="num">${num(l.vatPercent, 0)} %</td>
         <td>${Number(l.vatPercent || 0) === 0 ? rdSelect("cat", l.vatCategory, RD_CATS.filter(([k]) => k !== "S"), dis).replace('data-rd="cat"', 'data-rl="vatCategory"') : esc(l.vatCategory)}</td>
         <td class="num">${num(l.total)}</td></tr>`).join("")}</tbody></table></div>

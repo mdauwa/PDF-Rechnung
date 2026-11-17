@@ -497,13 +497,20 @@ table.sender-table input { width: 100%; min-width: 160px; }
 .vd-mail .mail-files li { padding: .3rem 0; border-bottom: 1px solid var(--border); }
 
 /* Rechnungsdaten-Editor */
-.rd-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
-.rd-field { display: flex; flex-direction: column; gap: .2rem; margin: .5rem 0; }
-.rd-field label { font-weight: 600; font-size: .9em; }
-.rd-field input, .rd-field textarea, .rd-field select { width: 100%; }
+.rd-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: .8rem; margin-bottom: .8rem; }
+.rd-groups .card, .rd-card { padding: .6rem .9rem; }
+.rd-groups h3 { margin: 0 0 .3rem; }
+.rd-field { display: flex; flex-direction: column; gap: .1rem; margin: .3rem 0; }
+.rd-field label { font-weight: 600; font-size: .82em; }
+.rd-field small { font-size: .78em; }
+.rd-field input, .rd-field textarea, .rd-field select { width: 100%; box-sizing: border-box; padding: .25rem .45rem; font-size: .9em; }
 .rd-corr input, .rd-corr textarea, .rd-corr select { border-color: #d9a400; }
-.rd-lines input, .rd-lines textarea { width: 100%; min-width: 8em; }
-.rd-lines textarea { margin-top: .2rem; font-size: .9em; }
+.rd-lines { table-layout: fixed; width: 100%; }
+.rd-lines th, .rd-lines td { padding: .3rem .35rem; vertical-align: top; overflow: hidden; }
+.rd-lines input, .rd-lines textarea, .rd-lines select { display: block; width: 100%; min-width: 0; box-sizing: border-box; padding: .2rem .35rem; font-size: .88em; }
+.rd-lines textarea { margin-top: .2rem; resize: vertical; font-family: inherit; }
+.rd-lines .rd-printed { display: block; font-size: .75em; color: var(--muted, #6b7280); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: .15rem; }
+.rd-lines td.num { white-space: nowrap; }
 .rd-msgs { list-style: none; padding: 0; margin: .3rem 0; }
-.rd-msgs li { padding: .25rem 0; }
-.rd-actions { margin: 1rem 0; }
+.rd-msgs li { padding: .2rem 0; }
+.rd-actions { margin: .8rem 0; }

@@ -520,3 +520,11 @@ table.sender-table input { width: 100%; min-width: 160px; }
 .gx-typemap td { padding: .2rem .4rem; }
 .gx-typemap td:last-child { width: 9rem; }
 .gx-typemap input { width: 100%; box-sizing: border-box; }
+
+/* REST-API: Aufrufe umbrechen statt abschneiden; Rechte als saubere Liste */
+.api-calls { table-layout: fixed; width: 100%; }
+.api-calls td { white-space: normal; vertical-align: top; }
+.api-calls td.mono { word-break: break-all; }
+.check-list { display: flex; flex-direction: column; align-items: flex-start; gap: .45rem; padding-top: .35rem; }
+.check-list .check { white-space: normal; color: var(--text); }
+.check-list input[type="checkbox"] { width: auto; margin: 0; padding: 0; flex: none; }

@@ -75,7 +75,7 @@ function tabApi() {
   return section("REST-API",
     `<p class="help">Für Überwachungssysteme (z. B. PRTG, Zabbix, Uptime Kuma) und Konnektoren. Anmeldung mit API-Schlüssel im Header
        <code>X-Api-Key: …</code> oder <code>Authorization: Bearer …</code>.</p>
-     <div class="table-wrap"><table class="list"><thead><tr><th>Aufruf</th><th>Zweck</th></tr></thead><tbody>
+     <table class="list api-calls"><colgroup><col style="width:42%"><col></colgroup><thead><tr><th>Aufruf</th><th>Zweck</th></tr></thead><tbody>
        <tr><td class="mono">GET ${esc(base)}api/v1/ping</td><td>Lebt der Dienst? Ohne Anmeldung.</td></tr>
        <tr><td class="mono">GET ${esc(base)}api/v1/status</td><td>Gesamtstatus mit allen Prüfungen. HTTP 200 = in Ordnung/Warnung, 503 = Fehler (<code>?immer200=1</code> liefert immer 200).</td></tr>
        <tr><td class="mono">GET ${esc(base)}api/v1/status/{versandweg}</td><td>Ein Versandweg, Kommunikationspartner oder Standort (Name, Kürzel oder Schlüssel aus <code>status-liste</code>) –
@@ -85,7 +85,7 @@ function tabApi() {
          (<code>?text=1</code> als Text) mit Empfehlung annehmen/ablehnen; HTTP 200 = annehmen, 406 = ablehnen.</td></tr>
        <tr><td class="mono">… ${esc(base)}api/v1/austausch/…</td><td>Datenaustausch für Konnektoren und den Filial-Client: <code>konfiguration</code>, <code>lebenszeichen</code>,
          <code>dateien</code> (abholen, <code>{nr}/quittung</code>, hochladen).</td></tr>
-     </tbody></table></div>`) +
+     </tbody></table>`) +
     section("API-Schlüssel",
       `${MON.newKey ? `<div class="notice ok"><b>Neuer Schlüssel „${esc(MON.newKey.name)}“</b> – jetzt kopieren, er wird nicht noch einmal angezeigt:<br>
           <code class="mono" style="user-select:all">${esc(MON.newKey.secret)}</code></div>` : ""}
@@ -100,9 +100,12 @@ function tabApi() {
        <h4>Neuer Schlüssel</h4>
        <div class="grid3">
          ${field("Name", `<input type="text" id="keyName" placeholder="z. B. PRTG oder Filiale Graz">`)}
-         ${field("Rechte", `<label class="check"><input type="checkbox" id="keyStatus" checked> Status abfragen</label>
-            <label class="check"><input type="checkbox" id="keyCheck"> Dokumente prüfen</label>
-            <label class="check"><input type="checkbox" id="keyEx"> Datenaustausch (Filial-Client)</label>`)}
+         <div class="field"><span class="lbl">Rechte</span>
+           <div class="check-list">
+             <label class="check"><input type="checkbox" id="keyStatus" checked> Status abfragen</label>
+             <label class="check"><input type="checkbox" id="keyCheck"> Dokumente prüfen</label>
+             <label class="check"><input type="checkbox" id="keyEx"> Datenaustausch (Filial-Client)</label>
+           </div></div>
          ${field("Standort (für Datenaustausch)", `<select id="keyStandort"><option value="">–</option>${standorte.map(s => `<option value="${esc(s.code)}">${esc(s.code)}${s.name ? " – " + esc(s.name) : ""}</option>`).join("")}</select>`,
            "Standorte unter Versand & Partner → Filialverbund anlegen und speichern.")}
        </div>

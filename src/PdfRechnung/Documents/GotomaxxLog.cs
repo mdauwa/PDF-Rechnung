@@ -130,6 +130,7 @@ public sealed class GotomaxxLogService : BackgroundService
             if (!Directory.Exists(dir)) throw new DirectoryNotFoundException("Ordner der gotomaxx-Protokolle nicht gefunden: " + dir);
             var files = Directory.GetFiles(dir, "usage_*.dat");
             foreach (var f in files) added += ReadFile(f, o);
+            AssignOwners();
             await AssignAsync(o, ct);
             await NotifyAsync(o, ct);
             State = (DateTimeOffset.Now, null, files.Length);
@@ -266,8 +267,24 @@ public sealed class GotomaxxLogService : BackgroundService
     private string? Owner(string? windowsUser)
     {
         if (_users is null || string.IsNullOrWhiteSpace(windowsUser)) return null;
-        var u = _users.FindByPrintName(windowsUser.Trim()) ?? _users.FindByLogin(new[] { windowsUser.Trim() });
+        // Windows-Benutzer kommt mit oder ohne Domäne („FIRMA\m.muster“ / „m.muster“); FindByPrintName vergleicht auch ohne Domäne
+        // und mit dem Teil vor dem @ der E-Mail-Adresse bzw. Anmeldung.
+        var full = windowsUser.Trim();
+        var u = _users.FindByPrintName(full) ?? _users.FindByLogin(new[] { full, Settings.UserStore.Short(full) });
         return u?.Id;
+    }
+
+    /// <summary>Einträge ohne Portal-Benutzer nachträglich zuordnen (z. B. Benutzer erst später angelegt oder Druck-Benutzer ergänzt).</summary>
+    private void AssignOwners()
+    {
+        if (_users is null) return;
+        using var c = _db.Open();
+        var names = new List<string>();
+        using (var cmd = BelegpostDb.Cmd(c, "SELECT DISTINCT benutzer FROM gotomaxx_protokoll WHERE besitzer IS NULL AND benutzer IS NOT NULL"))
+        using (var r = cmd.ExecuteReader()) while (r.Read()) names.Add(r.GetString(0));
+        foreach (var n in names)
+            if (Owner(n) is { } id)
+                BelegpostDb.Exec(c, "UPDATE gotomaxx_protokoll SET besitzer=@o WHERE besitzer IS NULL AND benutzer=@u", ("@o", id), ("@u", n));
     }
 
     /// <summary>Fehler dem druckenden Benutzer melden (Melder/Portal, optional Mail) – je Eintrag einmal.</summary>

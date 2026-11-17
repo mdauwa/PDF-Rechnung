@@ -77,7 +77,7 @@ public class GotomaxxLogTests
                     cmd.Parameters.AddWithValue("$s", src); cmd.Parameters.AddWithValue("$t", now); cmd.Parameters.AddWithValue("$st", st); cmd.Parameters.AddWithValue("$d", det);
                     cmd.ExecuteNonQuery();
                 }
-                cmd.CommandText = "INSERT INTO Entry(profileName,user,computer,source,timestamp,state,detail) VALUES('Rechnungsversand','m.mustermann','PC1','Rechnung - 99',$t,1,'')";
+                cmd.CommandText = "INSERT INTO Entry(profileName,user,computer,source,timestamp,state,detail) VALUES('Rechnungsversand','x','PC1','Rechnung - 99',$t,1,'')";
                 cmd.Parameters.Clear(); cmd.Parameters.AddWithValue("$t", now - 400L * 86400); cmd.ExecuteNonQuery();
                 cmd.CommandText = "INSERT INTO Entry(profileName,user,computer,source,timestamp,state,detail) VALUES('Lager','x','PC2','Rechnung - 1',$t,3,'')";
                 cmd.Parameters.Clear(); cmd.Parameters.AddWithValue("$t", now); cmd.ExecuteNonQuery();
@@ -97,6 +97,7 @@ public class GotomaxxLogTests
             Assert.Equal(3, all.Count);
             // Ältere Einträge werden beim ersten Lesen nur angezeigt, nicht ans ERP gemeldet
             Assert.Equal(GotomaxxErpStatus.Old, all.Single(e => e.DocNumber == "99").ErpStatus);
+            Assert.Null(all.Single(e => e.DocNumber == "99").Owner);
             var bad = all.Single(e => e.State == 3);
             Assert.Equal("u1", bad.Owner);
             Assert.Contains("Schwerwiegender Fehler", bad.Error);
@@ -109,6 +110,11 @@ public class GotomaxxLogTests
             Assert.Equal(0, await log.ScanAsync(CancellationToken.None)); // nichts Neues, auch „Lager“ nicht erneut gelesen
             Assert.Equal(new[] { "Rechnungsversand" }, log.ProfileNames());
             Assert.Equal(new[] { "Lager", "Rechnungsversand" }, log.AvailableProfiles());
+            // Benutzer später angelegt, Anmeldung mit Domäne bzw. E-Mail – Protokoll hat den Namen ohne Domäne
+            users.Replace(new List<PortalUser> { new() { Id = "u1", Name = "Max", Email = "max@firma.at", PrintNames = { "m.mustermann" } },
+                new() { Id = "u3", Name = "Lisa", Email = "x@firma.at", Logins = { "FIRMA\\x" } } });
+            await log.ScanAsync(CancellationToken.None);
+            Assert.Equal("u3", log.List(null, "Rechnung - 99", null, null, null).Single().Owner);
             // Liste muss sich wie im Portal serialisieren lassen (Web-Standard: camelCase)
             var json = System.Text.Json.JsonSerializer.Serialize(all.Select(x => GotomaxxLogApi.Item(x, erp)), new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
             Assert.Contains("\"state\":\"fehler\"", json);

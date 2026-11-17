@@ -44,6 +44,9 @@ public sealed class ProcessorTests : IDisposable
         Assert.Contains(v.Messages, m => m.Text.Contains("erzeugt und geprüft") && m.Text.EndsWith("gültig."));
         Assert.DoesNotContain(v.Messages, m => m.Text.StartsWith("E-Rechnung:") && m.Level == DocumentChecker.Error);
         Assert.Equal(File.ReadAllBytes(store.FilePath(v.Id, DocumentStore.XmlFile)!), FacturX.Extract(File.ReadAllBytes(store.FilePath(v.Id, DocumentStore.SendFile)!)));
+        // Validator erkennt das Versand-PDF als ZUGFeRD und findet keine Fehler (wie „E-Rechnung prüfen“ im Portal)
+        var rep = PdfRechnung.Edi.EdiValidation.Validate(File.ReadAllBytes(store.FilePath(v.Id, DocumentStore.SendFile)!), "versand.pdf");
+        Assert.True(rep.Valid, string.Join("\n", rep.Issues.Select(i => i.Text)));
         // Versand-PDF ohne Steuerzeichen
         var send = store.FilePath(v.Id, DocumentStore.SendFile);
         Assert.NotNull(send);

@@ -240,7 +240,10 @@ function drawVorgang(view, data) {
     if (portal.canSend && v.status === "verworfen") actions.push(`<button class="btn ghost" data-a="wiederherstellen">Wiederherstellen</button>`);
   }
   else actions.push(`<a class="btn ghost" href="api/vorgaenge/${encodeURIComponent(v.id)}/pdf?download=true">PDF herunterladen</a>`);
-  if (!plain && data.hasXml) actions.push(`<a class="btn ghost" href="api/vorgaenge/${encodeURIComponent(v.id)}/xml" title="${esc(v.eInvoiceProfile || "E-Rechnung")} – bei ZUGFeRD steckt sie auch im Versand-PDF">E-Rechnung (XML)</a>`);
+  if (!plain && data.hasXml) {
+    actions.push(`<a class="btn ghost" href="#/pruefen?vorgang=${encodeURIComponent(v.id)}" title="Prüfbericht des Validators (Schema, EN 16931, XRechnung) und lesbare Rechnungsansicht">E-Rechnung prüfen</a>`);
+    actions.push(`<a class="btn ghost" href="api/vorgaenge/${encodeURIComponent(v.id)}/xml" title="${esc(v.eInvoiceProfile || "E-Rechnung")} – bei ZUGFeRD steckt sie auch im Versand-PDF">E-Rechnung (XML)</a>`);
+  }
   if (portal.isAdmin && ["verworfen", "versendet", "ohneVersand"].includes(v.status)) actions.push(`<button class="btn ghost" data-a="loeschen">Löschen</button>`);
 
   const autoInfo = data.autoSendAt && ["bereit", "warnung"].includes(v.status)

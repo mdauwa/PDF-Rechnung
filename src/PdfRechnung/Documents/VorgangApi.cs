@@ -108,6 +108,28 @@ public static class VorgangApi
             });
         });
 
+        // Validator für die E-Rechnung dieses Vorgangs: bei ZUGFeRD das Versand-PDF (prüft auch die Einbettung), sonst die XML
+        g.MapGet("/{id}/pruefung", (string id, DocumentStore store) =>
+        {
+            var v = store.Get(id);
+            if (v is null) return Results.NotFound(new { error = "Vorgang nicht gefunden." });
+            var xml = store.FilePath(id, DocumentStore.XmlFile);
+            if (xml is null) return Results.NotFound(new { error = "Für diesen Vorgang hat Belegpost keine E-Rechnung erzeugt." });
+            var zugferd = InvoiceFormat.Find(v.FormatCode ?? v.Invoice.FormatCode)?.Kind == "zugferd";
+            var pdf = zugferd ? store.FilePath(id, DocumentStore.SendFile) : null;
+            var path = pdf ?? xml;
+            var name = (string.IsNullOrWhiteSpace(v.Mail.FileName) ? v.VoucherId ?? id : v.Mail.FileName) + Path.GetExtension(path);
+            var rep = Edi.EdiValidation.Validate(File.ReadAllBytes(path), name);
+            rep.ViewUrl = $"api/vorgaenge/{Uri.EscapeDataString(id)}/ansicht";
+            return Results.Ok(rep);
+        });
+
+        g.MapGet("/{id}/ansicht", (string id, DocumentStore store, HttpContext ctx) =>
+        {
+            var xml = store.Get(id) is null ? null : store.FilePath(id, DocumentStore.XmlFile);
+            return xml is null ? Results.NotFound() : Edi.InvoiceView.Result(ctx, File.ReadAllBytes(xml));
+        });
+
         g.MapGet("/{id}/xml", (string id, DocumentStore store) =>
         {
             var v = store.Get(id);

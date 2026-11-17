@@ -25,7 +25,7 @@ public static class ToolsApi
                 if (f.Length > 50 * 1024 * 1024) { list.Add(TooBig(f.FileName, f.Length)); continue; }
                 using var ms = new MemoryStream();
                 await f.CopyToAsync(ms);
-                list.Add(EdiValidation.Validate(ms.ToArray(), f.FileName));
+                list.Add(WithView(EdiValidation.Validate(ms.ToArray(), f.FileName), ms.ToArray()));
             }
             return Results.Ok(list);
         }).DisableAntiforgery();
@@ -38,10 +38,36 @@ public static class ToolsApi
             var t = text.TrimStart();
             var latin = (t.StartsWith("UNA") || t.StartsWith("UNB")) && !t.Contains("UNOW") && !t.Contains("UNOY") && text.All(c => c <= '\u00FF');
             var bytes = latin ? System.Text.Encoding.Latin1.GetBytes(text) : System.Text.Encoding.UTF8.GetBytes(text);
-            return Results.Ok(new[] { EdiValidation.Validate(bytes, string.IsNullOrWhiteSpace(req.Name) ? "eingefügt" : req.Name) });
+            return Results.Ok(new[] { WithView(EdiValidation.Validate(bytes, string.IsNullOrWhiteSpace(req.Name) ? "eingefügt" : req.Name), bytes) });
+        });
+
+        // Lesbare Rechnungsansicht einer hier geprüften Datei (Kopie liegt höchstens 2 Stunden im Datenordner)
+        g.MapGet("/ansicht/{token}", (string token, HttpContext ctx) =>
+        {
+            if (!System.Text.RegularExpressions.Regex.IsMatch(token, "^[a-f0-9]{32}$")) return Results.NotFound();
+            var path = Path.Combine(ViewDir, token + ".bin");
+            return File.Exists(path) ? InvoiceView.Result(ctx, File.ReadAllBytes(path)) : Results.NotFound(new { error = "Die Datei ist nicht mehr vorhanden – bitte erneut prüfen." });
         });
 
         g.MapPost("/bericht", (EdiReport r) => Results.Text(EdiReportText.Format(r), "text/plain; charset=utf-8"));
+    }
+
+    private static string ViewDir => Path.Combine(XmlInvoiceValidator.DataDirectory, "temp", "ansicht");
+
+    /// <summary>Darstellbare E-Rechnung: Kopie für die Ansicht ablegen und die Adresse in den Bericht schreiben.</summary>
+    private static EdiReport WithView(EdiReport r, byte[] data)
+    {
+        try
+        {
+            if (InvoiceView.InvoiceXml(data) is null) return r;
+            Directory.CreateDirectory(ViewDir);
+            foreach (var old in Directory.GetFiles(ViewDir).Where(f => File.GetLastWriteTimeUtc(f) < DateTime.UtcNow.AddHours(-2))) try { File.Delete(old); } catch (IOException) { }
+            var token = Guid.NewGuid().ToString("N");
+            File.WriteAllBytes(Path.Combine(ViewDir, token + ".bin"), data);
+            r.ViewUrl = $"api/tools/ansicht/{token}";
+        }
+        catch (Exception) { }
+        return r;
     }
 
     private static EdiReport TooBig(string name, long size)

@@ -188,6 +188,31 @@ public class XmlInvoiceValidatorTests
     }
 }
 
+public class InvoiceViewTests
+{
+    private static byte[] Daten(string f) => File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Daten", f));
+
+    [Theory]
+    [InlineData("CII_EN16931_Beispiel.xml")]
+    [InlineData("UBL_EN16931_Beispiel.xml")]
+    public void Rechnungsansicht_wird_erzeugt(string file)
+    {
+        PdfRechnung.Edi.XmlInvoiceValidator.DataDirectory = Path.Combine(Path.GetTempPath(), "pdfr-val");
+        var html = PdfRechnung.Edi.InvoiceView.Html(Daten(file));
+        Assert.Contains("<html", html);
+        Assert.Contains("Maßgeblich und zu archivieren ist die XML-Datei", html);
+        Assert.True(html.Length > 10_000);
+        if (Environment.GetEnvironmentVariable("VIEW_OUT") is { Length: > 0 } o) File.WriteAllText(Path.Combine(o, file + ".html"), html);
+    }
+
+    [Fact]
+    public void Keine_Ansicht_fuer_Nicht_Rechnungen()
+    {
+        Assert.Null(PdfRechnung.Edi.InvoiceView.InvoiceXml(System.Text.Encoding.UTF8.GetBytes("<a/>")));
+        Assert.Throws<InvalidOperationException>(() => PdfRechnung.Edi.InvoiceView.Html(System.Text.Encoding.UTF8.GetBytes("UNB+UNOC:3")));
+    }
+}
+
 public class EdiSampleDump
 {
     [Fact]

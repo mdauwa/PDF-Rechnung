@@ -41,6 +41,8 @@ public sealed class EdiReport
     public string? Scenario { get; set; }
     /// <summary>E-Rechnung: Empfehlung „annehmen“ oder „ablehnen“ (wie die KoSIT-Prüfung: Schema- oder Regelfehler bzw. kein Szenario → ablehnen).</summary>
     public string? Acceptance { get; set; }
+    /// <summary>Adresse der lesbaren Rechnungsansicht (nur bei darstellbaren E-Rechnungen).</summary>
+    public string? ViewUrl { get; set; }
     /// <summary>Stand der Prüfartefakte (für den Bericht).</summary>
     public string? RuleSet { get; set; }
     /// <summary>Geprüfter Inhalt zur Anzeige (Segmente bzw. XML), gekürzt.</summary>

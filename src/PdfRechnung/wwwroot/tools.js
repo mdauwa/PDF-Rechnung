@@ -69,7 +69,7 @@ function reportCard(r, i) {
   }).join("")}</tbody></table>` : `<p class="meta">Keine Meldungen.</p>`;
   return `<div class="card pr-report">
     <div class="pr-head"><div><h3>${esc(r.fileName || "Datei")}</h3><div class="meta">${esc(r.title || r.format)} · ${(r.size / 1024).toFixed(1).replace(".", ",")} KB</div></div>
-      <div class="pr-head-right">${r.acceptance ? `<span class="badge ${r.acceptance === "annehmen" ? "ok" : "missing"}" title="Empfehlung nach Schema- und Regelprüfung">${r.acceptance === "annehmen" ? "✓ annehmen" : "✗ ablehnen"}</span> ` : ""}${prStatus(r)} <button class="btn ghost" data-pr-text="${i}">Bericht als Text</button></div></div>
+      <div class="pr-head-right">${r.acceptance ? `<span class="badge ${r.acceptance === "annehmen" ? "ok" : "missing"}" title="Empfehlung nach Schema- und Regelprüfung">${r.acceptance === "annehmen" ? "✓ annehmen" : "✗ ablehnen"}</span> ` : ""}${prStatus(r)} ${r.viewUrl ? `<a class="btn ghost" href="${esc(r.viewUrl)}" target="_blank" rel="noopener" title="Lesbare Darstellung (KoSIT-Visualisierung) – maßgeblich ist die XML">Rechnung anzeigen</a> ` : ""}<button class="btn ghost" data-pr-text="${i}">Bericht als Text</button></div></div>
     ${r.scenario || r.acceptance ? `<p class="meta">Prüfszenario: <b>${esc(r.scenario || "keines passend")}</b>${r.ruleSet ? ` · ${esc(r.ruleSet)}` : ""}</p>` : ""}
     <p class="meta">Geprüft: ${esc((r.checks || []).join(" · "))}</p>
     ${env}${msgs}

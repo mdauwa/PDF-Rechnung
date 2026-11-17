@@ -53,7 +53,16 @@ public static class InboundApi
         {
             var x = book.Download(nr);
             if (x?.Path is null) return Results.NotFound(new { error = "Datei nicht mehr vorhanden." });
-            return Results.Ok(Edi.EdiValidation.Validate(File.ReadAllBytes(x.Value.Path), x.Value.Entry.FileName));
+            var data = File.ReadAllBytes(x.Value.Path);
+            var rep = Edi.EdiValidation.Validate(data, x.Value.Entry.FileName);
+            if (Edi.InvoiceView.InvoiceXml(data) is not null) rep.ViewUrl = $"api/eingang/{nr}/ansicht";
+            return Results.Ok(rep);
+        });
+
+        g.MapGet("/{nr:long}/ansicht", (long nr, InboundLog book, HttpContext ctx) =>
+        {
+            var x = book.Download(nr);
+            return x?.Path is null ? Results.NotFound(new { error = "Datei nicht mehr vorhanden." }) : Edi.InvoiceView.Result(ctx, File.ReadAllBytes(x.Value.Path));
         });
 
         g.MapPost("/gelesen", (ReadRequest req, InboundLog book) =>

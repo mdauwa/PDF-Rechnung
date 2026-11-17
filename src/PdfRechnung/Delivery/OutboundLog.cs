@@ -119,7 +119,16 @@ public static class OutboundApi
         {
             var e = book.Get(nr);
             if (e is null || !e.Exists) return Results.NotFound(new { error = "Datei nicht mehr vorhanden." });
-            return Results.Ok(Edi.EdiValidation.Validate(File.ReadAllBytes(e.Stored), e.FileName));
+            var data = File.ReadAllBytes(e.Stored);
+            var rep = Edi.EdiValidation.Validate(data, e.FileName);
+            if (Edi.InvoiceView.InvoiceXml(data) is not null) rep.ViewUrl = $"api/ausgang/{nr}/ansicht";
+            return Results.Ok(rep);
+        });
+
+        g.MapGet("/{nr:long}/ansicht", (long nr, OutboundLog book, HttpContext ctx) =>
+        {
+            var e = book.Get(nr);
+            return e is null || !e.Exists ? Results.NotFound(new { error = "Datei nicht mehr vorhanden." }) : Edi.InvoiceView.Result(ctx, File.ReadAllBytes(e.Stored));
         });
     }
 }

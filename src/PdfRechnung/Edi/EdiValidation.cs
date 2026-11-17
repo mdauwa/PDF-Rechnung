@@ -41,6 +41,20 @@ public static class EdiValidation
         }
     }
 
+    /// <summary>Eingebettete Rechnungs-XML eines ZUGFeRD/Factur-X-PDF (factur-x.xml, xrechnung.xml …, sonst die erste XML).</summary>
+    public static byte[]? EmbeddedInvoiceXml(byte[] pdfData)
+    {
+        try
+        {
+            using var pdf = PdfDocument.Open(pdfData);
+            if (!pdf.Advanced.TryGetEmbeddedFiles(out var files)) return null;
+            var f = files.FirstOrDefault(x => InvoiceNames.Any(n => n.Equals(x.Name, StringComparison.OrdinalIgnoreCase)))
+                ?? files.FirstOrDefault(x => x.Name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
+            return f?.Bytes.ToArray();
+        }
+        catch (Exception) { return null; }
+    }
+
     /// <summary>ZUGFeRD/Factur-X: eingebettete XML suchen, PDF/A-3-Kennung und XMP prüfen, dann die XML prüfen.</summary>
     private static EdiReport Pdf(byte[] data, string? fileName)
     {

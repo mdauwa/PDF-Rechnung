@@ -10,5 +10,8 @@ mkdir -p $W && cd $W
 [ -d en16931 ] || git clone -q --depth 1 https://github.com/ConnectingEurope/eInvoicing-EN16931.git en16931
 [ -d xrs ] || git clone -q --depth 1 https://github.com/itplr-kosit/xrechnung-schematron.git xrs
 [ -d schxslt ] || { curl -sSfL -o schxslt.jar https://repo1.maven.org/maven2/name/dmaus/schxslt/schxslt/1.10.1/schxslt-1.10.1.jar; unzip -q schxslt.jar -d schxslt; }
+[ -d viz ] || git clone -q --depth 1 https://github.com/itplr-kosit/xrechnung-visualization.git viz   # Rechnungsansicht (Apache 2.0), unverändert nach visualisierung/
 [ -d ubl ] || { curl -sSfL -o ph-ubl21.jar https://repo1.maven.org/maven2/com/helger/ubl/ph-ubl21/8.0.3/ph-ubl21-8.0.3.jar; unzip -q ph-ubl21.jar 'external/schemas/ubl21/*' -d ubl; }
-echo "Weiter wie in der Übergabe beschrieben (Ordnerstruktur cii/xsd, ubl/xsd, en16931, xrechnung, lizenzen)."
+# visualisierung/: aus viz/src/xsl die Dateien cii-xr.xsl, ubl-invoice-xr.xsl, ubl-creditnote-xr.xsl, common-xr.xsl, functions.xsl,
+#   xrechnung-html.xsl, xrechnung-viewer.css, xrechnung-viewer.js, FileSaver-v2.0.5.js und l10n/*.xml; LICENSE nach lizenzen/XRechnung-Visualisierung-Apache-2.0.txt
+echo "Weiter wie in der Übergabe beschrieben (Ordnerstruktur cii/xsd, ubl/xsd, en16931, xrechnung, visualisierung, lizenzen)."

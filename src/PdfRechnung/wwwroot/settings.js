@@ -1045,10 +1045,26 @@ async function previewTemplate(i) {
 
 /* ---------------- Tab: E-Rechnung ---------------- */
 
+/** Eigene Stufe je Prüfregel (E-Rechnung) – z. B. eine Regel, die ein Empfänger nicht verlangt, als Warnung führen. */
+function ruleLevelsSection() {
+  ST.s.validation ||= {}; ST.s.validation.ruleLevels ||= [];
+  const L = ST.s.validation.ruleLevels;
+  return section("Prüfregeln anpassen (E-Rechnung)",
+    `<p class="help">Gilt für „Dokument validieren“, den Eingang und die Prüfung vor dem Senden. Die Regelkennung steht im Prüfbericht in der Spalte „Regel“ (z. B. BR-DE-21, BR-CO-15).
+       Fehler führen zur Empfehlung „ablehnen“ – eine auf Warnung gesetzte Regel nicht mehr. Bitte nur bewusst einsetzen: die Regeln selbst bleiben unverändert.</p>
+     ${L.map((x, i) => `<div class="grid3">
+        ${field("Regel", inText(`validation.ruleLevels.${i}.rule`, "BR-DE-21"))}
+        ${field("Stufe", inSelect(`validation.ruleLevels.${i}.level`, [["warnung", "Warnung"], ["info", "Hinweis"], ["fehler", "Fehler"], ["aus", "aus (nicht anzeigen)"]]))}
+        <div class="field"><span class="lbl">Notiz</span><span style="display:flex;gap:8px">${inText(`validation.ruleLevels.${i}.note`, "warum?")}
+          <button class="btn ghost small danger" data-st="rl-del" data-i="${i}">Entfernen</button></span></div></div>`).join("")}
+     <div class="actions"><button class="btn ghost" data-st="rl-add">Regel hinzufügen</button></div>`);
+}
+
 function tabInvoice() {
   const units = Object.entries(ST.s.invoice.units || {}).sort((a, b) => a[0].localeCompare(b[0], "de"));
   return section("Prüfung",
     `<div class="grid2">${field("Toleranz der Summenprüfung", inNum("invoice.sumTolerance", 0, 10, 0.01), "Abweichung in Belegwährung, ab der die Summenprüfung einen Fehler meldet (Standard 0,02).")}</div>`) +
+    ruleLevelsSection() +
     section("Einheiten",
       `<p class="help">Das ERP druckt die Mengeneinheit als Text (z. B. „Stk“). Die E-Rechnung braucht den UN/ECE-Code (z. B. H87 = Stück, HUR = Stunde, C62 = Einheit).
         Nicht zugeordnete Einheiten erscheinen beim Vorgang als Warnung.</p>

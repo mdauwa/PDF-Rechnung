@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace PdfRechnung.Edi;
 
-public sealed record EdiIssue(string Level, string Text, int? Segment = null, int? Line = null, string? Tag = null, string? Position = null);
+public sealed record EdiIssue(string Level, string Text, int? Segment = null, int? Line = null, string? Tag = null, string? Position = null, string? Rule = null);
 
 public sealed class EdiMessageInfo
 {
@@ -37,6 +37,12 @@ public sealed class EdiReport
     public List<EdiIssue> Issues { get; set; } = new();
     /// <summary>Welche Prüfungen gelaufen sind (z. B. „Syntax“, „Schema (XSD)“, „Regeln EN 16931“).</summary>
     public List<string> Checks { get; set; } = new();
+    /// <summary>E-Rechnung: angewandtes Prüfszenario, z. B. „XRechnung 3.0 – UBL Invoice“ (null = kein Szenario gefunden bzw. keine E-Rechnung).</summary>
+    public string? Scenario { get; set; }
+    /// <summary>E-Rechnung: Empfehlung „annehmen“ oder „ablehnen“ (wie die KoSIT-Prüfung: Schema- oder Regelfehler bzw. kein Szenario → ablehnen).</summary>
+    public string? Acceptance { get; set; }
+    /// <summary>Stand der Prüfartefakte (für den Bericht).</summary>
+    public string? RuleSet { get; set; }
     /// <summary>Geprüfter Inhalt zur Anzeige (Segmente bzw. XML), gekürzt.</summary>
     public string? Content { get; set; }
 
@@ -57,7 +63,7 @@ public sealed class EdiReport
     public void Error(string text, EdiSegment? s = null, string? pos = null) => Add(Fehler, text, s, pos);
     public void Warn(string text, EdiSegment? s = null, string? pos = null) => Add(Warnung, text, s, pos);
     public void Info(string text, EdiSegment? s = null, string? pos = null) => Add(Hinweis, text, s, pos);
-    public void AddAt(string level, string text, int? line, string? pos = null) => Issues.Add(new EdiIssue(level, text, null, line, null, pos));
+    public void AddAt(string level, string text, int? line, string? pos = null, string? rule = null) => Issues.Add(new EdiIssue(level, text, null, line, null, pos, rule));
 
     internal EdiReport Finish()
     {

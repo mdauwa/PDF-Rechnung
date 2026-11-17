@@ -81,6 +81,8 @@ function tabApi() {
        <tr><td class="mono">GET ${esc(base)}api/v1/status/{versandweg}</td><td>Ein Versandweg, Kommunikationspartner oder Standort (Name, Kürzel oder Schlüssel aus <code>status-liste</code>) –
          oder ein Bereich: <code>versandwege</code>, <code>ausgang</code>, <code>vorgaenge</code>, <code>eingang</code>, <code>connect</code>, <code>filialverbund</code>.</td></tr>
        <tr><td class="mono">GET ${esc(base)}api/v1/status-liste</td><td>Welche Versandwege und Standorte abgefragt werden können.</td></tr>
+       <tr><td class="mono">POST ${esc(base)}api/v1/pruefen</td><td>E-Rechnung (XML/ZUGFeRD-PDF) oder EDIFACT prüfen: Datei als Inhalt der Anfrage. Antwort: Prüfbericht als JSON
+         (<code>?text=1</code> als Text) mit Empfehlung annehmen/ablehnen; HTTP 200 = annehmen, 406 = ablehnen.</td></tr>
        <tr><td class="mono">… ${esc(base)}api/v1/austausch/…</td><td>Datenaustausch für Konnektoren und den Filial-Client: <code>konfiguration</code>, <code>lebenszeichen</code>,
          <code>dateien</code> (abholen, <code>{nr}/quittung</code>, hochladen).</td></tr>
      </tbody></table></div>`) +
@@ -90,7 +92,7 @@ function tabApi() {
        ${!K ? `<p class="meta">Lade …</p>` : K.error ? `<div class="notice">${esc(K.error)}</div>` : K.length ? `<div class="table-wrap"><table class="list"><thead><tr>
          <th>Name</th><th>Schlüssel</th><th>Rechte</th><th>Standort</th><th>Zuletzt benutzt</th><th></th></tr></thead><tbody>
          ${K.map(k => `<tr class="${k.active ? "" : "inactive"}"><td><b>${esc(k.name)}</b>${k.active ? "" : ' <span class="badge">gesperrt</span>'}</td>
-           <td class="mono">${esc(k.prefix)}…</td><td>${(k.scopes || []).map(s => `<span class="badge">${s === "status" ? "Status" : "Datenaustausch"}</span>`).join(" ")}</td>
+           <td class="mono">${esc(k.prefix)}…</td><td>${(k.scopes || []).map(s => `<span class="badge">${{ status: "Status", pruefen: "Prüfen", austausch: "Datenaustausch" }[s] || esc(s)}</span>`).join(" ")}</td>
            <td>${esc(k.standort || "–")}</td><td class="nowrap">${fmtWhen(k.lastUsed)}${k.lastAddress ? `<small>${esc(k.lastAddress)}</small>` : ""}</td>
            <td class="nowrap"><button class="btn ghost small" data-st="key-toggle" data-id="${esc(k.id)}">${k.active ? "Sperren" : "Freigeben"}</button>
              <button class="btn ghost small danger" data-st="key-del" data-id="${esc(k.id)}">Löschen</button></td></tr>`).join("")}</tbody></table></div>`
@@ -99,6 +101,7 @@ function tabApi() {
        <div class="grid3">
          ${field("Name", `<input type="text" id="keyName" placeholder="z. B. PRTG oder Filiale Graz">`)}
          ${field("Rechte", `<label class="check"><input type="checkbox" id="keyStatus" checked> Status abfragen</label>
+            <label class="check"><input type="checkbox" id="keyCheck"> Dokumente prüfen</label>
             <label class="check"><input type="checkbox" id="keyEx"> Datenaustausch (Filial-Client)</label>`)}
          ${field("Standort (für Datenaustausch)", `<select id="keyStandort"><option value="">–</option>${standorte.map(s => `<option value="${esc(s.code)}">${esc(s.code)}${s.name ? " – " + esc(s.name) : ""}</option>`).join("")}</select>`,
            "Standorte unter Versand & Partner → Filialverbund anlegen und speichern.")}
@@ -270,13 +273,15 @@ async function monitorClick(a, btn, e) {
   const F = ST.s?.filialverbund;
   const d = e.target.closest("[data-st]")?.dataset || {};
   switch (a) {
+    case "rl-add": ST.s.validation.ruleLevels.push({ rule: "", level: "warnung", note: "" }); markDirty(); drawTab(); return true;
+    case "rl-del": ST.s.validation.ruleLevels.splice(+d.i, 1); markDirty(); drawTab(); return true;
     case "mon-reload": MON.status = null; drawTab(); await loadMonStatus(); return true;
     case "alert-test": {
       if (ST.dirty) { msg("Bitte zuerst speichern."); return true; }
       const r = await api("POST", "api/admin/benachrichtigung/test"); msg(r.message, r.ok); return true;
     }
     case "key-new": {
-      const scopes = [$("#keyStatus").checked ? "status" : null, $("#keyEx").checked ? "austausch" : null].filter(Boolean);
+      const scopes = [$("#keyStatus").checked ? "status" : null, $("#keyCheck").checked ? "pruefen" : null, $("#keyEx").checked ? "austausch" : null].filter(Boolean);
       const name = $("#keyName").value.trim();
       const r = await api("POST", "api/admin/apikeys", { name, scopes, standort: $("#keyStandort").value });
       MON.newKey = { name, secret: r.secret }; await loadApiKeys(); return true;

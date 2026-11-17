@@ -62,6 +62,35 @@ public static class ApiV1
             return Results.Ok(Known(health.Report()));
         });
 
+        // ---------- E-Rechnung/EDI prüfen (wie der Daemon-Modus des KoSIT-Prüfwerkzeugs) ----------
+        // Datei als Rohdaten (application/xml, application/pdf, application/octet-stream) oder multipart „datei“.
+        // HTTP 200 = annehmen bzw. ohne Fehler, 406 = ablehnen bzw. mit Fehlern; ?immer200=1 liefert immer 200. ?text=1 liefert den Bericht als Text.
+        app.MapPost("/api/v1/pruefen", async (HttpContext h, string? name, string? immer200, string? text) =>
+        {
+            var k = Key(h);
+            if (k is null) return Unauthorized();
+            if (!k.Has(ApiKey.ScopeCheck)) return Forbidden("Prüfen");
+            byte[] data; string? fileName = name;
+            if (h.Request.HasFormContentType)
+            {
+                var form = await h.Request.ReadFormAsync();
+                var f = form.Files.GetFile("datei") ?? form.Files.FirstOrDefault();
+                if (f is null) return Results.BadRequest(new { error = "Keine Datei." });
+                using var ms = new MemoryStream(); await f.CopyToAsync(ms); data = ms.ToArray(); fileName ??= f.FileName;
+            }
+            else
+            {
+                using var ms = new MemoryStream(); await h.Request.Body.CopyToAsync(ms); data = ms.ToArray();
+            }
+            if (data.Length == 0) return Results.BadRequest(new { error = "Leere Anfrage – bitte die Datei als Inhalt senden." });
+            if (data.Length > 50 * 1024 * 1024) return Results.BadRequest(new { error = "Datei zu groß (max. 50 MB)." });
+            var rep = Edi.EdiValidation.Validate(data, fileName);
+            rep.Content = null;
+            var bad = rep.Acceptance is not null ? rep.Acceptance == "ablehnen" : rep.Errors > 0;
+            var code = bad && immer200 is not ("1" or "true") ? 406 : 200;
+            return text is "1" or "true" ? Results.Text(Edi.EdiReportText.Format(rep), "text/plain; charset=utf-8", statusCode: code) : Results.Json(rep, statusCode: code);
+        }).DisableAntiforgery();
+
         // ---------- Datenaustausch (Konnektoren, Filial-Client) ----------
         var ex = app.MapGroup("/api/v1/austausch").AddEndpointFilter(async (ctx, next) =>
         {

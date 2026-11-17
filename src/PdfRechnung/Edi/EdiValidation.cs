@@ -16,6 +16,14 @@ public static class EdiValidation
 
     public static EdiReport Validate(byte[] data, string? fileName = null)
     {
+        var r = ValidateCore(data, fileName);
+        // Empfehlung erst ganz am Ende festlegen (beim PDF kommen Meldungen zur Hülle dazu)
+        if (r.Acceptance is not null) r.Acceptance = r.Errors > 0 || r.Scenario is null ? "ablehnen" : "annehmen";
+        return r;
+    }
+
+    private static EdiReport ValidateCore(byte[] data, string? fileName)
+    {
         try
         {
             if (EdifactValidator.Looks(data)) return EdifactValidator.Validate(data, fileName);

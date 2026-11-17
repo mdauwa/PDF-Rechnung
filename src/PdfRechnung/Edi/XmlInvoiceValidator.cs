@@ -29,6 +29,9 @@ public static class XmlInvoiceValidator
     private static readonly ConcurrentDictionary<string, XsltExecutable> Xslt = new();
     private static readonly ConcurrentDictionary<string, XmlSchemaSet> Xsd = new();
 
+    /// <summary>Eigene Stufe je Regel (z. B. BR-DE-21 → warnung, PEPPOL-EN16931-R001 → aus). Wird in Program.cs aus den Einstellungen gesetzt.</summary>
+    public static Func<IReadOnlyDictionary<string, string>> RuleLevels { get; set; } = () => new Dictionary<string, string>();
+
     /// <summary>Ordner der Prüfartefakte; muss einmal gesetzt werden (Program.cs), sonst Temp-Ordner.</summary>
     public static string DataDirectory { get; set; } = Path.Combine(Path.GetTempPath(), "belegpost");
 
@@ -112,6 +115,18 @@ public static class XmlInvoiceValidator
         if (r.Format is "XML" or "") r.Format = syntax;
         var profile = Profile(spec, syntax);
         r.Title = $"{profile.Name} ({syntax})";
+        r.RuleSet = RuleSetText();
+        // Prüfszenario: Syntax + Dokumentart + Spezifikation. Für XRechnung sind nur die Regeln der Version 3.x hinterlegt.
+        var docKind = syntax == "CII" ? "CII" : root.Name.LocalName == "Invoice" ? "UBL Invoice" : "UBL CreditNote";
+        var xrVersion = System.Text.RegularExpressions.Regex.Match(spec ?? "", @"xrechnung_(\d+(?:\.\d+)*)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var noScenario = false;
+        if (profile.Key == "xrechnung" && xrVersion.Success && !xrVersion.Groups[1].Value.StartsWith("3"))
+        {
+            noScenario = true;
+            r.Error($"Kein Prüfszenario für XRechnung {xrVersion.Groups[1].Value}: hinterlegt sind die Regeln für XRechnung 3.0. Ältere Versionen werden in der Regel nicht mehr angenommen.");
+        }
+        r.Scenario = noScenario ? null : $"{profile.Name}{(xrVersion.Success ? " " + xrVersion.Groups[1].Value : "")} – {docKind}";
+        CheckDocumentType(root, syntax, r);
         if (spec is null) r.Error(syntax == "CII" ? "Spezifikationskennung fehlt (GuidelineSpecifiedDocumentContextParameter/ID, BT-24)." : "Spezifikationskennung fehlt (cbc:CustomizationID, BT-24).");
         else r.Info($"Spezifikationskennung: {spec}");
 
@@ -142,9 +157,41 @@ public static class XmlInvoiceValidator
         foreach (var (file, name) in rules)
         {
             try { SchematronCheck(data, file, r); r.Checks.Add(name); }
-            catch (Exception ex) { r.Warn($"{name} konnten nicht ausgeführt werden: {ex.Message}"); }
+            catch (Exception ex) { r.Error($"{name} konnten nicht ausgeführt werden: {ex.Message}"); }
         }
+        r.Acceptance = r.Errors > 0 || noScenario ? "ablehnen" : "annehmen";
         return r;
+    }
+
+    /// <summary>Rechnungsart passt zum Wurzelelement? (UBL: Gutschrift 381 gehört in CreditNote, nicht in Invoice.)</summary>
+    private static void CheckDocumentType(XElement root, string syntax, EdiReport r)
+    {
+        if (syntax != "UBL") return;
+        var code = root.Element(XName.Get(root.Name.LocalName == "Invoice" ? "InvoiceTypeCode" : "CreditNoteTypeCode", Cbc))?.Value.Trim();
+        if (code is null) return;
+        if (root.Name.LocalName == "Invoice" && code is "381" or "396" or "81" or "83" or "532")
+            r.Info($"Rechnungsart {code} (Gutschrift) steht in einer UBL-Invoice – für Gutschriften ist das Wurzelelement CreditNote vorgesehen (siehe Regel BR-CL-01 bzw. Codeliste).");
+    }
+
+    private static string? _ruleSet;
+    /// <summary>Kurzfassung von STAND.txt für den Bericht.</summary>
+    private static string RuleSetText()
+    {
+        if (_ruleSet is not null) return _ruleSet;
+        try
+        {
+            var lines = File.ReadAllLines(Path.Combine(Root(), "STAND.txt"));
+            string Part(string prefix, string label)
+            {
+                var l = lines.FirstOrDefault(x => x.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+                if (l is null) return "";
+                var m = System.Text.RegularExpressions.Regex.Match(l, @"\w{3} (\w{3}) (\d{1,2}) [\d:]+ (\d{4})");
+                return m.Success ? $"{label} Stand {m.Groups[2].Value}. {m.Groups[1].Value} {m.Groups[3].Value}" : label;
+            }
+            _ruleSet = string.Join(" · ", new[] { Part("EN16931", "EN 16931"), Part("XRechnung", "XRechnung-Schematron") }.Where(x => x.Length > 0));
+        }
+        catch (Exception) { _ruleSet = ""; }
+        return _ruleSet;
     }
 
     public sealed record ProfileInfo(string Key, string Name);
@@ -216,6 +263,8 @@ public static class XmlInvoiceValidator
         t.ApplyTemplates(doc, dest);
         var svrl = XDocument.Parse(dest.XdmNode.OuterXml);
         var lines = LineIndex(data);
+        var overrides = RuleLevels();
+        var hidden = 0;
         foreach (var fa in svrl.Descendants(XName.Get("failed-assert", Svrl)).Concat(svrl.Descendants(XName.Get("successful-report", Svrl))))
         {
             var flag = fa.Attribute("flag")?.Value ?? fa.Attribute("role")?.Value ?? "fatal";
@@ -226,9 +275,18 @@ public static class XmlInvoiceValidator
             if (id is not null && !text.Contains(id)) text = $"[{id}] {text}";
             var level = flag.Equals("warning", StringComparison.OrdinalIgnoreCase) ? EdiReport.Warnung
                 : flag.Equals("information", StringComparison.OrdinalIgnoreCase) ? EdiReport.Hinweis : EdiReport.Fehler;
-            r.AddAt(level, text, Line(lines, loc), Short(loc));
+            // Eigene Stufe je Regel (Einstellungen → E-Rechnung → Prüfregeln anpassen)
+            if (id is not null && overrides.TryGetValue(id, out var own))
+            {
+                if (own == "aus") { hidden++; continue; }
+                if (own is EdiReport.Fehler or EdiReport.Warnung or EdiReport.Hinweis && own != level) { text += $" (Stufe angepasst, eigentlich {Label(level)})"; level = own; }
+            }
+            r.AddAt(level, text, Line(lines, loc), Short(loc), id);
         }
+        if (hidden > 0) r.Info($"{hidden} Meldung(en) ausgeblendet (Regeln mit Stufe „aus“ in den Einstellungen).");
     }
+
+    private static string Label(string level) => level switch { EdiReport.Fehler => "Fehler", EdiReport.Warnung => "Warnung", _ => "Hinweis" };
 
     /// <summary>XPath aus dem SVRL (…/*:Element[namespace-uri()=…][1]/…) grob einer Zeile zuordnen.</summary>
     private static int? Line(XDocument? doc, string? loc)

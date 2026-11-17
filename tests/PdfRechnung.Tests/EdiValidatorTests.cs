@@ -155,6 +155,36 @@ public class XmlInvoiceValidatorTests
         var r = PdfRechnung.Edi.EdiValidation.Validate(Daten("UBL_EN16931_Beispiel.xml"), "u.xml");
         Assert.True(r.Valid, string.Join("\n", r.Issues.Select(i => i.Text)));
         Assert.Equal("UBL", r.Format);
+        Assert.Equal("annehmen", r.Acceptance);
+        Assert.Contains("UBL Invoice", r.Scenario);
+    }
+
+    [Fact]
+    public void Empfehlung_Regelstufe_und_XRechnung_Version()
+    {
+        PdfRechnung.Edi.XmlInvoiceValidator.DataDirectory = Path.Combine(Path.GetTempPath(), "pdfr-val");
+        var text = System.Text.Encoding.UTF8.GetString(Daten("CII_EN16931_Beispiel.xml")).Replace("<ram:GrandTotalAmount>", "<ram:GrandTotalAmount>9");
+        var bad = PdfRechnung.Edi.EdiValidation.Validate(System.Text.Encoding.UTF8.GetBytes(text), "b.xml");
+        Assert.Equal("ablehnen", bad.Acceptance);
+        var rule = bad.Issues.First(i => i.Level == EdiReport.Fehler && i.Rule is not null).Rule!;
+        try
+        {
+            PdfRechnung.Edi.XmlInvoiceValidator.RuleLevels = () => bad.Issues.Where(i => i.Rule is not null).Select(i => i.Rule!).Distinct()
+                .ToDictionary(x => x, x => EdiReport.Warnung, StringComparer.OrdinalIgnoreCase);
+            var soft = PdfRechnung.Edi.EdiValidation.Validate(System.Text.Encoding.UTF8.GetBytes(text), "b.xml");
+            Assert.Equal("annehmen", soft.Acceptance);
+            Assert.Contains(soft.Issues, i => i.Rule == rule && i.Level == EdiReport.Warnung && i.Text.Contains("Stufe angepasst"));
+            PdfRechnung.Edi.XmlInvoiceValidator.RuleLevels = () => new Dictionary<string, string> { [rule] = "aus" };
+            Assert.DoesNotContain(PdfRechnung.Edi.EdiValidation.Validate(System.Text.Encoding.UTF8.GetBytes(text), "b.xml").Issues, i => i.Rule == rule);
+        }
+        finally { PdfRechnung.Edi.XmlInvoiceValidator.RuleLevels = () => new Dictionary<string, string>(); }
+
+        var cii = System.Text.Encoding.UTF8.GetString(Daten("CII_EN16931_Beispiel.xml"));
+        var old = System.Text.RegularExpressions.Regex.Replace(cii, @"(<ram:GuidelineSpecifiedDocumentContextParameter>\s*<ram:ID>)[^<]*", "$1urn:cen.eu:en16931:2017#compliant#urn:xoev-de:kosit:standard:xrechnung_2.3");
+        var r2 = PdfRechnung.Edi.EdiValidation.Validate(System.Text.Encoding.UTF8.GetBytes(old), "x.xml");
+        Assert.Equal("ablehnen", r2.Acceptance);
+        Assert.Null(r2.Scenario);
+        Assert.Contains(r2.Issues, i => i.Text.Contains("Kein Prüfszenario für XRechnung 2.3"));
     }
 }
 

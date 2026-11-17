@@ -21,7 +21,8 @@ public sealed class ApiKey
     public DateTimeOffset? LastUsed { get; set; }
     public string? LastAddress { get; set; }
 
-    public const string ScopeStatus = "status", ScopeExchange = "austausch";
+    public const string ScopeStatus = "status", ScopeExchange = "austausch", ScopeCheck = "pruefen";
+    public static bool Known(string s) => s is ScopeStatus or ScopeExchange or ScopeCheck;
     public bool Has(string scope) => Active && Scopes.Contains(scope);
 }
 
@@ -50,7 +51,7 @@ public sealed class ApiKeyStore
         var k = new ApiKey
         {
             Id = Guid.NewGuid().ToString("N")[..10], Name = name.Trim(), Prefix = secret[..9], Hash = HashOf(secret),
-            Scopes = scopes.Where(s => s is ApiKey.ScopeStatus or ApiKey.ScopeExchange).Distinct().ToList(), Standort = standort.Trim(), Created = DateTimeOffset.Now
+            Scopes = scopes.Where(ApiKey.Known).Distinct().ToList(), Standort = standort.Trim(), Created = DateTimeOffset.Now
         };
         lock (_lock) { _items.Add(k); Save(); }
         return (Copy(k), secret);
@@ -62,7 +63,7 @@ public sealed class ApiKeyStore
         {
             var k = _items.FirstOrDefault(x => x.Id == id);
             if (k is null) return false;
-            k.Name = name.Trim(); k.Scopes = scopes.Where(s => s is ApiKey.ScopeStatus or ApiKey.ScopeExchange).Distinct().ToList();
+            k.Name = name.Trim(); k.Scopes = scopes.Where(ApiKey.Known).Distinct().ToList();
             k.Standort = standort.Trim(); k.Active = active;
             Save();
             return true;

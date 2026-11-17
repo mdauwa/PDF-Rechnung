@@ -116,6 +116,7 @@ builder.Services.Configure<MandantOptions>(builder.Configuration.GetSection("Man
 builder.Services.Configure<PdfRechnung.Delivery.DeliveryOptions>(builder.Configuration.GetSection("Delivery"));
 builder.Services.Configure<PdfRechnung.Connect.ConnectOptions>(builder.Configuration.GetSection("Connect"));
 builder.Services.Configure<PdfRechnung.Monitoring.AlertOptions>(builder.Configuration.GetSection("Alerts"));
+builder.Services.Configure<ValidationOptions>(builder.Configuration.GetSection("Validation"));
 builder.Services.Configure<PdfRechnung.Exchange.FilialverbundOptions>(builder.Configuration.GetSection("Filialverbund"));
 builder.Services.AddSingleton<MailRuleStore>();
 builder.Services.AddSingleton(sp => new RuntimeControl(sp.GetRequiredService<IHostApplicationLifetime>(), isService));
@@ -365,6 +366,9 @@ PdfRechnung.Api.ApiV1.Map(app);
 PdfRechnung.Api.AdminMonitoringApi.Map(app);
 PdfRechnung.Edi.ToolsApi.Map(app);
 PdfRechnung.Connect.ConnectApi.Map(app);
+PdfRechnung.Edi.XmlInvoiceValidator.RuleLevels = () => app.Services.GetRequiredService<IOptionsMonitor<ValidationOptions>>().CurrentValue.RuleLevels
+    .Where(x => !string.IsNullOrWhiteSpace(x.Rule)).GroupBy(x => x.Rule.Trim(), StringComparer.OrdinalIgnoreCase)
+    .ToDictionary(g => g.Key, g => g.Last().Level.Trim().ToLowerInvariant(), StringComparer.OrdinalIgnoreCase);
 PdfRechnung.Delivery.InboundLog.ConnectEnabled = () => app.Services.GetRequiredService<IOptionsMonitor<PdfRechnung.Connect.ConnectOptions>>().CurrentValue.Enabled;
 
 // ---------------- Start ----------------

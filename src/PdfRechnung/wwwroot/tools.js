@@ -61,15 +61,16 @@ function reportCard(r, i) {
   const msgs = r.messages?.length ? `<table class="list"><thead><tr><th>Nachricht</th><th>Typ</th><th>Version</th><th>Verzeichnis</th><th class="num">Segmente</th></tr></thead><tbody>${r.messages.map(m =>
     `<tr><td>${esc(m.ref)}</td><td><b>${esc(m.type)}</b>${m.name ? `<small>${esc(m.name)}</small>` : ""}</td><td>${esc(m.version)} ${esc(m.agency || "")} ${esc(m.association || "")}</td><td>${esc(m.directory || "nicht hinterlegt")}</td><td class="num">${m.segments}</td></tr>`).join("")}</tbody></table>` : "";
   const counts = { fehler: 0, warnung: 0, info: 0 }; r.issues.forEach(x => counts[x.level] = (counts[x.level] || 0) + 1);
-  const issues = r.issues.length ? `<table class="list pr-issues"><thead><tr><th>Art</th><th>Stelle</th><th>Meldung</th></tr></thead><tbody>${r.issues.map((x, k) => {
+  const issues = r.issues.length ? `<table class="list pr-issues"><thead><tr><th>Art</th><th>Stelle</th><th>Meldung</th>${r.issues.some(x => x.rule) ? "<th>Regel</th>" : ""}</tr></thead><tbody>${r.issues.map((x, k) => {
     const [cls, txt] = prLevel[x.level] || ["", x.level];
     const where = [x.segment ? `Segment ${x.segment}` : "", x.line && !x.segment ? `Zeile ${x.line}` : "", x.tag || "", x.position || ""].filter(Boolean).join(" · ");
     const jump = x.segment || x.line;
-    return `<tr class="lvl-${esc(x.level)}"><td class="nowrap"><span class="badge ${cls}">${txt}</span></td><td class="nowrap">${jump ? `<a href="#" data-pr-jump="${i}:${x.segment ? "s" : "l"}${jump}">${esc(where)}</a>` : esc(where)}</td><td>${esc(x.text)}</td></tr>`;
+    return `<tr class="lvl-${esc(x.level)}"><td class="nowrap"><span class="badge ${cls}">${txt}</span></td><td class="nowrap">${jump ? `<a href="#" data-pr-jump="${i}:${x.segment ? "s" : "l"}${jump}">${esc(where)}</a>` : esc(where)}</td><td>${esc(x.text)}</td>${r.issues.some(y => y.rule) ? `<td class="nowrap mono">${esc(x.rule || "")}</td>` : ""}</tr>`;
   }).join("")}</tbody></table>` : `<p class="meta">Keine Meldungen.</p>`;
   return `<div class="card pr-report">
     <div class="pr-head"><div><h3>${esc(r.fileName || "Datei")}</h3><div class="meta">${esc(r.title || r.format)} · ${(r.size / 1024).toFixed(1).replace(".", ",")} KB</div></div>
-      <div class="pr-head-right">${prStatus(r)} <button class="btn ghost" data-pr-text="${i}">Bericht als Text</button></div></div>
+      <div class="pr-head-right">${r.acceptance ? `<span class="badge ${r.acceptance === "annehmen" ? "ok" : "missing"}" title="Empfehlung nach Schema- und Regelprüfung">${r.acceptance === "annehmen" ? "✓ annehmen" : "✗ ablehnen"}</span> ` : ""}${prStatus(r)} <button class="btn ghost" data-pr-text="${i}">Bericht als Text</button></div></div>
+    ${r.scenario || r.acceptance ? `<p class="meta">Prüfszenario: <b>${esc(r.scenario || "keines passend")}</b>${r.ruleSet ? ` · ${esc(r.ruleSet)}` : ""}</p>` : ""}
     <p class="meta">Geprüft: ${esc((r.checks || []).join(" · "))}</p>
     ${env}${msgs}
     <div class="pr-tabs"><span>${counts.fehler} Fehler · ${counts.warnung} Warnungen · ${counts.info} Hinweise</span>

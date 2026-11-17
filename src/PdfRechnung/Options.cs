@@ -24,6 +24,8 @@ public sealed class AppSettings
     public PdfRechnung.Delivery.DeliveryOptions Delivery { get; set; } = new();
     /// <summary>ERP Suite Connect (Webshop-Schnittstelle): Ordner anzeigen und Dateien prüfen.</summary>
     public PdfRechnung.Connect.ConnectOptions Connect { get; set; } = new();
+    /// <summary>Prüfung von E-Rechnungen: eigene Stufe je Regel.</summary>
+    public ValidationOptions Validation { get; set; } = new();
     /// <summary>Benachrichtigung bei Problemen ohne Reaktion.</summary>
     public PdfRechnung.Monitoring.AlertOptions Alerts { get; set; } = new();
     /// <summary>Versandweg Filialverbund: Verteilung an Standorte, Filial-Clients.</summary>
@@ -502,4 +504,19 @@ public sealed class MailDesign
 
     /// <summary>Eigenes HTML (Kind = "html") mit Platzhaltern wie {Inhalt}, {Logo}, {Signatur}, {Fusszeile}, {Belegnummer} …</summary>
     public string CustomHtml { get; set; } = "";
+}
+
+/// <summary>Prüfung von E-Rechnungen (Dokument validieren, Eingang, Ausgang).</summary>
+public sealed class ValidationOptions
+{
+    /// <summary>Eigene Stufe je Regel – wie „customLevel“ im KoSIT-Prüfwerkzeug: fehler, warnung, info oder aus.</summary>
+    public List<RuleLevel> RuleLevels { get; set; } = new();
+}
+
+public sealed class RuleLevel
+{
+    /// <summary>Regelkennung, z. B. „BR-DE-21“ oder „BR-CO-15“.</summary>
+    public string Rule { get; set; } = "";
+    public string Level { get; set; } = "warnung";
+    public string Note { get; set; } = "";
 }

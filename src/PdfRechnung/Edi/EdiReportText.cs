@@ -13,8 +13,11 @@ public static class EdiReportText
         sb.AppendLine($"Format:  {r.Title ?? r.Format}");
         if (r.Sender is not null) sb.AppendLine($"Absender: {r.Sender}  Empfänger: {r.Recipient}  Referenz: {r.ControlRef}  Zeichensatz: {r.Syntax}");
         foreach (var m in r.Messages) sb.AppendLine($"Nachricht {m.Ref}: {m.Type} {m.Version} {m.Association} – {m.Segments} Segmente{(m.Directory is null ? "" : $", Verzeichnis {m.Directory}")}");
+        if (r.Scenario is not null) sb.AppendLine($"Prüfszenario: {r.Scenario}");
         sb.AppendLine($"Geprüft: {string.Join(" · ", r.Checks)}");
+        if (!string.IsNullOrEmpty(r.RuleSet)) sb.AppendLine($"Prüfregeln: {r.RuleSet}");
         sb.AppendLine($"Ergebnis: {r.Errors} Fehler, {r.Warnings} Warnung(en)");
+        if (r.Acceptance is not null) sb.AppendLine($"Empfehlung: {(r.Acceptance == "annehmen" ? "annehmen" : "ABLEHNEN")}");
         sb.AppendLine();
         foreach (var i in r.Issues)
         {

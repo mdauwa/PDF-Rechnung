@@ -391,7 +391,7 @@ function drawVorgang(view, data) {
   const msg = (t, ok) => { const el = $("#vdMsg"); el.hidden = !t; el.className = "notice" + (ok ? " ok" : ""); el.textContent = t || ""; };
   const split = s => s.split(/[;,\s]+/).map(x => x.trim()).filter(Boolean);
 
-  if (editable) {
+  if (editable && view.querySelector(".mailform")) { // bei normalen E-Mails gibt es kein Versandformular
     const saveBtn = view.querySelector('[data-a="mail-save"]');
     view.querySelector(".mailform").addEventListener("input", () => { saveBtn.disabled = false; });
     $("#mEnabled")?.addEventListener("change", () => { saveBtn.disabled = false; });

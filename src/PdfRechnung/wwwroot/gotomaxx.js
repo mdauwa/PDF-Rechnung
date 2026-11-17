@@ -55,7 +55,7 @@ function gxErp(x) {
   }
   if (x.erpStatus === "vorgang") return `<a href="#/vorgang?id=${encodeURIComponent(x.vorgangId)}"><span class="badge">über Vorgang</span></a>${x.erpIndex ? `<small class="mono">${esc(x.erpIndex)}</small>` : ""}${x.erpMessage ? `<small>${esc(x.erpMessage)}</small>` : ""}`;
   if (!x.erpStatus) return x.state === "offen" ? '<span class="muted">–</span>' : `<span class="badge partial">wird zugeordnet</span>${x.erpMessage ? `<small>${esc(x.erpMessage)}</small>` : ""}`;
-  return `<span class="badge ${x.erpStatus === "aus" ? "" : "missing"}">${esc(x.erpStatus)}</span>${x.erpMessage ? `<small>${esc(x.erpMessage)}</small>` : ""}`;
+  return `<span class="badge ${x.erpStatus === "aus" || String(x.erpStatus).startsWith("nicht gemeldet") ? "" : "missing"}">${esc(x.erpStatus)}</span>${x.erpMessage ? `<small>${esc(x.erpMessage)}</small>` : ""}`;
 }
 
 function drawGotomaxx() {

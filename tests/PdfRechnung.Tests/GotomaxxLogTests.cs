@@ -77,6 +77,8 @@ public class GotomaxxLogTests
                     cmd.Parameters.AddWithValue("$s", src); cmd.Parameters.AddWithValue("$t", now); cmd.Parameters.AddWithValue("$st", st); cmd.Parameters.AddWithValue("$d", det);
                     cmd.ExecuteNonQuery();
                 }
+                cmd.CommandText = "INSERT INTO Entry(profileName,user,computer,source,timestamp,state,detail) VALUES('Rechnungsversand','m.mustermann','PC1','Rechnung - 99',$t,1,'')";
+                cmd.Parameters.Clear(); cmd.Parameters.AddWithValue("$t", now - 400L * 86400); cmd.ExecuteNonQuery();
                 cmd.CommandText = "INSERT INTO Entry(profileName,user,computer,source,timestamp,state,detail) VALUES('Lager','x','PC2','Rechnung - 1',$t,3,'')";
                 cmd.Parameters.Clear(); cmd.Parameters.AddWithValue("$t", now); cmd.ExecuteNonQuery();
             }
@@ -89,10 +91,12 @@ public class GotomaxxLogTests
             var erp = new ErpFeedbackService(store.Db, store, settings, new StaticOptions<PdfRechnung.ErpOptions>(new PdfRechnung.ErpOptions()), new NoServices(), NullLogger<ErpFeedbackService>.Instance);
             var opt = new GotomaxxLogOptions { Enabled = true, Folder = gx, Profiles = { "Rechnungsversand" } };
             var log = new GotomaxxLogService(store.Db, store, new StaticOptions<GotomaxxLogOptions>(opt), erp, settings, NullLogger<GotomaxxLogService>.Instance, users, hub);
-            Assert.Equal(2, await log.ScanAsync(CancellationToken.None));
+            Assert.Equal(3, await log.ScanAsync(CancellationToken.None));
             Assert.Null(log.State.Error);
             var all = log.List("Rechnungsversand", null, null, null, null);
-            Assert.Equal(2, all.Count);
+            Assert.Equal(3, all.Count);
+            // Ältere Einträge werden beim ersten Lesen nur angezeigt, nicht ans ERP gemeldet
+            Assert.Equal(GotomaxxErpStatus.Old, all.Single(e => e.DocNumber == "99").ErpStatus);
             var bad = all.Single(e => e.State == 3);
             Assert.Equal("u1", bad.Owner);
             Assert.Contains("Schwerwiegender Fehler", bad.Error);
@@ -105,6 +109,9 @@ public class GotomaxxLogTests
             Assert.Equal(0, await log.ScanAsync(CancellationToken.None)); // nichts Neues, auch „Lager“ nicht erneut gelesen
             Assert.Equal(new[] { "Rechnungsversand" }, log.ProfileNames());
             Assert.Equal(new[] { "Lager", "Rechnungsversand" }, log.AvailableProfiles());
+            // Liste muss sich wie im Portal serialisieren lassen (Web-Standard: camelCase)
+            var json = System.Text.Json.JsonSerializer.Serialize(all.Select(x => GotomaxxLogApi.Item(x, erp)), new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+            Assert.Contains("\"state\":\"fehler\"", json);
         }
         finally { try { Directory.Delete(dir, true); } catch { } }
     }

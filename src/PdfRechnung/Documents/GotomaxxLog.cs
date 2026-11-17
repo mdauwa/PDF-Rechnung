@@ -70,6 +70,8 @@ public static class GotomaxxErpStatus
     /// <summary>über den Vorgang (Belegpost hat an gotomaxx übergeben) – die Rückmeldung läuft über den Vorgang</summary>
     public const string Vorgang = "vorgang";
     public const string Queued = "eingereiht", NotAssignable = "nicht zuordenbar", NotFound = "nicht gefunden", Off = "aus", Pending = "offen", LookupError = "suchfehler";
+    /// <summary>Beim ersten Lesen älter als „ImportDays“: nur angezeigt, nicht ans ERP gemeldet</summary>
+    public const string Old = "nicht gemeldet (alt)";
 }
 
 /// <summary>Ein Ereignis aus dem gotomaxx-Detailtext (Speichern, Drucken, E-Mail …).</summary>
@@ -170,11 +172,12 @@ public sealed class GotomaxxLogService : BackgroundService
         using (var g = new SqliteConnection($"Data Source={copy};Pooling=False"))
         {
             g.Open();
-            var since = last < 0 ? DateTimeOffset.Now.AddDays(-Math.Max(1, o.ImportDays)).ToUnixTimeSeconds() : 0;
-            var where = last < 0 ? "timestamp >= @s" : "entryId > @l" + (open.Count > 0 ? $" OR entryId IN ({string.Join(",", open)})" : "");
+            // Erstes Lesen: die ganze Geschichte (die neuesten 20000) zur Anzeige; ans ERP gemeldet wird nur, was jünger als ImportDays ist
+            var where = last < 0 ? "1=1" : "entryId > @l" + (open.Count > 0 ? $" OR entryId IN ({string.Join(",", open)})" : "");
             using var cmd = g.CreateCommand();
-            cmd.CommandText = $"SELECT entryId, profileName, user, computer, source, timestamp, state, detail FROM Entry WHERE {where} ORDER BY entryId LIMIT 20000";
-            cmd.Parameters.AddWithValue("@s", since);
+            cmd.CommandText = last < 0
+                ? "SELECT * FROM (SELECT entryId, profileName, user, computer, source, timestamp, state, detail FROM Entry ORDER BY entryId DESC LIMIT 20000) ORDER BY entryId"
+                : $"SELECT entryId, profileName, user, computer, source, timestamp, state, detail FROM Entry WHERE {where} ORDER BY entryId LIMIT 20000";
             cmd.Parameters.AddWithValue("@l", last);
             using var r = cmd.ExecuteReader();
             while (r.Read())
@@ -187,21 +190,24 @@ public sealed class GotomaxxLogService : BackgroundService
         SaveMarks(marks);
         rows = rows.Where(x => o.Watches(x.Profile)).ToList();
         if (rows.Count == 0) return 0;
+        var oldBefore = last < 0 ? DateTimeOffset.Now.AddDays(-Math.Max(1, o.ImportDays)).ToUnixTimeSeconds() : long.MinValue;
         using (var c = _db.Open())
         using (var tx = c.BeginTransaction())
         {
             foreach (var x in rows)
             {
+                var old = x.Ts < oldBefore;
                 var events = ParseEvents(x.Detail);
                 var (art, nr) = ParseTitle(x.Source, o);
                 BelegpostDb.Exec(c, """
-                    INSERT INTO gotomaxx_protokoll(datei, eintrag_id, profil, benutzer, rechner, quelle, zeit, status, aktionen, fehler, belegart, belegnr, besitzer)
-                    VALUES(@d,@e,@p,@u,@r,@q,@z,@s,@a,@f,@ba,@bn,@o)
+                    INSERT INTO gotomaxx_protokoll(datei, eintrag_id, profil, benutzer, rechner, quelle, zeit, status, aktionen, fehler, belegart, belegnr, besitzer, erp_status, erp_meldung, gemeldet)
+                    VALUES(@d,@e,@p,@u,@r,@q,@z,@s,@a,@f,@ba,@bn,@o,@es,@em,@gm)
                     ON CONFLICT(datei, eintrag_id) DO UPDATE SET status=@s, aktionen=@a, fehler=@f
                     """,
                     ("@d", name), ("@e", x.Id), ("@p", x.Profile), ("@u", x.User), ("@r", x.Computer), ("@q", x.Source),
                     ("@z", BelegpostDb.Ms(DateTimeOffset.FromUnixTimeSeconds(x.Ts))), ("@s", x.State),
-                    ("@a", Actions(events)), ("@f", FirstError(events)), ("@ba", art), ("@bn", nr), ("@o", Owner(x.User)));
+                    ("@a", Actions(events)), ("@f", FirstError(events)), ("@ba", art), ("@bn", nr), ("@o", Owner(x.User)),
+                    ("@es", old ? GotomaxxErpStatus.Old : null), ("@em", old ? $"Beim ersten Lesen älter als {o.ImportDays} Tage" : null), ("@gm", old ? 0 : null));
             }
             tx.Commit();
         }
@@ -220,13 +226,18 @@ public sealed class GotomaxxLogService : BackgroundService
     }
 
     /// <summary>Alle gotomaxx-Profile in den Protokolldateien (für die Auswahl in den Einstellungen).</summary>
-    public List<string> AvailableProfiles()
+    public List<string> AvailableProfiles() => ProfileInfos().Select(x => x.Name).ToList();
+
+    public sealed record ProfileInfo(string Name, long Total, DateTimeOffset? Last);
+
+    /// <summary>Drucker in den Protokolldateien mit Anzahl und letztem Eintrag.</summary>
+    public List<ProfileInfo> ProfileInfos()
     {
         var o = _opt.CurrentValue;
-        var set = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        var map = new Dictionary<string, (long Total, long Last)>(StringComparer.OrdinalIgnoreCase);
         try
         {
-            if (!Directory.Exists(o.FolderOrDefault)) return set.ToList();
+            if (!Directory.Exists(o.FolderOrDefault)) return new();
             Directory.CreateDirectory(_temp);
             foreach (var path in Directory.GetFiles(o.FolderOrDefault, "usage_*.dat"))
             {
@@ -236,14 +247,19 @@ public sealed class GotomaxxLogService : BackgroundService
                 using var g = new SqliteConnection($"Data Source={copy};Pooling=False");
                 g.Open();
                 using var cmd = g.CreateCommand();
-                cmd.CommandText = "SELECT DISTINCT profileName FROM Entry WHERE profileName IS NOT NULL";
+                cmd.CommandText = "SELECT profileName, COUNT(*), MAX(timestamp) FROM Entry WHERE profileName IS NOT NULL GROUP BY profileName";
                 using var r = cmd.ExecuteReader();
-                while (r.Read()) set.Add(r.GetString(0));
+                while (r.Read())
+                {
+                    var name = r.GetString(0); var total = r.GetInt64(1); var last = r.IsDBNull(2) ? 0 : r.GetInt64(2);
+                    map[name] = map.TryGetValue(name, out var v) ? (v.Total + total, Math.Max(v.Last, last)) : (total, last);
+                }
             }
         }
         catch (Exception ex) { _log.LogInformation(ex, "gotomaxx-Profile lesen"); }
-        foreach (var p in ProfileNames()) set.Add(p);
-        return set.ToList();
+        foreach (var p in ProfileNames()) if (!map.ContainsKey(p)) map[p] = (0, 0);
+        return map.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(x => new ProfileInfo(x.Key, x.Value.Total, x.Value.Last > 0 ? DateTimeOffset.FromUnixTimeSeconds(x.Value.Last).ToLocalTime() : null)).ToList();
     }
 
     /// <summary>Portal-Benutzer zum Windows-Benutzer im gotomaxx-Protokoll (Druck-Benutzer bzw. Anmeldename, ohne Domäne).</summary>

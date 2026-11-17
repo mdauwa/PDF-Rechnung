@@ -660,8 +660,12 @@ function gxProfilesInner(L) {
   L = L || {};
   const sel = Array.isArray(L.profiles) ? L.profiles : [];
   if (GXP === null) { loadGxProfiles(); return '<span class="meta-inline">Lade Drucker aus den Protokollen …</span>'; }
-  const all = [...new Set([...(Array.isArray(GXP) ? GXP : []), ...sel])].sort((a, b) => String(a).localeCompare(String(b), "de"));
-  return (GXP_ERR ? `<p class="notice">${esc(GXP_ERR)} <button class="btn ghost small" type="button" data-st="gx-profiles">Erneut laden</button></p>` : "") + (all.length ? all.map(p => `<label class="check"><input type="checkbox" data-gxprof="${esc(p)}" ${sel.includes(p) ? "checked" : ""}> ${esc(p)}</label>`).join("")
+  const info = {};
+  for (const x of (Array.isArray(GXP) ? GXP : [])) { const n = typeof x === "string" ? x : x?.name; if (n) info[n] = typeof x === "string" ? {} : x; }
+  const all = [...new Set([...Object.keys(info), ...sel])].sort((a, b) => String(a).localeCompare(String(b), "de"));
+  const det = p => { const i = info[p] || {}; return i.total ? ` <span class="meta-inline">${i.total} Einträge, letzter ${fmtDT(i.last)}</span>` : ""; };
+  return (GXP_ERR ? `<p class="notice">${esc(GXP_ERR)} <button class="btn ghost small" type="button" data-st="gx-profiles">Erneut laden</button></p>` : "")
+    + (all.length ? all.map(p => `<label class="check"><input type="checkbox" data-gxprof="${esc(p)}" ${sel.includes(p) ? "checked" : ""}> ${esc(p)}${det(p)}</label>`).join("")
     : '<span class="meta-inline">In den Protokollen wurde noch kein Drucker gefunden.</span>')
     + `<p class="help">Keiner angehakt = alle Drucker überwachen. Gelistet werden die gotomaxx-Profile aus den Protokolldateien.</p>`;
 }
@@ -681,7 +685,7 @@ function gotomaxxLogSection() {
     <div class="grid3">
       ${field("Protokollordner", inText("gotomaxxLog.folder", "C:\\ProgramData\\gotomaxx\\pdfmailer6"), "Leer = C:\\ProgramData\\gotomaxx\\pdfmailer6")}
       ${field("Lesen alle … Sekunden", inNum("gotomaxxLog.intervalSeconds", 15, 3600))}
-      ${field("Beim ersten Lesen … Tage zurück", inNum("gotomaxxLog.importDays", 1, 365))}
+      ${field("Beim ersten Lesen ans ERP melden: … Tage zurück", inNum("gotomaxxLog.importDays", 1, 3650), "Beim ersten Lesen wird das ganze Protokoll angezeigt; ältere Einträge werden nicht ans ERP gemeldet.")}
     </div>
     <h4>Benutzer informieren</h4>
     ${inCheck("gotomaxxLog.notifyUsers", "Nicht versendete Belege dem Benutzer melden, der gedruckt hat (Melder und Portal)")}

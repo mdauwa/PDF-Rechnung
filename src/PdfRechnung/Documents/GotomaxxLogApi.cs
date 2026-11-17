@@ -12,6 +12,18 @@ public static class GotomaxxLogApi
         return a.IsAdmin || a.SeeAll || a.SeeOutbound ? null : (a.Visible?.ToList() ?? new List<string>());
     }
 
+    /// <summary>Eintrag für die Liste (Feldnamen dürfen sich auch in camelCase nicht doppeln).</summary>
+    public static object Item(GotomaxxLogEntry e, Erp.ErpFeedbackService? erp)
+    {
+        var job = e.ErpJob is { } id && erp is not null ? erp.JobState(id) : null;
+        return new
+        {
+            e.Nr, e.At, e.Profile, e.User, e.Computer, e.Source, code = e.State, state = e.StateText, e.Actions, e.Error,
+            e.DocType, e.DocNumber, e.VorgangId, e.ErpIndex, e.ErpStatus, e.ErpMessage,
+            erpJob = job is null ? null : new { status = job.Value.Status, message = job.Value.Message }
+        };
+    }
+
     public static void Map(WebApplication app)
     {
         var g = app.MapGroup("/api/gotomaxx-protokoll").AddEndpointFilter(async (ctx, next) =>
@@ -36,16 +48,7 @@ public static class GotomaxxLogApi
             var a = ctx.RequestServices.GetRequiredService<PortalAccess>().For(ctx);
             return Results.Ok(new
             {
-                items = items.Select(e =>
-                {
-                    var job = e.ErpJob is { } id ? erp.JobState(id) : null;
-                    return new
-                    {
-                        e.Nr, e.At, e.Profile, e.User, e.Computer, e.Source, e.State, state = e.StateText, e.Actions, e.Error,
-                        e.DocType, e.DocNumber, e.VorgangId, e.ErpIndex, e.ErpStatus, e.ErpMessage,
-                        erpJob = job is null ? null : new { status = job.Value.Status, message = job.Value.Message }
-                    };
-                }),
+                items = items.Select(e => Item(e, erp)),
                 canChange = a.CanSend
             });
         });
@@ -62,7 +65,7 @@ public static class GotomaxxLogApi
         });
 
         app.MapGet("/api/admin/gotomaxx-protokoll/profile", (HttpContext ctx, GotomaxxLogService log) =>
-            Settings.AdminApi.IsAdmin(ctx) ? Results.Ok(log.AvailableProfiles()) : Results.Json(new { error = "Keine Berechtigung." }, statusCode: 403));
+            Settings.AdminApi.IsAdmin(ctx) ? Results.Ok(log.ProfileInfos().Select(x => new { name = x.Name, total = x.Total, last = x.Last })) : Results.Json(new { error = "Keine Berechtigung." }, statusCode: 403));
 
         app.MapPost("/api/admin/gotomaxx-protokoll/lesen", async (HttpContext ctx, GotomaxxLogService log, CancellationToken ct) =>
         {

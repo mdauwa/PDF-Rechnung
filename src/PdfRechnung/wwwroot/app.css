@@ -495,3 +495,15 @@ table.sender-table input { width: 100%; min-width: 160px; }
 .vd-mail .mail-body { white-space: pre-wrap; font-family: inherit; margin: .8rem 0; padding: .8rem; border: 1px solid var(--border); border-radius: 6px; max-height: 50vh; overflow: auto; background: var(--surface-2); }
 .vd-mail .mail-files { list-style: none; padding: 0; margin: .3rem 0; }
 .vd-mail .mail-files li { padding: .3rem 0; border-bottom: 1px solid var(--border); }
+
+/* Rechnungsdaten-Editor */
+.rd-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+.rd-field { display: flex; flex-direction: column; gap: .2rem; margin: .5rem 0; }
+.rd-field label { font-weight: 600; font-size: .9em; }
+.rd-field input, .rd-field textarea, .rd-field select { width: 100%; }
+.rd-corr input, .rd-corr textarea, .rd-corr select { border-color: #d9a400; }
+.rd-lines input, .rd-lines textarea { width: 100%; min-width: 8em; }
+.rd-lines textarea { margin-top: .2rem; font-size: .9em; }
+.rd-msgs { list-style: none; padding: 0; margin: .3rem 0; }
+.rd-msgs li { padding: .25rem 0; }
+.rd-actions { margin: 1rem 0; }

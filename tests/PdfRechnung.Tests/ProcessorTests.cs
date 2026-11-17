@@ -63,6 +63,44 @@ public sealed class ProcessorTests : IDisposable
     }
 
     [Fact]
+    public void Korrekturen_der_Rechnungsdaten_wirken_auf_die_E_Rechnung_und_ueberstehen_Neu_pruefen()
+    {
+        var (store, proc) = Create(s => s.Mail.Enabled = true);
+        var v = proc.Process(TestData.Pdf(TestData.InvoiceCodes), "Upload", "test.pdf", "Tester");
+        var gross = v.GrossAmount;
+        store.Update(v.Id, x =>
+        {
+            x.Corrections = new InvoiceCorrections
+            {
+                Fields = { ["BUYER_TAX_ID"] = "ATU99999999", ["ROUTING_ID"] = "991-12345-67", ["SELLER_BIC"] = "" },
+                Lines = { [0] = new LineCorrection { UnitCode = "HUR", Name = "Beratung vor Ort" } }
+            };
+            return true;
+        });
+        var after = proc.Recheck(v.Id, "Tester")!;
+        var xml = File.ReadAllText(store.FilePath(v.Id, DocumentStore.XmlFile)!);
+        Assert.Contains("ATU99999999", xml);
+        Assert.Contains("<ram:BuyerReference>991-12345-67</ram:BuyerReference>", xml);
+        Assert.DoesNotContain("BKAUATWW", xml);                     // leerer Wert = Feld entfernt
+        Assert.Contains("unitCode=\"HUR\"", xml);
+        Assert.Contains("Beratung vor Ort", xml);
+        Assert.Equal(gross, after.GrossAmount);                       // Beträge unverändert
+        Assert.Equal("Beratung vor Ort", after.Invoice.Lines[0].Name);
+        // Korrekturen bleiben beim nächsten „Neu prüfen“ erhalten
+        Assert.Equal("ATU99999999", proc.Recheck(v.Id, "Tester")!.Invoice.Fields["BUYER_TAX_ID"]);
+    }
+
+    [Fact]
+    public void Steuerkategorie_ist_nur_bei_null_Prozent_aenderbar()
+    {
+        var p = ControlCodeParser.Parse(string.Join("\n", TestData.InvoiceCodes));
+        new InvoiceCorrections { Lines = { [0] = new LineCorrection { VatCategory = "AE" } } }.Apply(p);
+        Assert.Equal("S", p.Table("ITEM_DETAILS").First().Get("ITEM_VAT_CATEGORY")); // 20 % → unverändert
+        new InvoiceCorrections { Fields = { ["GROSS_AMOUNT"] = "1,00" } }.Apply(p);
+        Assert.Equal("150,00", p.Field("GROSS_AMOUNT"));                           // Beträge sind gesperrt
+    }
+
+    [Fact]
     public void Beleg_ohne_Steuerzeichen_bekommt_Vorlagen_und_Warnung()
     {
         var (_, proc) = Create(s => { s.Mail.Enabled = true; s.Mail.DefaultSubject = "Beleg {Belegnummer}"; });

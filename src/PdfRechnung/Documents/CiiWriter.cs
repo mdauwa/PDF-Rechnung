@@ -146,6 +146,12 @@ public static class CiiWriter
             Endpoint(w, F("BUYER_ENDPOINT_ID") ?? F("BUYER_CONTACT_EMAIL") ?? Clean(o.BuyerEmailFallback), F("BUYER_ENDPOINT_TYPE"));
             if (F("BUYER_TAX_ID") is { } bvat) TaxReg(w, "VA", bvat);
             w.WriteEndElement();
+            if (F("BUYER_ORDER_ID") is { } order)
+            {
+                w.WriteStartElement("ram", "BuyerOrderReferencedDocument", Ram);
+                El(w, "IssuerAssignedID", order);
+                w.WriteEndElement();
+            }
             w.WriteEndElement();
 
             // ---- Lieferung ----
@@ -186,7 +192,7 @@ public static class CiiWriter
             w.WriteEndElement();
 
             foreach (var v in d.Vat)
-                Tax(w, Cat(v.Category), v.Percent, v.Tax, v.Basis, ExemptionFor(Cat(v.Category)));
+                Tax(w, Cat(v.Category), v.Percent, v.Tax, v.Basis, ExemptionFor(Cat(v.Category)) is { } ex ? F("VAT_EXEPT_REASON_TEXT") ?? ex : null);
 
             foreach (var c in d.Charges)
             {

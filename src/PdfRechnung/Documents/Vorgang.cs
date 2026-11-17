@@ -146,6 +146,8 @@ public sealed class Vorgang
     public List<CheckMessage> LayoutMessages { get; set; } = new();
     /// <summary>Von Belegpost erzeugte E-Rechnung (CII): Profil, z. B. „ZUGFeRD 2 Comfort (EN 16931)“; null = keine.</summary>
     public string? EInvoiceProfile { get; set; }
+    /// <summary>Im Portal korrigierte Rechnungsdaten (Stammdaten, Einheiten, Befreiungsgrund …).</summary>
+    public InvoiceCorrections Corrections { get; set; } = new();
     /// <summary>Gerade erzeugte XML, wird beim Speichern als <c>rechnung.xml</c> abgelegt.</summary>
     [System.Text.Json.Serialization.JsonIgnore] public byte[]? PendingEInvoice { get; set; }
 

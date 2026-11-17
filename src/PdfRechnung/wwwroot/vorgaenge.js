@@ -329,7 +329,8 @@ function drawVorgang(view, data) {
         </div>
 
         <div class="card">
-          <div class="card-head"><h2>Rechnungsdaten</h2><span class="meta-inline">${esc(v.formatName || "keine E-Rechnung angefordert")}</span></div>
+          <div class="card-head"><h2>Rechnungsdaten</h2><span class="meta-inline">${esc(v.formatName || "keine E-Rechnung angefordert")}${(v.corrections && (Object.keys(v.corrections.fields || {}).length || Object.keys(v.corrections.lines || {}).length)) ? ' · <span class="badge partial">korrigiert</span>' : ""}
+            ${v.formatCode ? ` <a class="btn ghost small" href="#/rechnungsdaten?id=${encodeURIComponent(v.id)}">${editable ? "Bearbeiten" : "Details"}</a>` : ""}</span></div>
           ${Object.keys(f).length ? `<div class="vd-fields">${HEAD_FIELDS.map(([t, rows]) => { const body = kv(rows); return body ? `<div><h3>${t}</h3><table class="kv">${body}</table></div>` : ""; }).join("")}</div>` : `<p class="meta">Keine Rechnungsdaten (@@xi@@) im Dokument.</p>`}
           ${lines.length ? `<h3>Positionen</h3><div class="table-wrap"><table class="list mini"><thead><tr><th>Pos</th><th>Artikel</th><th class="num">Menge</th><th>Einheit</th><th class="num">Preis</th><th class="num">Rabatt</th><th class="num">USt</th><th class="num">Netto</th></tr></thead><tbody>
             ${lines.map(l => `<tr><td>${esc(l.lineId || "")}</td><td><b>${esc(l.name || "")}</b><small>${esc([l.articleNo, l.description].filter(Boolean).join(" · "))}</small></td>

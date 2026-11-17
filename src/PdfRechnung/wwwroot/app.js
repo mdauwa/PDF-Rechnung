@@ -160,6 +160,7 @@ const VIEWS = {
   filialverbund: { title: "Filialverbund", render: v => renderFilialverbund(v) },
   gotomaxx: { title: "gotomaxx", render: v => renderGotomaxx(v) },
   pruefen: { title: "Dokument validieren", render: v => renderPruefen(v) },
+  rechnungsdaten: { title: "Rechnungsdaten", render: v => renderRechnungsdaten(v) },
   connect: { title: "ERP Suite Connect", render: v => renderConnect(v) }
 };
 

@@ -450,6 +450,19 @@ public sealed class DocumentProcessor
     }
 
     /// <summary>Prüfung wiederholen (z. B. nach geänderten Einstellungen oder Versanddaten).</summary>
+    /// <summary>Rechnungsdaten aus Steuerzeichen mit den eingestellten Einheiten.</summary>
+    public InvoiceData InvoiceFrom(ParsedCodes p) => InvoiceData.From(p, _invoice.CurrentValue.Units);
+
+    /// <summary>Steuerzeichen wie gedruckt (ohne Korrekturen) – für den Rechnungsdaten-Editor.</summary>
+    public ParsedCodes? OriginalCodes(string id)
+    {
+        var path = _store.FilePath(id, DocumentStore.PdfFile);
+        if (path is null) return null;
+        var stored = _store.Get(id);
+        try { return Map(ApplyPrinter(ControlCodeParser.Parse(PdfText.Extract(File.ReadAllBytes(path)).Lines), stored?.PrinterId), stored?.OriginMandant); }
+        catch { return new ParsedCodes(); }
+    }
+
     public Vorgang? Recheck(string id, string by)
     {
         var path = _store.FilePath(id, DocumentStore.PdfFile);
@@ -462,6 +475,7 @@ public sealed class DocumentProcessor
         catch { p = new ParsedCodes(); }
         return _store.Update(id, v =>
         {
+            (v.Corrections ??= new()).Apply(p); // Korrekturen aus dem Portal
             // Zuordnung neu (z. B. Bedienernummer inzwischen einem Benutzer zugewiesen); Upload-Besitzer bleibt als Rückfall
             SetMandant(v, p);
             AssignOwner(v, p, v.Source == "Upload" ? v.OwnerUserId : null);

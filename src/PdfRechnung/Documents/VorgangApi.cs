@@ -5,6 +5,8 @@ namespace PdfRechnung.Documents;
 
 public sealed record MailUpdate(List<string>? To, List<string>? Cc, List<string>? Bcc, string? Subject, string? Body, string? FileName, bool? Enabled);
 public sealed record ActionRequest(string Action, bool Force = false, string? Comment = null);
+public sealed record LineCorrectionRequest(int Index, string? Name, string? Description, string? SellerId, string? UnitCode, string? VatCategory);
+public sealed record InvoiceCorrectionRequest(Dictionary<string, string?>? Fields, List<LineCorrectionRequest>? Lines);
 public sealed record BulkSendRequest(List<string> Ids);
 
 /// <summary>Portal-API für die Vorgänge: Liste, Detail, PDF-Vorschau, Versanddaten, Aktionen, Upload.</summary>
@@ -128,6 +130,108 @@ public static class VorgangApi
         {
             var xml = store.Get(id) is null ? null : store.FilePath(id, DocumentStore.XmlFile);
             return xml is null ? Results.NotFound() : Edi.InvoiceView.Result(ctx, File.ReadAllBytes(xml));
+        });
+
+        // ---- Rechnungsdaten-Editor: Stammdaten korrigieren, Beträge bleiben wie gedruckt ----
+        g.MapGet("/{id}/rechnungsdaten", (string id, DocumentStore store, DocumentProcessor proc, PortalAccess access, HttpContext ctx) =>
+        {
+            var v = store.Get(id);
+            if (v is null) return Results.NotFound();
+            var orig = proc.OriginalCodes(id) ?? new ParsedCodes();
+            var c = v.Corrections ?? new InvoiceCorrections();
+            var rows = orig.Table("ITEM_DETAILS").ToList();
+            var a = access.For(ctx);
+            return Results.Ok(new
+            {
+                id, voucherId = v.VoucherId, documentType = v.DocumentType, format = v.FormatName, eInvoice = v.EInvoiceProfile,
+                editable = a.CanSend && CorrectionsAllowed(v) && v.FormatCode is not null,
+                why = v.FormatCode is null ? "Für diesen Beleg sind keine Rechnungsdaten (@@xt@@/@@xi@@) gedruckt."
+                    : !CorrectionsAllowed(v) ? "Der Beleg ist versendet, an gotomaxx übergeben oder verworfen." : null,
+                changedBy = c.ChangedBy, changedAt = c.ChangedAt,
+                fields = InvoiceCorrections.Editable.Select(f => new
+                {
+                    key = f.Key, label = f.Label, group = f.Group, type = f.Type, help = f.Help,
+                    printed = orig.Field(f.Key),
+                    value = c.Fields.TryGetValue(f.Key, out var cv) ? cv : orig.Field(f.Key),
+                    corrected = c.Fields.ContainsKey(f.Key)
+                }),
+                lines = rows.Select((r, i) =>
+                {
+                    var l = i < v.Invoice.Lines.Count ? v.Invoice.Lines[i] : null;
+                    c.Lines.TryGetValue(i, out var lc);
+                    return new
+                    {
+                        index = i, lineId = r.Get("ITEM_LINE_ID"), name = lc?.Name ?? r.Get("ITEM_NAME"), description = lc?.Description ?? r.Get("ITEM_DESCRIPTION"),
+                        sellerId = lc?.SellerId ?? r.Get("ITEM_SELLER_ID"), quantity = l?.Quantity, baseQuantity = l?.BaseQuantity, unitText = r.Get("ITEM_UNIT"),
+                        unitCode = lc?.UnitCode ?? l?.UnitCode, price = l?.Price, vatPercent = l?.VatPercent,
+                        vatCategory = lc?.VatCategory ?? r.Get("ITEM_VAT_CATEGORY") ?? "S", total = l?.Total,
+                        corrected = lc is { IsEmpty: false }
+                    };
+                }),
+                totals = new { net = v.Invoice.NetAmount, tax = v.Invoice.TaxAmount, gross = v.Invoice.GrossAmount, printedGross = v.Invoice.PrintedGrossAmount, currency = v.Invoice.Fields.GetValueOrDefault("CURRENCY")?.Trim() ?? "EUR" },
+                messages = v.Messages
+            });
+        });
+
+        g.MapPut("/{id}/rechnungsdaten", (string id, InvoiceCorrectionRequest req, DocumentStore store, DocumentProcessor proc, PortalAccess access, HttpContext ctx) =>
+        {
+            var a = access.For(ctx);
+            if (!a.CanSend) return Forbidden();
+            var v0 = store.Get(id);
+            if (v0 is null) return Results.NotFound();
+            if (!CorrectionsAllowed(v0)) return Results.BadRequest(new { error = "Der Beleg ist versendet, übergeben oder verworfen – keine Korrektur mehr möglich." });
+            var orig = proc.OriginalCodes(id) ?? new ParsedCodes();
+            var rows = orig.Table("ITEM_DETAILS").ToList();
+            var printedInv = proc.InvoiceFrom(orig);
+            var c = new InvoiceCorrections { ChangedBy = a.Name, ChangedAt = DateTimeOffset.Now };
+            var changed = new List<string>();
+            foreach (var (key, raw) in req.Fields ?? new())
+            {
+                var def = InvoiceCorrections.Editable.FirstOrDefault(f => f.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
+                if (def is null || raw is null) continue;
+                var val = raw.Trim();
+                if (val == (orig.Field(def.Key) ?? "")) continue; // wie gedruckt → keine Korrektur
+                c.Fields[def.Key] = val;
+                changed.Add($"{def.Group} {def.Label}");
+            }
+            var cats = new[] { "Z", "E", "AE", "K", "G", "O" };
+            foreach (var l in req.Lines ?? new())
+            {
+                if (l.Index < 0 || l.Index >= rows.Count) continue;
+                var r = rows[l.Index];
+                var lc = new LineCorrection();
+                string? Diff(string? value, string key) => value is null || value.Trim() == (r.Get(key) ?? "") ? null : value.Trim();
+                lc.Name = Diff(l.Name, "ITEM_NAME");
+                lc.Description = Diff(l.Description, "ITEM_DESCRIPTION");
+                lc.SellerId = Diff(l.SellerId, "ITEM_SELLER_ID");
+                if (!string.IsNullOrWhiteSpace(l.UnitCode))
+                {
+                    var u = l.UnitCode.Trim().ToUpperInvariant();
+                    if (!InvoiceData.IsUneceCode(u)) return Results.BadRequest(new { error = $"Position {r.Get("ITEM_LINE_ID")}: „{l.UnitCode}“ ist kein UN/ECE-Einheitencode." });
+                    if (u != (printedInv.Lines.ElementAtOrDefault(l.Index)?.UnitCode ?? "")) lc.UnitCode = u;
+                }
+                if (!string.IsNullOrWhiteSpace(l.VatCategory))
+                {
+                    var cat = l.VatCategory.Trim().ToUpperInvariant();
+                    var printedCat = (r.Get("ITEM_VAT_CATEGORY") ?? "S").ToUpperInvariant();
+                    if (cat != printedCat)
+                    {
+                        if ((ControlCodeParser.Number(r.Get("ITEM_VAT_PERCENT")) ?? 0) != 0 || !cats.Contains(cat))
+                            return Results.BadRequest(new { error = $"Position {r.Get("ITEM_LINE_ID")}: Die Steuerkategorie kann nur bei 0 % geändert werden (Z, E, AE, K, G, O)." });
+                        lc.VatCategory = cat;
+                    }
+                }
+                if (!lc.IsEmpty) { c.Lines[l.Index] = lc; changed.Add($"Position {r.Get("ITEM_LINE_ID") ?? (l.Index + 1).ToString()}"); }
+            }
+            store.Update(id, v =>
+            {
+                v.Corrections = c;
+                v.History.Add(new HistoryEntry(DateTimeOffset.Now, a.Name, "korrektur",
+                    changed.Count == 0 ? "Korrekturen der Rechnungsdaten entfernt (wie gedruckt)" : "Rechnungsdaten korrigiert: " + string.Join(", ", changed)));
+                return true;
+            });
+            var after = proc.Recheck(id, a.Name);
+            return Results.Ok(new { message = changed.Count == 0 ? "Keine Abweichung zum Druck – Korrekturen entfernt." : $"{changed.Count} Korrektur(en) gespeichert, E-Rechnung neu erzeugt und geprüft.", vorgang = after });
         });
 
         g.MapGet("/{id}/xml", (string id, DocumentStore store) =>
@@ -302,6 +406,9 @@ public static class VorgangApi
             return created.Count == 0 ? Results.BadRequest(new { error = "Keine Datei ausgewählt." }) : Results.Ok(new { created });
         }).DisableAntiforgery();
     }
+
+    private static bool CorrectionsAllowed(Vorgang v) =>
+        v.Status is not (VorgangStatus.Sent or VorgangStatus.Sending or VorgangStatus.Gotomaxx or VorgangStatus.Discarded);
 
     private static IResult Forbidden() => Results.Json(new { error = "Keine Berechtigung zum Versenden. Bitte an einen Administrator wenden." }, statusCode: 403);
 

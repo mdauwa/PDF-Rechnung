@@ -281,7 +281,13 @@ async function monitorClick(a, btn, e) {
   switch (a) {
     case "gx-read": {
       if (ST.dirty) { msg("Bitte zuerst speichern."); return true; }
-      const r = await api("POST", "api/admin/gotomaxx-protokoll/lesen"); msg(r.message, r.ok); return true;
+      const r = await api("POST", "api/admin/gotomaxx-protokoll/lesen"); msg(r.message, r.ok);
+      GXP = null; loadGxProfiles(); return true;
+    }
+    case "gx-profiles": {
+      GXP = null; const box = document.getElementById("gxProfiles");
+      if (box) box.innerHTML = '<span class="meta-inline">Lade Drucker aus den Protokollen …</span>';
+      loadGxProfiles(); return true;
     }
     case "rl-add": ST.s.validation.ruleLevels.push({ rule: "", level: "warnung", note: "" }); markDirty(); drawTab(); return true;
     case "rl-del": ST.s.validation.ruleLevels.splice(+d.i, 1); markDirty(); drawTab(); return true;

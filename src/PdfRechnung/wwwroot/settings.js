@@ -646,16 +646,22 @@ function tabInbox() {
     section("gotomaxx-Protokoll einlesen und ans ERP melden", gotomaxxLogSection());
 }
 
-let GXP = null;
+let GXP = null, GXP_ERR = "";
 async function loadGxProfiles() {
-  try { GXP = await api("GET", "api/admin/gotomaxx-protokoll/profile"); } catch { GXP = []; }
-  const box = document.getElementById("gxProfiles"); if (box && ST.s) box.innerHTML = gxProfilesInner(ST.s.gotomaxxLog);
+  try {
+    const r = await api("GET", "api/admin/gotomaxx-protokoll/profile");
+    if (Array.isArray(r)) { GXP = r; GXP_ERR = ""; }
+    else { GXP = []; GXP_ERR = "Die Drucker konnten nicht gelesen werden. Läuft schon die neue Version des Dienstes (Dienst neu starten)?"; }
+  } catch (e) { GXP = []; GXP_ERR = "Die Drucker konnten nicht gelesen werden: " + e.message; }
+  const box = document.getElementById("gxProfiles");
+  if (box && ST.s) box.innerHTML = gxProfilesInner(ST.s.gotomaxxLog || {});
 }
 function gxProfilesInner(L) {
-  const sel = L.profiles || [];
-  const all = [...new Set([...(GXP || []), ...sel])].sort((a, b) => a.localeCompare(b, "de"));
+  L = L || {};
+  const sel = Array.isArray(L.profiles) ? L.profiles : [];
   if (GXP === null) { loadGxProfiles(); return '<span class="meta-inline">Lade Drucker aus den Protokollen …</span>'; }
-  return (all.length ? all.map(p => `<label class="check"><input type="checkbox" data-gxprof="${esc(p)}" ${sel.includes(p) ? "checked" : ""}> ${esc(p)}</label>`).join("")
+  const all = [...new Set([...(Array.isArray(GXP) ? GXP : []), ...sel])].sort((a, b) => String(a).localeCompare(String(b), "de"));
+  return (GXP_ERR ? `<p class="notice">${esc(GXP_ERR)} <button class="btn ghost small" type="button" data-st="gx-profiles">Erneut laden</button></p>` : "") + (all.length ? all.map(p => `<label class="check"><input type="checkbox" data-gxprof="${esc(p)}" ${sel.includes(p) ? "checked" : ""}> ${esc(p)}</label>`).join("")
     : '<span class="meta-inline">In den Protokollen wurde noch kein Drucker gefunden.</span>')
     + `<p class="help">Keiner angehakt = alle Drucker überwachen. Gelistet werden die gotomaxx-Profile aus den Protokolldateien.</p>`;
 }

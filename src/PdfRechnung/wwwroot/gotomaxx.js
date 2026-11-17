@@ -30,8 +30,9 @@ async function renderGotomaxx(view) {
     const p = new URLSearchParams(); if (printer) p.set("drucker", printer);
     const q = $("#gxSearch").value.trim(); if (q) p.set("q", q);
     for (const [id, k] of [["gxStatus", "status"], ["gxFrom", "from"], ["gxTo", "to"]]) if ($("#" + id).value) p.set(k, $("#" + id).value);
-    try { const r = await api("GET", "api/gotomaxx-protokoll?" + p); GX.items = r.items; GX.canChange = r.canChange; show(""); drawGotomaxx(); }
-    catch (e) { show(e.message); }
+    try { const r = await api("GET", "api/gotomaxx-protokoll?" + p); if (!Array.isArray(r.items)) throw new Error("Das Protokoll konnte nicht geladen werden. Läuft schon die neue Version des Dienstes (Dienst neu starten)?");
+      GX.items = r.items; GX.canChange = r.canChange; show(""); drawGotomaxx(); }
+    catch (e) { show(e.message); if (!GX.items.length) $("#gxTable").innerHTML = `<tbody><tr><td class="empty">Keine Daten.</td></tr></tbody>`; }
   };
   let deb;
   $("#gxSearch").oninput = () => { clearTimeout(deb); deb = setTimeout(load, 300); };

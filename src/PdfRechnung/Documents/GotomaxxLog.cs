@@ -602,7 +602,7 @@ public sealed class GotomaxxLogService : BackgroundService
             foreach (var (o, i) in ids) p.Add(("@o" + i, o));
         }
         if (!string.IsNullOrWhiteSpace(profile)) { w.Add("profil=@p"); p.Add(("@p", profile)); }
-        if (!string.IsNullOrWhiteSpace(text)) { w.Add("(quelle LIKE @q OR benutzer LIKE @q OR fehler LIKE @q OR belegnr LIKE @q)"); p.Add(("@q", "%" + text.Trim() + "%")); }
+        if (!string.IsNullOrWhiteSpace(text)) { w.Add("(quelle LIKE @q OR benutzer LIKE @q OR fehler LIKE @q OR belegnr LIKE @q OR aktionen LIKE @q OR belndx LIKE @q OR rechner LIKE @q)"); p.Add(("@q", "%" + text.Trim() + "%")); }
         if (state == "versendet") w.Add("status=1");
         else if (state == "fehler") w.Add("status IN (2,3)");
         else if (state == "offen") w.Add("status NOT IN (1,2,3)");

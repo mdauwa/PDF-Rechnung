@@ -13,7 +13,7 @@ async function renderGotomaxx(view) {
   view.innerHTML = `
     <div class="toolbar">
       <div class="filters">
-        <input type="search" id="gxSearch" placeholder="Dokument, Belegnummer, Benutzer, Fehler" aria-label="Suchen">
+        <input type="search" id="gxSearch" placeholder="Dokument, Belegnummer, Mailadresse, Benutzer, Fehler" aria-label="Suchen">
         <select id="gxStatus" aria-label="Status"><option value="">Alle</option><option value="versendet">versendet</option><option value="fehler">Fehler</option>
           <option value="offen">in Arbeit</option><option value="erp-offen">ERP noch offen</option></select>
         <input type="date" id="gxFrom" aria-label="Von"><input type="date" id="gxTo" aria-label="Bis">

@@ -132,6 +132,7 @@ public class GotomaxxLogTests
             Assert.True(sub.Reader.TryRead(out var ev));
             Assert.Equal("hinweis", ev!.Kind);
             Assert.Single(log.List(null, null, "fehler", null, null, owners: new[] { "u1" }));
+            Assert.Single(log.List(null, "a@b.at", null, null, null)); // Suche auch nach der Mailadresse
             Assert.Empty(log.List(null, null, null, null, null, owners: new[] { "u2" }));
             Assert.Equal(0, await log.ScanAsync(CancellationToken.None)); // nichts Neues, auch „Lager“ nicht erneut gelesen
             Assert.Equal(new[] { "Rechnungsversand" }, log.ProfileNames());

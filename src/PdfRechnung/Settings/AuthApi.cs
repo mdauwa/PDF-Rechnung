@@ -140,6 +140,8 @@ public static class AuthApi
                 foreach (var n in nos.Where(n => UserStore.NormalizeOperator(n) is null))
                     errors.Add($"„{u.Name}“: ERP-Bediener-Nr. „{n}“ – bitte 3 Ziffern, z. B. 007.");
                 u.OperatorNumbers = nos.Select(n => UserStore.NormalizeOperator(n) ?? n).Distinct().ToList();
+                u.Mandanten = (u.Mandanten ?? new()).Select(MandantOptions.Normalize).Where(m => m is not null).Select(m => m!)
+                    .DistinctBy(MandantOptions.Key, StringComparer.OrdinalIgnoreCase).ToList();
                 u.Visibility = u.Visibility is "auswahl" or "alle" ? u.Visibility : "eigene";
                 u.AlsoSees = (u.AlsoSees ?? new()).Where(id => id != u.Id && list.Any(o => o.Id == id)).Distinct().ToList();
                 u.SendFromAddress = (u.SendFromAddress ?? "").Trim(); u.SendFromName = (u.SendFromName ?? "").Trim(); u.ReplyTo = (u.ReplyTo ?? "").Trim();

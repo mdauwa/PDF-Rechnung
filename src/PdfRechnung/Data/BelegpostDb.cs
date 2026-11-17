@@ -253,6 +253,10 @@ public sealed class BelegpostDb
             gemeldet INTEGER,
             UNIQUE(datei, eintrag_id));
         CREATE INDEX ix_gx_profil_zeit ON gotomaxx_protokoll(profil, zeit);
+        """,
+        // 8: gotomaxx-Protokoll – Mandant, in dem gesucht und zurückgemeldet wurde
+        """
+        ALTER TABLE gotomaxx_protokoll ADD COLUMN mandant TEXT;
         """
     };
 

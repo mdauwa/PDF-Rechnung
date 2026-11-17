@@ -699,7 +699,7 @@ function gotomaxxLogSection() {
       ${field("Anfang des Belegindex", inText("gotomaxxLog.indexPrefix", "0N"), "Wenn er nicht im Dokumentnamen steht, z. B. „(0NA)“.")}
       ${field("Suchreihenfolge der Belegart", inText("gotomaxxLog.searchOrder", "R, L, A, N, b"), "Kennbuchstaben (3. Stelle), wenn kein Suchwort passt: R = Rechnung, L = Lieferschein, A = Auftrag, N = Angebot, b = Bestellung.")}
       ${field("Stellen der Belegnummer", inNum("gotomaxxLog.numberWidth", 0, 20), "Kürzere Nummern rechtsbündig mit Leerzeichen, z. B. „0NR 1234567“ (Standard 8).")}
-      ${field("Mandant", inText("gotomaxxLog.mandant", "leer = allgemeine ERP-Verbindung"))}
+      ${field("Mandant (global)", inText("gotomaxxLog.mandant", "leer = allgemeine ERP-Verbindung"), "Gilt, wenn dem druckenden Benutzer kein Mandant zugewiesen ist (Einstellungen → Benutzer).")}
     </div>
     ${field("Belegart und -nummer im Dokumentnamen (regulärer Ausdruck, Gruppen art und nr)", inText("gotomaxxLog.titlePattern", "Standard"), "Leer = Standard, z. B. „WA-Auftrag (alle Belege) - 20241001 (0NA)“ → Nummer 20241001, Index 0NA20241001.")}
     <div class="grid3">${L.typeMap.map((m, i) => `${field(i ? "" : "Suchwort im Betreff/Dateinamen", inText(`gotomaxxLog.typeMap.${i}.text`, "Rechnung"))}${field(i ? "" : "3. Stelle im Belegindex", inText(`gotomaxxLog.typeMap.${i}.code`, "R"))}<div></div>`).join("")}</div>
@@ -1252,7 +1252,8 @@ function userMask(i) {
            "Dreistellig; das ERP druckt sie als <code>@@pb007@@</code>, bei der WebWARE kommt sie aus dem Prozess (<code>wwa.exe 007 …</code>). Mehrere mit Komma.")}
          ${field("Windows-/ERP-Benutzer (Druckauftrag)", inp("printNames", (u.printNames || []).join(", "), "z. B. FIRMA\\mmuster"),
            "Aus dem Druckauftrag oder <code>@@pu…@@</code>. Ohne Eintrag wird der Anmeldename ohne Domäne verglichen.")}
-       </div>`) +
+       </div>
+       ${userMandanten(u, i)}`) +
     section("Sichtbarkeit",
       `${field("Sieht Belege", `<select data-u="${i}|visibility" ${u.isAdmin ? "disabled" : ""}>
           ${[["eigene", "nur eigene"], ["auswahl", "eigene + ausgewählte Benutzer"], ["alle", "alle"]].map(([k, t]) =>
@@ -1270,6 +1271,16 @@ function userMask(i) {
           ${(ST.data.mapiModes || []).map(m => `<option value="${m.key}" ${u.mapiMode === m.key ? "selected" : ""}>${esc(m.text)}</option>`).join("")}</select>`)}
        <div class="user-devices">${userDevices(u, i)}</div>`) +
     section("Signaturen und Mail-Regeln", rulesHtml);
+}
+
+function userMandanten(u, i) {
+  const items = (ST.s?.mandanten?.items || []).filter(m => (m.number || "").trim());
+  if (!items.length) return "";
+  const key = n => /^\d+$/.test(String(n).trim()) ? String(+String(n).trim()) : String(n).trim().toLowerCase();
+  const sel = (u.mandanten || []).map(key);
+  return `<div class="user-also"><span>Mandanten (ERP-Rückmeldung aus dem gotomaxx-Protokoll):</span>
+    ${items.map(m => `<label class="check"><input type="checkbox" data-umd="${i}" value="${esc(m.number)}" ${sel.includes(key(m.number)) ? "checked" : ""}> ${esc(m.number)}${m.name ? ` – ${esc(m.name)}` : ""}</label>`).join("")}
+    <small class="meta-inline">Gehen der globalen Einstellung vor; mehrere: gesucht wird der Reihe nach, der erste Treffer zählt. Keiner angehakt = globale Einstellung.</small></div>`;
 }
 
 async function loadUserRules(id) {
@@ -1322,6 +1333,14 @@ function onUsersInput(el, e) {
       x[f] = el.value;
     }
     markUsersDirty(); return true;
+  }
+  if (el.dataset.umd !== undefined) {
+    const u = ST.users.users[+el.dataset.umd];
+    const key = n => /^\d+$/.test(String(n).trim()) ? String(+String(n).trim()) : String(n).trim().toLowerCase();
+    u.mandanten = (u.mandanten || []).filter(x => key(x) !== key(el.value));
+    if (el.checked) u.mandanten.push(el.value);
+    ST.usersDirty = true; const b = document.querySelector('[data-st="users-save"]'); if (b) b.disabled = false;
+    return true;
   }
   if (!el.dataset.u) return false;
   const [i, k] = el.dataset.u.split("|"), u = ST.users.users[+i];

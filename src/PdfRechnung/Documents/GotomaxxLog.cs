@@ -43,7 +43,7 @@ public sealed class GotomaxxLogOptions
     public bool NotifyUsers { get; set; } = true;
     /// <summary>Zusätzlich per E-Mail an den Benutzer (E-Mail-Adresse aus der Benutzerverwaltung).</summary>
     public bool NotifyUserMail { get; set; }
-    /// <summary>Mandant für die Suche und Rückmeldung (leer = allgemeine ERP-Verbindung).</summary>
+    /// <summary>Mandant für die Suche und Rückmeldung (leer = allgemeine ERP-Verbindung). Mandanten des druckenden Benutzers gehen vor.</summary>
     public string Mandant { get; set; } = "";
 
     public const string DefaultTitlePattern = @"^(?<art>.+?)\s*(?:\([^)]*\))?\s+-\s+(?<nr>[A-Za-z0-9/._-]+)";
@@ -59,7 +59,7 @@ public sealed class GotomaxxTypeMapping
 /// <summary>Ein Eintrag aus dem gotomaxx-Protokoll mit Zuordnung.</summary>
 public sealed record GotomaxxLogEntry(long Nr, string File, long EntryId, string Profile, string? User, string? Computer, string? Source,
     DateTimeOffset At, int State, string? Actions, string? Error, string? DocType, string? DocNumber, string? VorgangId, string? ErpIndex,
-    string? ErpStatus, string? ErpMessage, long? ErpJob, string? Owner = null)
+    string? ErpStatus, string? ErpMessage, long? ErpJob, string? Owner = null, string? Mandant = null)
 {
     /// <summary>offen, versendet, fehler</summary>
     public string StateText => State switch { 1 => "versendet", 2 or 3 => "fehler", 0 => "offen", _ => "unbekannt" };
@@ -90,6 +90,7 @@ public sealed class GotomaxxLogService : BackgroundService
     private readonly ErpFeedbackService _erp;
     private readonly ILogger<GotomaxxLogService> _log;
     private readonly Settings.UserStore? _users;
+    private readonly IOptionsMonitor<MandantOptions>? _mandanten;
     private readonly Services.EventHub? _hub;
     private readonly IOptionsMonitor<MailOptions>? _mail;
     private readonly Settings.SettingsStore _settings;
@@ -100,8 +101,9 @@ public sealed class GotomaxxLogService : BackgroundService
 
     public GotomaxxLogService(BelegpostDb db, DocumentStore store, IOptionsMonitor<GotomaxxLogOptions> opt, ErpFeedbackService erp,
         Settings.SettingsStore settings, ILogger<GotomaxxLogService> log, Settings.UserStore? users = null, Services.EventHub? hub = null,
-        IOptionsMonitor<MailOptions>? mail = null)
+        IOptionsMonitor<MailOptions>? mail = null, IOptionsMonitor<MandantOptions>? mandanten = null)
     {
+        _mandanten = mandanten;
         _db = db; _store = store; _opt = opt; _erp = erp; _log = log; _users = users; _hub = hub; _mail = mail; _settings = settings;
         _temp = Path.Combine(settings.DataDirectory, "temp", "gotomaxx");
         ErpFeedbackService.ExternalVorgang = External;
@@ -421,23 +423,37 @@ public sealed class GotomaxxLogService : BackgroundService
             if (!o.ErpFeedback) { SetErp(e.Nr, GotomaxxErpStatus.Off, "ERP-Rückmeldung für das gotomaxx-Protokoll ist aus.", null, null, null); continue; }
             if (!o.LookupErp || e.DocNumber is null) { SetErp(e.Nr, GotomaxxErpStatus.NotAssignable, e.DocNumber is null ? "Belegnummer im Dokumentnamen nicht erkannt." : "Suche im ERP ist aus.", null, null, null); continue; }
             var tried = Candidates(o, e);
-            var erpOpt = _erp.OptionsFor(string.IsNullOrWhiteSpace(o.Mandant) ? null : o.Mandant);
-            if (!erpOpt.Enabled) { SetErp(e.Nr, GotomaxxErpStatus.Off, "ERP-Rückmeldung ist nicht eingerichtet.", null, null, null); continue; }
+            // Mandanten: die des druckenden Benutzers gehen vor, sonst die globale Einstellung
+            var mandanten = MandantenFor(e, o);
+            var setups = mandanten.Select(m => (Mandant: m, Opt: _erp.OptionsFor(m))).Where(x => x.Opt.Enabled).ToList();
+            if (setups.Count == 0)
+            {
+                SetErp(e.Nr, GotomaxxErpStatus.Off, mandanten.Any(m => m is not null)
+                    ? $"ERP-Rückmeldung für Mandant {string.Join(", ", mandanten.Where(m => m is not null))} ist nicht eingerichtet." : "ERP-Rückmeldung ist nicht eingerichtet.", null, null, null);
+                continue;
+            }
             try
             {
-                // Belegindex erraten und der Reihe nach im ERP prüfen (BELEG.GET mit BELNDX)
-                var manager = _erp.Manager(erpOpt);
+                // Belegindex erraten und der Reihe nach im ERP prüfen (BELEG.GET mit BELNDX) – je Mandant, der erste Treffer zählt
                 var idx = new List<string>();
-                foreach (var cand in tried)
+                ErpOptions erpOpt = setups[0].Opt; string? mandant = setups[0].Mandant;
+                foreach (var (m, opt) in setups)
                 {
-                    try { if (await manager.ReadDocumentAsync(cand, ct) is not null) { idx.Add(cand); break; } }
-                    catch (ErpException x) when (x.Code is "QueryRejected" or "DocumentNotFound" && !x.Transient) { } // diesen Index gibt es nicht
+                    var manager = _erp.Manager(opt);
+                    foreach (var cand in tried)
+                    {
+                        try { if (await manager.ReadDocumentAsync(cand, ct) is not null) { idx.Add(cand); break; } }
+                        catch (ErpException x) when (x.Code is "QueryRejected" or "DocumentNotFound" && !x.Transient) { } // diesen Index gibt es nicht
+                    }
+                    if (idx.Count > 0) { erpOpt = opt; mandant = m; break; }
                 }
                 if (idx.Count == 0)
                 {
-                    SetErp(e.Nr, GotomaxxErpStatus.NotFound, $"Im ERP nicht gefunden (versucht: {string.Join(", ", tried)}).", null, null, null);
+                    var where = setups.Any(x => x.Mandant is not null) ? $" in Mandant {string.Join(", ", setups.Select(x => x.Mandant ?? "allgemein"))}" : "";
+                    SetErp(e.Nr, GotomaxxErpStatus.NotFound, $"Im ERP{where} nicht gefunden (versucht: {string.Join(", ", tried)}).", null, null, null);
                     continue;
                 }
+                SetMandant(e.Nr, mandant);
                 var code = ok ? StatusCode.Versendet : StatusCode.GotomaxxFehler;
                 if (!ErpFieldBuilder.ShouldWrite(erpOpt, code) || erpOpt.Fields.Count == 0)
                 {
@@ -528,6 +544,25 @@ public sealed class GotomaxxLogService : BackgroundService
         BelegpostDb.Exec(c, "UPDATE gotomaxx_protokoll SET erp_status=NULL, erp_meldung=NULL, erp_versuche=0, erp_auftrag=NULL WHERE nr=@n", ("@n", nr));
     }
 
+    /// <summary>
+    /// Mandanten für Suche und Rückmeldung: die dem druckenden Benutzer zugewiesenen (nur eingerichtete), sonst die globale
+    /// Einstellung (null = allgemeine ERP-Verbindung).
+    /// </summary>
+    public List<string?> MandantenFor(GotomaxxLogEntry e, GotomaxxLogOptions o)
+    {
+        var known = _mandanten?.CurrentValue;
+        var own = (_users?.FindById(e.Owner)?.Mandanten ?? new())
+            .Where(m => known is null || known.Find(m) is not null).Select(m => (string?)m).ToList();
+        if (own.Count > 0) return own;
+        return new() { string.IsNullOrWhiteSpace(o.Mandant) ? null : o.Mandant.Trim() };
+    }
+
+    private void SetMandant(long nr, string? mandant)
+    {
+        using var c = _db.Open();
+        BelegpostDb.Exec(c, "UPDATE gotomaxx_protokoll SET mandant=@m WHERE nr=@n", ("@m", mandant), ("@n", nr));
+    }
+
     /// <summary>Vorübergehender Vorgang für die ERP-Rückmeldung eines direkt gedruckten Belegs.</summary>
     private Vorgang? External(string id)
     {
@@ -538,13 +573,13 @@ public sealed class GotomaxxLogService : BackgroundService
             Id = id, CreatedAt = e.At, ErpIndex = e.ErpIndex, DocumentType = e.DocType ?? "Beleg", VoucherId = e.DocNumber,
             OriginalFileName = e.Source, Status = e.State == 1 ? VorgangStatus.Sent : VorgangStatus.SendError, SendChannel = GotomaxxService.Channel,
             SentAt = e.State == 1 ? e.At : null, SentBy = $"gotomaxx ({e.Profile})", SendError = e.Error, PrintUser = e.User,
-            Mandant = string.IsNullOrWhiteSpace(o.Mandant) ? null : o.Mandant, GotomaxxPrinter = e.Profile
+            Mandant = e.Mandant ?? MandantenFor(e, o).FirstOrDefault(), GotomaxxPrinter = e.Profile
         };
     }
 
     // ---------------- Abfragen ----------------
 
-    private const string Select = "SELECT nr, datei, eintrag_id, profil, benutzer, rechner, quelle, zeit, status, aktionen, fehler, belegart, belegnr, vorgang_id, belndx, erp_status, erp_meldung, erp_auftrag, besitzer FROM gotomaxx_protokoll";
+    private const string Select = "SELECT nr, datei, eintrag_id, profil, benutzer, rechner, quelle, zeit, status, aktionen, fehler, belegart, belegnr, vorgang_id, belndx, erp_status, erp_meldung, erp_auftrag, besitzer, mandant FROM gotomaxx_protokoll";
 
     public GotomaxxLogEntry? Get(long nr)
     {
@@ -611,7 +646,7 @@ public sealed class GotomaxxLogService : BackgroundService
 
     private static GotomaxxLogEntry Read(SqliteDataReader r) => new(
         r.GetInt64(0), r.GetString(1), r.GetInt64(2), r.GetString(3), N(r, 4), N(r, 5), N(r, 6), BelegpostDb.At(r.GetInt64(7)), r.GetInt32(8),
-        N(r, 9), N(r, 10), N(r, 11), N(r, 12), N(r, 13), N(r, 14), N(r, 15), N(r, 16), r.IsDBNull(17) ? null : r.GetInt64(17), N(r, 18));
+        N(r, 9), N(r, 10), N(r, 11), N(r, 12), N(r, 13), N(r, 14), N(r, 15), N(r, 16), r.IsDBNull(17) ? null : r.GetInt64(17), N(r, 18), N(r, 19));
 
     private static string? N(SqliteDataReader r, int i) => r.IsDBNull(i) ? null : r.GetString(i);
 }

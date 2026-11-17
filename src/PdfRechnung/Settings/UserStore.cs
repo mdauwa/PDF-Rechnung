@@ -32,6 +32,9 @@ public sealed class PortalUser
     public List<string> PrintNames { get; set; } = new();
     /// <summary>ERP-Bedienernummern (z. B. „007“) – im Druck per @@pu007@@; führende Nullen sind egal.</summary>
     public List<string> OperatorNumbers { get; set; } = new();
+    /// <summary>Mandanten des Benutzers (Nummern wie unter „Mandanten“). Für die ERP-Rückmeldung aus dem gotomaxx-Protokoll;
+    /// gehen der globalen Einstellung vor. Leer = globale Einstellung.</summary>
+    public List<string> Mandanten { get; set; } = new();
     /// <summary>
     /// Welche Belege sieht der Benutzer? "eigene" = nur seine, "auswahl" = seine + die von <see cref="AlsoSees"/>,
     /// "alle" = alle Belege. Administratoren sehen immer alle.

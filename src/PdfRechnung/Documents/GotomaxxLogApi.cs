@@ -19,7 +19,7 @@ public static class GotomaxxLogApi
         return new
         {
             e.Nr, e.At, e.Profile, e.User, e.Computer, e.Source, code = e.State, state = e.StateText, e.Actions, e.Error,
-            e.DocType, e.DocNumber, e.VorgangId, e.ErpIndex, e.ErpStatus, e.ErpMessage,
+            e.DocType, e.DocNumber, e.VorgangId, e.ErpIndex, e.ErpStatus, e.ErpMessage, e.Mandant,
             erpJob = job is null ? null : new { status = job.Value.Status, message = job.Value.Message }
         };
     }

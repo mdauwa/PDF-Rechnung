@@ -51,7 +51,7 @@ function gxErp(x) {
   if (x.erpJob) {
     const s = x.erpJob.status;
     const cls = s === "erledigt" ? "ok" : s === "fehler" || s === "aufgegeben" ? "missing" : "partial";
-    return `<span class="badge ${cls}">${s === "erledigt" ? "ans ERP gemeldet" : esc(s)}</span>${x.erpIndex ? `<small class="mono">${esc(x.erpIndex)}</small>` : ""}${x.erpJob.message ? `<small>${esc(x.erpJob.message)}</small>` : ""}`;
+    return `<span class="badge ${cls}">${s === "erledigt" ? "ans ERP gemeldet" : esc(s)}</span>${x.erpIndex ? `<small class="mono">${esc(x.erpIndex)}${x.mandant ? ` · Mandant ${esc(x.mandant)}` : ""}</small>` : ""}${x.erpJob.message ? `<small>${esc(x.erpJob.message)}</small>` : ""}`;
   }
   if (x.erpStatus === "vorgang") return `<a href="#/vorgang?id=${encodeURIComponent(x.vorgangId)}"><span class="badge">über Vorgang</span></a>${x.erpIndex ? `<small class="mono">${esc(x.erpIndex)}</small>` : ""}${x.erpMessage ? `<small>${esc(x.erpMessage)}</small>` : ""}`;
   if (!x.erpStatus) return x.state === "offen" ? '<span class="muted">–</span>' : `<span class="badge partial">wird zugeordnet</span>${x.erpMessage ? `<small>${esc(x.erpMessage)}</small>` : ""}`;

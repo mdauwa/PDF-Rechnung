@@ -55,6 +55,32 @@ public class GotomaxxLogTests
     private sealed class NoServices : IServiceProvider { public object? GetService(Type t) => null; }
 
     [Fact]
+    public void Mandant_des_Benutzers_geht_vor()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "pdfr-gxm-" + Guid.NewGuid().ToString("N")[..8]); Directory.CreateDirectory(dir);
+        try
+        {
+            var settings = new SettingsStore(dir);
+            var store = new DocumentStore(settings, NullLogger<DocumentStore>.Instance);
+            var users = new UserStore(dir);
+            users.Replace(new List<PortalUser> {
+                new() { Id = "u1", Name = "A", Email = "a@f.at", Mandanten = { "010000", "20000" } },
+                new() { Id = "u2", Name = "B", Email = "b@f.at", Mandanten = { "99999" } } }); // nicht eingerichtet
+            var mand = new PdfRechnung.MandantOptions { Items = { new() { Number = "10000" }, new() { Number = "20000" } } };
+            var erp = new ErpFeedbackService(store.Db, store, settings, new StaticOptions<PdfRechnung.ErpOptions>(new PdfRechnung.ErpOptions()), new NoServices(), NullLogger<ErpFeedbackService>.Instance);
+            var opt = new GotomaxxLogOptions { Mandant = "30000" };
+            var log = new GotomaxxLogService(store.Db, store, new StaticOptions<GotomaxxLogOptions>(opt), erp, settings, NullLogger<GotomaxxLogService>.Instance, users,
+                mandanten: new StaticOptions<PdfRechnung.MandantOptions>(mand));
+            GotomaxxLogEntry For(string? owner) => E("Rechnung - 1", "1") with { Owner = owner };
+            Assert.Equal(new string?[] { "010000", "20000" }, log.MandantenFor(For("u1"), opt));
+            Assert.Equal(new string?[] { "30000" }, log.MandantenFor(For("u2"), opt));   // im Zweifel global
+            Assert.Equal(new string?[] { "30000" }, log.MandantenFor(For(null), opt));
+            Assert.Equal(new string?[] { null }, log.MandantenFor(For(null), new GotomaxxLogOptions()));
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
+    }
+
+    [Fact]
     public async Task Protokoll_wird_gelesen_zugeordnet_und_gemeldet()
     {
         var dir = Path.Combine(Path.GetTempPath(), "pdfr-gx-" + Guid.NewGuid().ToString("N")[..8]);

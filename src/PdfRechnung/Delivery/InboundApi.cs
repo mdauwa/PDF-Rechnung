@@ -15,7 +15,7 @@ public static class InboundApi
         var g = app.MapGroup("/api/eingang").AddEndpointFilter(async (ctx, next) =>
         {
             var a = ctx.HttpContext.RequestServices.GetRequiredService<PortalAccess>().For(ctx.HttpContext);
-            return a.Authenticated && (a.SeeAll || a.IsAdmin) ? await next(ctx) : Results.Json(new { error = "Keine Berechtigung." }, statusCode: 403);
+            return a.SeeInbound ? await next(ctx) : Results.Json(new { error = "Keine Berechtigung." }, statusCode: 403);
         });
 
         g.MapGet("", (string? q, string? from, string? to, string? kanal, string? ungelesen, string? anzahl, InboundLog book) =>

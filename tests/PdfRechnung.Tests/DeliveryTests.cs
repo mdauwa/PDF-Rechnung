@@ -154,4 +154,34 @@ public sealed class DeliveryTests : IDisposable
         Assert.Equal(data, File.ReadAllBytes(got[0]));
         await app.StopAsync();
     }
+
+    [Fact]
+    public void Ausgangsbuch_vermerkt_gesendete_und_zurueckgehaltene_Dateien()
+    {
+        var book = new OutboundLog(PdfRechnung.Data.BelegpostDb.For(_dir));
+        var f = Path.Combine(_dir, "INVOIC_1.edi");
+        File.WriteAllText(f, "kein edifact");
+        book.Add(ChannelType.Sftp, "Partner A", "k1", "Partner A", "INVOIC_1.edi", File.ReadAllBytes(f), OutboundLog.Sent, f);
+        book.Add(ChannelType.Ftp, "Partner B", null, null, "ORDERS_2.edi", new byte[] { 1, 2 }, OutboundLog.Held, Path.Combine(_dir, "fehlt.edi"));
+        var all = book.List(null, null, null, null, null);
+        Assert.Equal(2, all.Count);
+        Assert.Equal("ORDERS_2.edi", all[0].FileName);
+        Assert.False(all[0].Exists);
+        Assert.True(all[1].Exists);
+        Assert.Single(book.List(null, null, null, null, OutboundLog.Held));
+        Assert.Single(book.List("Partner A", null, null, null, null));
+    }
+
+    [Fact]
+    public void Rechte_Eingang_und_Ausgang_je_Benutzer()
+    {
+        var alle = PdfRechnung.Services.PortalAccess.ForUser(new PortalUser { Id = "a", Visibility = "alle" });
+        Assert.True(alle.SeeInbound && alle.SeeOutbound);
+        var eigene = PdfRechnung.Services.PortalAccess.ForUser(new PortalUser { Id = "b", Visibility = "eigene", SeeOutbound = true });
+        Assert.False(eigene.SeeInbound);
+        Assert.True(eigene.SeeOutbound);
+        var ohne = PdfRechnung.Services.PortalAccess.ForUser(new PortalUser { Id = "c", Visibility = "alle", SeeInbound = false });
+        Assert.False(ohne.SeeInbound);
+        Assert.True(PdfRechnung.Services.PortalAccess.ForUser(new PortalUser { Id = "d", IsAdmin = true, SeeInbound = false }).SeeInbound);
+    }
 }

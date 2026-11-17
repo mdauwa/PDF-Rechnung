@@ -6,8 +6,13 @@ namespace PdfRechnung.Services;
 
 /// <summary>Wer ist angemeldet und was darf er? Lokaler Administrator (nur direkt am Server) und Portal-Admins dürfen alles.</summary>
 public sealed record AccessInfo(bool Authenticated, bool IsAdmin, bool IsLocalAdmin, bool CanSend, string? UserId, string Name, string? Login,
-    bool SeeAll = false, IReadOnlySet<string>? Visible = null, bool Outlook = false)
+    bool SeeAll = false, IReadOnlySet<string>? Visible = null, bool Outlook = false, bool Inbound = false, bool Outbound = false)
 {
+    /// <summary>Darf den Eingang sehen (Admins immer).</summary>
+    public bool SeeInbound => Authenticated && (IsAdmin || Inbound);
+    /// <summary>Darf den Ausgang sehen (Admins immer).</summary>
+    public bool SeeOutbound => Authenticated && (IsAdmin || Outbound);
+
     public static readonly AccessInfo Anonymous = new(false, false, false, false, null, "", null);
 
     /// <summary>Darf diesen Beleg sehen? Admins und „alle“ sehen alles, sonst nur eigene (und freigegebene) Belege.</summary>
@@ -41,7 +46,8 @@ public sealed class PortalAccess
         var seeAll = pu.IsAdmin || pu.Visibility == "alle";
         var visible = new HashSet<string> { pu.Id };
         if (pu.Visibility == "auswahl") visible.UnionWith(pu.AlsoSees);
-        return new AccessInfo(true, pu.IsAdmin, false, pu.IsAdmin || pu.CanSend, pu.Id, pu.Name, login ?? pu.Email, seeAll, visible, pu.SendViaOutlook);
+        return new AccessInfo(true, pu.IsAdmin, false, pu.IsAdmin || pu.CanSend, pu.Id, pu.Name, login ?? pu.Email, seeAll, visible, pu.SendViaOutlook,
+            pu.IsAdmin || (pu.SeeInbound ?? pu.Visibility == "alle"), pu.IsAdmin || (pu.SeeOutbound ?? pu.Visibility == "alle"));
     }
 
     private AccessInfo Resolve(ClaimsPrincipal user, bool local)

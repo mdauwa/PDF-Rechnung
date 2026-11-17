@@ -54,15 +54,16 @@ public sealed class InboundService : BackgroundService
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, InboundRun> _runs = new();
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly InboundLog? _book;
+    private readonly OutboundLog? _outBook;
     private InboundJob? _job; // laufender Abruf (unter _gate)
     private List<string> _held = new(); // im letzten Ausgangslauf zurückgehalten (Prüffehler)
 
     private readonly IOptionsMonitor<Connect.ConnectOptions>? _connect;
 
     public InboundService(IOptionsMonitor<DeliveryOptions> opt, CustomerStore customers, Settings.SettingsStore settings, ILogger<InboundService> log,
-        InboundLog? book = null, IOptionsMonitor<Connect.ConnectOptions>? connect = null)
+        InboundLog? book = null, IOptionsMonitor<Connect.ConnectOptions>? connect = null, OutboundLog? outBook = null)
     {
-        _opt = opt; _customers = customers; _settings = settings; _log = log; _book = book; _connect = connect;
+        _opt = opt; _customers = customers; _settings = settings; _log = log; _book = book; _connect = connect; _outBook = outBook;
     }
 
     /// <summary>Inhalt „ERP Suite Connect XML“: leere Ordner kommen aus Einstellungen → ERP Suite Connect.</summary>
@@ -78,6 +79,18 @@ public sealed class InboundService : BackgroundService
     }
 
     public IReadOnlyList<InboundRun> Runs() => _runs.Values.OrderBy(r => r.Label).ToList();
+
+    /// <summary>Seit wann schlägt der Abruf/Ausgang eines Versandwegs fehl (für Überwachung und Benachrichtigung)?</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTimeOffset> _failSince = new();
+    public DateTimeOffset? FailingSince(string key) => _failSince.TryGetValue(key, out var t) ? t : null;
+    public InboundRun? LastRun(string key) => _runs.TryGetValue(key, out var r) ? r : null;
+    /// <param name="failed">Übertragung selbst fehlgeschlagen (zurückgehaltene Dateien zählen nicht – die meldet der Ausgang).</param>
+    private InboundRun Track(InboundRun r, bool failed)
+    {
+        if (!failed) _failSince.TryRemove(r.Key, out _);
+        else _failSince.TryAdd(r.Key, r.At);
+        return r;
+    }
 
     /// <summary>Alle Abrufe: global und je Kunde (gleiche Quelle und gleiches Ziel nur einmal).</summary>
     public List<InboundJob> Jobs()
@@ -153,8 +166,8 @@ public sealed class InboundService : BackgroundService
             {
                 // reiner Ausgangslauf ohne Ergebnis: letzte Meldung nicht überschreiben (bei „sofort“ alle 15 s)
                 if (!inbound && sent.Count == 0 && _held.Count == 0 && _runs.ContainsKey(job.Key)) return _runs[job.Key];
-                return _runs[job.Key] = new InboundRun(job.Key, job.Label, DateTimeOffset.Now, _held.Count == 0, sent.Count,
-                    (sent.Count == 0 ? "Ausgangsordner leer" : $"{sent.Count} Datei(en) gesendet: {string.Join(", ", sent.Take(5))}{(sent.Count > 5 ? " …" : "")}") + heldText);
+                return _runs[job.Key] = Track(new InboundRun(job.Key, job.Label, DateTimeOffset.Now, _held.Count == 0, sent.Count,
+                    (sent.Count == 0 ? "Ausgangsordner leer" : $"{sent.Count} Datei(en) gesendet: {string.Join(", ", sent.Take(5))}{(sent.Count > 5 ? " …" : "")}") + heldText), failed: false);
             }
             var target = Target(s);
             Directory.CreateDirectory(target);
@@ -170,12 +183,12 @@ public sealed class InboundService : BackgroundService
                 (sent.Count > 0 ? $"{sent.Count} gesendet · " : "") +
                 (files.Count == 0 ? "keine neuen Dateien" : $"{files.Count} Datei(en) nach {target}: {string.Join(", ", files.Take(5))}{(files.Count > 5 ? " …" : "")}") + heldText);
             if (files.Count > 0) _log.LogInformation("Abruf {Label}: {Count} Datei(en) nach {Target}", job.Label, files.Count, target);
-            return _runs[job.Key] = run;
+            return _runs[job.Key] = Track(run, failed: false);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             _log.LogWarning(ex, "Abruf {Label} fehlgeschlagen", job.Label);
-            return _runs[job.Key] = new InboundRun(job.Key, job.Label, DateTimeOffset.Now, false, 0, ex.Message);
+            return _runs[job.Key] = Track(new InboundRun(job.Key, job.Label, DateTimeOffset.Now, false, 0, ex.Message), failed: true);
         }
         finally { _gate.Release(); }
     }
@@ -207,6 +220,7 @@ public sealed class InboundService : BackgroundService
                     if (File.Exists(dest0)) dest0 = Path.Combine(bad, $"{Path.GetFileNameWithoutExtension(name)}_{DateTime.Now:yyyyMMdd-HHmmss}{Path.GetExtension(name)}");
                     File.Move(path, dest0);
                     await File.WriteAllTextAsync(dest0 + ".pruefung.txt", Edi.EdiReportText.Format(rep), ct);
+                    _outBook?.Add(s.Type, _job?.Label, _job?.CustomerId, _job?.Customer, name, data, OutboundLog.Held, dest0, rep);
                     held.Add($"{name} ({rep.Errors} Fehler, {rep.Warnings} Warnungen)");
                     _log.LogWarning("Ausgang: {File} nicht gesendet – {Summary}", name, rep.Summary);
                     continue;
@@ -226,6 +240,7 @@ public sealed class InboundService : BackgroundService
             var dest = Path.Combine(archive, name);
             if (File.Exists(dest)) dest = Path.Combine(archive, $"{Path.GetFileNameWithoutExtension(name)}_{DateTime.Now:yyyyMMdd-HHmmss}{Path.GetExtension(name)}");
             File.Move(path, dest);
+            _outBook?.Add(s.Type, _job?.Label, _job?.CustomerId, _job?.Customer, name, data, OutboundLog.Sent, dest);
             sent.Add(name);
         }
         _held = held;

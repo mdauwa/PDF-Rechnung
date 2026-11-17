@@ -60,7 +60,7 @@ public static class VorgangApi
                 counts = store.CountByStatus(vis),
                 mine = mineOpen,
                 sentToday = store.CountSentBetween(vis, today, today.AddDays(1)),
-                inbound = acc.SeeAll || acc.IsAdmin ? book.Unread() : 0
+                inbound = acc.SeeInbound ? book.Unread() : 0
             });
         });
 

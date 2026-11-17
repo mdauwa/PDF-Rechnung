@@ -64,6 +64,7 @@ public static class AdminApi
                 if (s.Delivery.Channels.All(c => c.Type != t)) s.Delivery.Channels.Add(new PdfRechnung.Delivery.ChannelSettings { Type = t });
             s.Delivery.Channels = s.Delivery.Channels.OrderBy(c => Array.IndexOf(PdfRechnung.Delivery.ChannelType.All, c.Type)).ToList();
             foreach (var c in s.Delivery.Channels) c.Redact();
+            foreach (var st in s.Filialverbund.Standorte) { st.Client.ErpHasPassword = !string.IsNullOrEmpty(st.Client.ErpPassword); st.Client.ErpPassword = null; }
             foreach (var m in s.Mandanten.Items) { m.ErpHasPassword = !string.IsNullOrEmpty(m.ErpPassword); m.ErpPassword = null; m.ErpNewPassword = null; m.ErpClearPassword = false; }
             // Fehlende Statuscodes ergänzen und leere Statusbitmaps mit dem Standard (ab 950) füllen
             foreach (var c in PdfRechnung.Documents.StatusCode.All)
@@ -139,6 +140,23 @@ public static class AdminApi
                 m.ErpNewPassword = null; m.ErpClearPassword = false; m.ErpHasPassword = false;
                 m.PathMappings = m.PathMappings.Select(x => x.Trim()).Where(x => x.Length > 0).ToList();
             }
+            // Filialverbund: Standorte bereinigen, ERP-Kennwort der Clients verschlüsseln bzw. behalten
+            s.Filialverbund ??= new();
+            s.Filialverbund.Standorte = s.Filialverbund.Standorte.Where(x => !string.IsNullOrWhiteSpace(x.Code)).GroupBy(x => x.Code.Trim(), StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList();
+            foreach (var st in s.Filialverbund.Standorte)
+            {
+                st.Code = st.Code.Trim(); st.Name = st.Name.Trim();
+                st.Client ??= new();
+                var prev = old.Filialverbund.Find(st.Code)?.Client;
+                st.Client.ErpPassword = !string.IsNullOrEmpty(st.Client.ErpNewPassword) ? store.Secrets.Protect(st.Client.ErpNewPassword)
+                    : st.Client.ErpHasPassword ? prev?.ErpPassword : null;
+                st.Client.ErpNewPassword = null; st.Client.ErpHasPassword = false;
+                st.Client.SpecialFiles = st.Client.SpecialFiles.Where(r => !string.IsNullOrWhiteSpace(r.Pattern)).ToList();
+                st.Client.Exports = st.Client.Exports.Where(r => !string.IsNullOrWhiteSpace(r.Folder)).ToList();
+                foreach (var t in st.Client.Tasks) if (string.IsNullOrWhiteSpace(t.Id)) t.Id = Guid.NewGuid().ToString("N")[..8];
+            }
+            s.Filialverbund.Gruppen = s.Filialverbund.Gruppen.Where(g => !string.IsNullOrWhiteSpace(g.Name)).ToList();
+            s.Filialverbund.Regeln = s.Filialverbund.Regeln.Where(r => !string.IsNullOrWhiteSpace(r.Pattern)).ToList();
             s.Erp.Fields = s.Erp.Fields.Where(f => !string.IsNullOrWhiteSpace(f.Field)).Select(f => { f.Field = f.Field.Trim().ToUpperInvariant(); return f; }).ToList();
             s.StatusLink.AllowedNetworks = s.StatusLink.AllowedNetworks.Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToList();
             s.StatusLink.TrustedProxies = s.StatusLink.TrustedProxies.Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToList();

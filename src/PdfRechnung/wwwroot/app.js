@@ -61,7 +61,7 @@ async function loadPortal() {
   if (portal.authenticated && portal.userId && typeof portal.theme === "string") applyTheme(portal.theme, false);
   $("#userInfo").innerHTML = portal.authenticated
     ? `<button class="user-btn" id="userBtn" aria-haspopup="true" aria-expanded="false" title="Persönliche Einstellungen">
-         <span class="user-name">${esc(portal.user)}</span>${portal.login ? `<span class="user-login">${esc(portal.login)}</span>` : ""}
+         <span class="user-name">${esc(portal.user)}${portal.userId ? `<span class="menu-dot live-dot${liveOn ? " on" : ""}" title="Live-Verbindung zum Melder"></span>` : ""}</span>${portal.login ? `<span class="user-login">${esc(portal.login)}</span>` : ""}
          <span class="user-caret" aria-hidden="true">▾</span></button>
        <div class="user-pop" id="userPop" hidden>
          <div class="user-pop-h">Darstellung</div>
@@ -97,23 +97,34 @@ document.addEventListener("click", e => {
   if (p && !p.hidden && !e.target.closest("#userPop") && !e.target.closest("#userBtn")) { p.hidden = true; $("#userBtn")?.setAttribute("aria-expanded", "false"); }
 });
 
+let menuSettingsOpen = false;
 function renderMenu() {
   if (!portal.authenticated) { $("#menu").innerHTML = ""; return; }
   let html = `<div class="menu-group">Vorgänge</div>`;
   html += MENU.filter(m => !m.needsUser || portal.userId).map(m => `<a href="#/${m.key}?f=${m.filter}" data-key="${m.key}:${m.filter}">${icon(m.icon)}<span>${esc(m.title)}</span><span class="menu-count" data-count="${m.filter}"></span></a>`).join("");
-  if (portal.seeInbound) html += `<a href="#/eingang" data-key="eingang">${icon("download")}<span>Eingang</span><span class="menu-count" data-count="eingang"></span></a>`;
-  if (portal.userId) html += `<div class="menu-group">Persönlich</div><a href="#/melder" data-key="melder">${icon("bell")}<span>Melder &amp; Hinweise</span><span class="menu-dot" id="liveDot" title="Live-Verbindung"></span></a>`
-    + `<a href="#/regeln" data-key="regeln">${icon("send")}<span>Meine Mail-Regeln</span></a>`;
-  if (portal.connect) html += `<div class="menu-group">ERP Suite Connect</div><a href="#/connect?b=eingang" data-key="connect:eingang">${icon("download")}<span>Eingang</span></a><a href="#/connect?b=ausgang" data-key="connect:ausgang">${icon("upload")}<span>Ausgang</span></a>`;
+  if (portal.seeInbound || portal.seeOutbound) html += `<div class="menu-group">Datenaustausch</div>`
+    + (portal.seeInbound ? `<a href="#/eingang" data-key="eingang">${icon("download")}<span>Eingang</span><span class="menu-count" data-count="eingang"></span></a>` : "")
+    + (portal.seeOutbound ? `<a href="#/ausgang" data-key="ausgang">${icon("upload")}<span>Ausgang</span></a>` : "")
+    + (portal.filialverbund ? `<a href="#/filialverbund" data-key="filialverbund">${icon("users")}<span>Filialverbund</span></a>` : "");
+  if (portal.connect) html += `<div class="menu-group">ERP Suite Connect</div>`
+    + (portal.seeInbound ? `<a href="#/connect?b=eingang" data-key="connect:eingang">${icon("download")}<span>Eingang</span></a>` : "")
+    + (portal.seeOutbound ? `<a href="#/connect?b=ausgang" data-key="connect:ausgang">${icon("upload")}<span>Ausgang</span></a>` : "");
   html += `<div class="menu-group">Tools</div><a href="#/pruefen" data-key="pruefen">${icon("check")}<span>Dokument validieren</span></a>`;
+  // Einstellungen: persönliche Einstellungen, Benutzer und (für Admins) die Systemeinstellungen
+  const sub = [];
+  if (portal.userId) sub.push(`<a href="#/melder" data-key="melder">${icon("bell")}<span>Melder &amp; Hinweise</span><span class="menu-dot live-dot${liveOn ? " on" : ""}" title="Live-Verbindung"></span></a>`,
+    `<a href="#/regeln" data-key="regeln">${icon("send")}<span>Meine Mail-Regeln</span></a>`);
   if (portal.isAdmin) {
-    const sub = ST_GROUPS.filter(([g]) => g !== "benutzer");
-    const inSettings = /^#\/einstellungen/.test(location.hash) && !/[?&]g=benutzer/.test(location.hash);
-    const open = inSettings || store.get("menu.einstellungen", false);
+    if (sub.length) sub.push(`<div class="menu-sub-sep"></div>`);
+    sub.push(...ST_GROUPS.map(([g, title, ic]) => `<a href="#/einstellungen?g=${g}" data-key="einstellungen:${g}">${icon(ic)}<span>${esc(title)}</span></a>`));
+  }
+  if (sub.length) {
+    // Beim Öffnen des Portals zugeklappt; nur aufgeklappt, wenn gerade eine Einstellungsseite offen ist
+    const inSettings = /^#\/(einstellungen|melder|regeln)/.test(location.hash);
+    const open = inSettings || menuSettingsOpen;
     html += `<div class="menu-group">System</div>
-      <a href="#/einstellungen?g=benutzer" data-key="einstellungen:benutzer">${icon("users")}<span>Benutzer</span></a>
       <a href="#" class="menu-parent" data-menu-toggle="einstellungen" aria-expanded="${open}">${icon("settings")}<span>Einstellungen</span><span class="menu-caret" aria-hidden="true">▸</span></a>
-      <div class="menu-sub" id="menuSubEinstellungen" ${open ? "" : "hidden"}>${sub.map(([g, title, ic]) => `<a href="#/einstellungen?g=${g}" data-key="einstellungen:${g}">${icon(ic)}<span>${esc(title)}</span></a>`).join("")}</div>`;
+      <div class="menu-sub" id="menuSubEinstellungen" ${open ? "" : "hidden"}>${sub.join("")}</div>`;
   }
   $("#menu").innerHTML = html;
   if (portal.seeInbound) api("GET", "api/eingang?anzahl=1").then(r => setInboundCount(r.unread)).catch(() => { });
@@ -142,6 +153,8 @@ const VIEWS = {
   melder: { title: "Melder & Hinweise", render: v => renderMelder(v) },
   regeln: { title: "Meine Mail-Regeln", render: v => renderMyRules(v) },
   eingang: { title: "Eingang", render: v => renderEingang(v) },
+  ausgang: { title: "Ausgang", render: v => renderAusgang(v) },
+  filialverbund: { title: "Filialverbund", render: v => renderFilialverbund(v) },
   pruefen: { title: "Dokument validieren", render: v => renderPruefen(v) },
   connect: { title: "ERP Suite Connect", render: v => renderConnect(v) }
 };
@@ -166,6 +179,8 @@ function route() {
   }
   if (key === "einstellungen" && !portal.isAdmin) key = "vorgaenge";
   if (key === "eingang" && !portal.seeInbound) key = "vorgaenge";
+  if (key === "ausgang" && !portal.seeOutbound) key = "vorgaenge";
+  if (key === "filialverbund" && !portal.filialverbund) key = "vorgaenge";
   if (key === "connect" && !portal.connect) key = "vorgaenge";
   const v = VIEWS[key] || VIEWS.vorgaenge;
   $("#viewTitle").textContent = v.title;
@@ -190,10 +205,14 @@ async function init() {
     if (t) {
       e.preventDefault();
       const sub = $("#menuSubEinstellungen"), open = sub.hidden;
-      sub.hidden = !open; t.setAttribute("aria-expanded", String(open)); store.set("menu.einstellungen", open);
+      sub.hidden = !open; t.setAttribute("aria-expanded", String(open)); menuSettingsOpen = open;
       return;
     }
-    if (e.target.closest("a")) toggleSidebar(false);
+    const a = e.target.closest("a");
+    if (!a) return;
+    // Erneuter Klick auf die gerade offene Einstellungsseite: wieder mit dem ersten Reiter beginnen
+    if (a.getAttribute("href") === location.hash && location.hash.startsWith("#/einstellungen")) { e.preventDefault(); route(); }
+    toggleSidebar(false);
   });
   $("#menuToggle").onclick = () => toggleSidebar(true);
   $("#backdrop").onclick = () => toggleSidebar(false);
@@ -203,12 +222,14 @@ async function init() {
 
 /* ---------------- Live-Hinweise (neuer Beleg von mir gedruckt) ---------------- */
 
-let live = null;
+let live = null, liveOn = false;
+/** Live-Punkt (Menü „Melder & Hinweise“ und Benutzername) aktualisieren. */
+function setLive(on) { liveOn = on; document.querySelectorAll(".live-dot").forEach(d => d.classList.toggle("on", on)); }
 function startLive() {
   if (live || !portal.authenticated || !portal.userId || !window.EventSource) return;
   live = new EventSource("api/ereignisse");
-  live.onopen = () => $("#liveDot")?.classList.add("on");
-  live.onerror = () => $("#liveDot")?.classList.remove("on");
+  live.onopen = () => setLive(true);
+  live.onerror = () => setLive(false);
   live.addEventListener("beleg", e => {
     let ev; try { ev = JSON.parse(e.data); } catch { return; }
     if (ev.kind && !["neu", "test"].includes(ev.kind)) return; // Aufträge/Einstellungen sind nur für den Melder

@@ -47,6 +47,7 @@ async function renderPruefen(view) {
   drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); send(e.dataTransfer.files); });
   $("#prResults").addEventListener("click", prClick);
 
+  if (q.get("ausgang")) run(api("GET", `api/ausgang/${encodeURIComponent(q.get("ausgang"))}/pruefung`).then(r => [r]));
   if (q.get("eingang")) run(api("GET", `api/eingang/${encodeURIComponent(q.get("eingang"))}/pruefung`).then(r => [r]));
   if (q.get("connect")) run(api("GET", `api/connect/${encodeURIComponent(q.get("connect"))}/pruefung?name=${encodeURIComponent(q.get("name") || "")}&archiv=${q.get("archiv") || ""}`).then(r => [r]));
 }

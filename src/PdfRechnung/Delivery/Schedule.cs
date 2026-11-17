@@ -68,6 +68,13 @@ public static class ScheduleEngine
         return from <= to ? now >= from && now < to : now >= from || now < to;
     }
 
+    /// <summary>Liegt der Zeitpunkt in den Wochentagen und im Zeitfenster (leer = immer)?</summary>
+    public static bool Allowed(string? days, string? from, string? to, DateTime d)
+    {
+        var s = new Schedule { Days = days ?? "", From = from ?? "", To = to ?? "" };
+        return DayOk(s, d) && InWindow(s, d);
+    }
+
     /// <summary>Ist jetzt ein Lauf fällig? last = letzter Lauf (null = noch nie).</summary>
     public static bool Due(Schedule s, DateTime? last, DateTime now)
     {

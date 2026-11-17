@@ -183,6 +183,49 @@ public sealed class BelegpostDb
         // 4: ERP Suite Connect – Nachrichtentyp; Nicht-Bestellungen erscheinen nur unter ERP Suite Connect
         """
         ALTER TABLE eingang ADD COLUMN connect_typ TEXT;
+        """,
+        // 5: Ausgang – über die Ausgangsordner der Versandwege gesendete bzw. zurückgehaltene Dateien
+        """
+        CREATE TABLE ausgang(
+            nr INTEGER PRIMARY KEY AUTOINCREMENT,
+            zeit INTEGER NOT NULL,
+            kanal TEXT NOT NULL,
+            quelle TEXT,
+            kunde_id TEXT,
+            kunde TEXT,
+            datei TEXT NOT NULL,
+            groesse INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            ablage TEXT NOT NULL COLLATE NOCASE,
+            pruefung TEXT,
+            pruefung_text TEXT,
+            connect_typ TEXT);
+        CREATE INDEX ix_ausgang_zeit ON ausgang(zeit);
+        """,
+        // 6: Datenaustausch (Filialverbund, Konnektoren über die REST-API) und Lebenszeichen der Konnektoren
+        """
+        CREATE TABLE austausch(
+            nr INTEGER PRIMARY KEY AUTOINCREMENT,
+            zeit INTEGER NOT NULL,
+            richtung TEXT NOT NULL,
+            standort TEXT NOT NULL COLLATE NOCASE,
+            datei TEXT NOT NULL,
+            groesse INTEGER NOT NULL,
+            status TEXT NOT NULL,
+            status_zeit INTEGER,
+            meldung TEXT,
+            quelle TEXT,
+            ablage TEXT NOT NULL,
+            versuche INTEGER NOT NULL DEFAULT 0);
+        CREATE INDEX ix_austausch_zeit ON austausch(zeit);
+        CREATE INDEX ix_austausch_offen ON austausch(standort, status);
+        CREATE TABLE konnektor(
+            code TEXT PRIMARY KEY COLLATE NOCASE,
+            zuletzt INTEGER NOT NULL,
+            version TEXT,
+            rechner TEXT,
+            info TEXT,
+            adresse TEXT);
         """
     };
 

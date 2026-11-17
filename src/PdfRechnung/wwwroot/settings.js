@@ -26,16 +26,19 @@ const TABS = [
   ["mapi", "MAPI-Mails"],
   ["statuslink", "Status-Link"],
   ["benutzer", "Benutzer"],
-  ["anmeldung", "Anmeldung"]
+  ["anmeldung", "Anmeldung"],
+  ["benachrichtigung", "Benachrichtigung"],
+  ["api", "REST-API"],
+  ["filialverbund", "Filialverbund"]
 ];
 
 /** Einstellungen im Menü links: Gruppen mit ihren Reitern. */
 const ST_GROUPS = [
   ["benutzer", "Benutzer", "users", ["benutzer"]],
-  ["system", "Dienst & Zugang", "settings", ["dienst", "server", "anmeldung"]],
+  ["system", "Dienst & Zugang", "settings", ["dienst", "server", "anmeldung", "benachrichtigung", "api"]],
   ["belege", "Drucker & Belege", "doc", ["eingang", "briefpapier", "erechnung", "ablage"]],
   ["email", "E-Mail", "send", ["mail", "mailvorlagen", "regeln", "mapi", "statuslink"]],
-  ["versand", "Versand & Partner", "upload", ["versandwege", "kunden", "connect"]],
+  ["versand", "Versand & Partner", "upload", ["versandwege", "kunden", "filialverbund", "connect"]],
   ["erp", "ERP & Mandanten", "inbox", ["erp", "mandanten"]]
 ];
 const stGroupOf = tab => ST_GROUPS.find(g => g[3].includes(tab)) || ST_GROUPS[0];
@@ -44,8 +47,8 @@ const stGroupTabs = () => TABS.filter(([k]) => stGroupOf(k)[0] === ST.group);
 /** Zu einem Reiter springen (ggf. in eine andere Gruppe). */
 function stGoto(tab) {
   const g = stGroupOf(tab)[0];
-  if (g !== ST.group) { store.set("st.tab." + g, tab); location.hash = `#/einstellungen?g=${g}`; return; }
-  ST.tab = tab; store.set("st.tab." + g, tab); drawTab();
+  if (g !== ST.group) { location.hash = `#/einstellungen?g=${g}&t=${tab}`; return; }
+  ST.tab = tab; drawTab();
 }
 
 const get = (obj, path) => path.split(".").reduce((o, k) => o?.[k], obj);
@@ -60,8 +63,8 @@ async function renderSettings(view) {
   const q = new URLSearchParams(location.hash.split("?")[1] || "");
   const grp = ST_GROUPS.find(g => g[0] === q.get("g")) || ST_GROUPS[0];
   ST.group = grp[0];
-  ST.tab = q.get("t") && grp[3].includes(q.get("t")) ? q.get("t") : store.get("st.tab." + grp[0], grp[3][0]);
-  if (!grp[3].includes(ST.tab)) ST.tab = grp[3][0];
+  // Beim Aufruf über das Menü ist immer der erste Reiter aktiv
+  ST.tab = q.get("t") && grp[3].includes(q.get("t")) ? q.get("t") : (stGroupTabs()[0] || [grp[3][0]])[0];
   $("#viewTitle").textContent = grp[0] === "benutzer" ? "Benutzer" : `Einstellungen – ${grp[1]}`;
   view.innerHTML = `<div class="settings">
     <div class="notice info" id="stSetup" hidden></div>
@@ -77,7 +80,7 @@ async function renderSettings(view) {
 
   view.querySelector("#stTabs").onclick = e => {
     const t = e.target.closest("[data-tab]")?.dataset.tab;
-    if (t) { ST.tab = t; ST.mtEdit = null; ST.userEdit = null; ST.mdEdit = null; store.set("st.tab." + ST.group, t); drawTab(); }
+    if (t) { ST.tab = t; ST.mtEdit = null; ST.userEdit = null; ST.mdEdit = null; drawTab(); }
   };
   rteInstall(view);
   view.addEventListener("click", onAction);
@@ -110,7 +113,8 @@ function drawTab() {
   const body = $("#stBody");
   if (!ST.s) return;
   const fn = { dienst: tabService, server: tabServer, eingang: tabInbox, briefpapier: tabStationery, mail: tabMail, mailvorlagen: tabTemplates, erechnung: tabInvoice, ablage: tabStorage, benutzer: tabUsers, anmeldung: tabAuth,
-    erp: tabErp, mapi: tabMapi, statuslink: tabStatusLink, regeln: tabRules, mandanten: tabMandanten, versandwege: tabDelivery, kunden: tabCustomers, connect: tabConnect }[ST.tab] || tabService;
+    erp: tabErp, mapi: tabMapi, statuslink: tabStatusLink, regeln: tabRules, mandanten: tabMandanten, versandwege: tabDelivery, kunden: tabCustomers, connect: tabConnect,
+    benachrichtigung: tabAlerts, api: tabApi, filialverbund: tabFilialverbund }[ST.tab] || tabService;
   body.innerHTML = fn();
   if (ST.tab === "benutzer" && !ST.users) loadUsers();
   if (ST.tab === "benutzer" && !ST.devices) loadDevices();
@@ -119,6 +123,9 @@ function drawTab() {
   if (ST.tab === "eingang") loadPrinterStatus();
   if (ST.tab === "versandwege") loadDeliveryRuns();
   if (ST.tab === "dienst") loadService();
+  if (ST.tab === "benachrichtigung" && !MON.status) loadMonStatus();
+  if (ST.tab === "api" && !MON.keys) loadApiKeys();
+  if (ST.tab === "filialverbund" && !MON.clients) loadFvClients();
 }
 
 function msg(text, ok) {
@@ -150,6 +157,7 @@ const section = (title, inner, extra = "") => `<section class="st-card"><div cla
 function onInput(e) {
   const el = e.target;
   if (deliveryInput(el, e)) return;
+  if (monitorInput(el, e)) return;
   if (el.dataset?.mdErp !== undefined) {
     const m = ST.s.mandanten.items[+el.dataset.mdErp];
     m.ownErp = el.value === "eigen"; m.erpOff = el.value === "aus";
@@ -224,6 +232,7 @@ async function onAction(e) {
   try {
     if (btn && btn.tagName === "BUTTON") btn.disabled = true;
     if (await deliveryClick(a, btn, e)) return;
+    if (await monitorClick(a, btn, e)) return;
     switch (a) {
       case "save": await save(); break;
       case "discard": await loadSettings(); msg(""); break;
@@ -1172,6 +1181,10 @@ function userMask(i) {
           ${[["eigene", "nur eigene"], ["auswahl", "eigene + ausgewählte Benutzer"], ["alle", "alle"]].map(([k, t]) =>
             `<option value="${k}" ${(u.isAdmin ? "alle" : (u.visibility || "eigene")) === k ? "selected" : ""}>${t}</option>`).join("")}</select>`,
           "Admins sehen immer alle; Belege ohne zugeordneten Benutzer sehen nur „alle“ und Admins.")}
+       <div class="user-also"><span>Datenaustausch (Dateien, die nicht der Benutzer selbst gedruckt hat):</span>
+         ${[["seeInbound", "Eingang sehen", "abgerufene und empfangene Dateien, ERP Suite Connect Eingang"], ["seeOutbound", "Ausgang sehen", "aus Ausgangsordnern gesendete Dateien, ERP Suite Connect Ausgang"]].map(([k, t, h]) =>
+           `<label class="check" title="${h}"><input type="checkbox" data-u="${i}|${k}" ${u.isAdmin || (u[k] ?? u.visibility === "alle") ? "checked" : ""} ${u.isAdmin ? "disabled" : ""}> ${t} <small class="meta-inline">${h}</small></label>`).join("")}
+       </div>
        ${!u.isAdmin && u.visibility === "auswahl" ? `<div class="user-also"><span>zusätzlich die Belege von:</span>
           ${U.users.filter(o => o !== u && o.id).map(o => `<label class="check"><input type="checkbox" data-also="${i}" value="${esc(o.id)}" ${(u.alsoSees || []).includes(o.id) ? "checked" : ""}> ${esc(o.name || o.email)}</label>`).join("") || '<span class="meta-inline">(neue Benutzer erst speichern)</span>'}</div>` : ""}`) +
     section("MAPI-Mails und Melder",

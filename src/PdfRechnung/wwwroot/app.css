@@ -302,7 +302,8 @@ a.btn.ms-btn { display: inline-flex; align-items: center; gap: 10px; margin-top:
 .ms-logo i { width: 8px; height: 8px; display: block; }
 .ms-logo i:nth-child(1) { background: #f25022; } .ms-logo i:nth-child(2) { background: #7fba00; }
 .ms-logo i:nth-child(3) { background: #00a4ef; } .ms-logo i:nth-child(4) { background: #ffb900; }
-.user-name { color: #fff; font-weight: 500; }
+.user-name { color: #fff; font-weight: 500; display: inline-flex; align-items: center; gap: 7px; }
+.user-name .live-dot { margin-left: 0; }
 .user-login { font-size: 11px; opacity: .8; overflow: hidden; text-overflow: ellipsis; }
 .user-foot { margin-top: 4px; }
 .user-foot a { color: var(--side-text); }
@@ -484,3 +485,7 @@ table.sender-table input { width: 100%; min-width: 160px; }
 .menu a.menu-parent.has-active { color: #fff; }
 .menu-sub { margin: 2px 0 4px 14px; padding-left: 8px; border-left: 1px solid rgba(255,255,255,.08); }
 .menu-sub a { padding: 7px 10px; font-size: 13px; }
+.menu-sub-sep { height: 1px; margin: 6px 10px; background: rgba(255,255,255,.08); }
+.fv-task { border: 1px solid var(--line, #e3e7ee); border-radius: 10px; padding: 12px 14px; margin: 0 0 12px; }
+.fv-task h5 { margin: 10px 0 4px; font-size: 13px; }
+.fv-wf { border-top: 1px dashed var(--line, #e3e7ee); padding-top: 6px; }

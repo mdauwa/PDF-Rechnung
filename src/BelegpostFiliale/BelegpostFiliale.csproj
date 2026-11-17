@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <!-- Belegpost Filial-Client: Windows-Dienst am Standort. Holt Dateien vom Portal, importiert sie ins ERP, ersetzt Sonderdateien,
+       startet Workflows und lädt Exporte hoch. Alle Einstellungen kommen aus dem Portal (Versand & Partner → Filialverbund). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>BelegpostFiliale</RootNamespace>
+    <AssemblyName>Belegpost-Filialclient</AssemblyName>
+    <Version>0.1.0</Version>
+    <Product>Belegpost Filial-Client</Product>
+    <Company>Belegpost</Company>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.0" />
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Zeitplan-Logik wie im Portal -->
+    <Compile Include="..\PdfRechnung\Delivery\Schedule.cs" Link="Shared\Schedule.cs" />
+  </ItemGroup>
+
+</Project>

@@ -115,6 +115,8 @@ builder.Services.Configure<MailRuleOptions>(builder.Configuration.GetSection("Ma
 builder.Services.Configure<MandantOptions>(builder.Configuration.GetSection("Mandanten"));
 builder.Services.Configure<PdfRechnung.Delivery.DeliveryOptions>(builder.Configuration.GetSection("Delivery"));
 builder.Services.Configure<PdfRechnung.Connect.ConnectOptions>(builder.Configuration.GetSection("Connect"));
+builder.Services.Configure<PdfRechnung.Monitoring.AlertOptions>(builder.Configuration.GetSection("Alerts"));
+builder.Services.Configure<PdfRechnung.Exchange.FilialverbundOptions>(builder.Configuration.GetSection("Filialverbund"));
 builder.Services.AddSingleton<MailRuleStore>();
 builder.Services.AddSingleton(sp => new RuntimeControl(sp.GetRequiredService<IHostApplicationLifetime>(), isService));
 
@@ -124,8 +126,17 @@ builder.Services.AddSingleton<DocumentStore>();
 builder.Services.AddSingleton(new PdfRechnung.Delivery.CustomerStore(store.DataDirectory));
 builder.Services.AddSingleton<PdfRechnung.Delivery.DeliveryService>();
 builder.Services.AddSingleton(new PdfRechnung.Delivery.InboundLog(database, store.DataDirectory));
+builder.Services.AddSingleton(new PdfRechnung.Delivery.OutboundLog(database));
 builder.Services.AddSingleton<PdfRechnung.Delivery.InboundService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PdfRechnung.Delivery.InboundService>());
+builder.Services.AddSingleton(new PdfRechnung.Exchange.ExchangeStore(database, store.DataDirectory));
+builder.Services.AddSingleton<PdfRechnung.Exchange.FilialverbundService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<PdfRechnung.Exchange.FilialverbundService>());
+builder.Services.AddSingleton(new PdfRechnung.Api.ApiKeyStore(store.DataDirectory));
+builder.Services.AddSingleton<PdfRechnung.Api.BelegpostDbAudit>();
+builder.Services.AddSingleton<PdfRechnung.Monitoring.HealthService>();
+builder.Services.AddSingleton<PdfRechnung.Monitoring.AlertService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<PdfRechnung.Monitoring.AlertService>());
 builder.Services.AddSingleton<DocumentProcessor>();
 builder.Services.AddSingleton<SendService>();
 if (OperatingSystem.IsWindows()) builder.Services.AddSingleton<IGotomaxxPrinter, PdfRechnung.Printing.WindowsGotomaxxPrinter>();
@@ -267,6 +278,8 @@ app.Use(async (ctx, next) =>
 app.Use(async (ctx, next) =>
 {
     var path = ctx.Request.Path;
+    // REST-API v1: eigene Anmeldung mit API-Schlüssel (kein Cookie, daher ohne CSRF-Header)
+    if (path.StartsWithSegments("/api/v1")) { await next(); return; }
     if (path.StartsWithSegments("/api") && !path.StartsWithSegments("/api/health") && !path.StartsWithSegments("/api/auth")
         && !path.StartsWithSegments("/api/portal"))
     {
@@ -308,8 +321,10 @@ app.MapGet("/api/portal", (IOptionsSnapshot<PortalOptions> portal, HttpContext c
         user = a.Authenticated ? a.Name : null,
         login = a.Login,
         isAdmin = a.IsAdmin,
-        seeInbound = a.Authenticated && (a.SeeAll || a.IsAdmin),
-        connect = a.Authenticated && (a.SeeAll || a.IsAdmin) && app.Services.GetRequiredService<IOptionsMonitor<PdfRechnung.Connect.ConnectOptions>>().CurrentValue.Enabled,
+        seeInbound = a.SeeInbound,
+        seeOutbound = a.SeeOutbound,
+        filialverbund = (a.SeeInbound || a.SeeOutbound) && app.Services.GetRequiredService<IOptionsMonitor<PdfRechnung.Exchange.FilialverbundOptions>>().CurrentValue.Enabled,
+        connect = (a.SeeInbound || a.SeeOutbound) && app.Services.GetRequiredService<IOptionsMonitor<PdfRechnung.Connect.ConnectOptions>>().CurrentValue.Enabled,
         isLocalAdmin = a.IsLocalAdmin,
         canSend = a.CanSend,
         userId = a.UserId,
@@ -345,6 +360,9 @@ AdminApi.Map(app);
 PdfRechnung.Delivery.DeliveryApi.Map(app);
 PdfRechnung.Delivery.As2Receiver.Map(app);
 PdfRechnung.Delivery.InboundApi.Map(app);
+PdfRechnung.Delivery.OutboundApi.Map(app);
+PdfRechnung.Api.ApiV1.Map(app);
+PdfRechnung.Api.AdminMonitoringApi.Map(app);
 PdfRechnung.Edi.ToolsApi.Map(app);
 PdfRechnung.Connect.ConnectApi.Map(app);
 PdfRechnung.Delivery.InboundLog.ConnectEnabled = () => app.Services.GetRequiredService<IOptionsMonitor<PdfRechnung.Connect.ConnectOptions>>().CurrentValue.Enabled;

@@ -60,7 +60,12 @@ async function renderConnect(view) {
         <td class="nowrap">${fmtDT(x.at)}</td><td>${esc(x.channelText)}<small>${esc(x.source || "")}</small></td>
         <td><b>${esc(x.fileName)}</b><small>${fmtSize(x.size)}</small></td><td>${esc(x.connectType || "")}</td>
         <td class="nowrap">${x.check ? `<a href="#/pruefen?eingang=${x.nr}">${cnBadge(x.check, x.checkText)}</a>` : '<span class="muted">–</span>'}</td>
-        <td class="nowrap">${x.hasCopy || x.inTarget ? `<a href="api/eingang/${x.nr}/datei?ansehen=1" target="_blank" rel="noopener">Ansehen</a> · <a href="api/eingang/${x.nr}/datei" download>Herunterladen</a>` : ""}</td></tr>`).join("")}</tbody></table></div></div>` : "";
+        <td class="nowrap">${x.hasCopy || x.inTarget ? `<a href="api/eingang/${x.nr}/datei?ansehen=1" target="_blank" rel="noopener">Ansehen</a> · <a href="api/eingang/${x.nr}/datei" download>Herunterladen</a>` : ""}</td></tr>`).join("")}</tbody></table></div></div>`
+      : d.sent?.length ? `<h3 class="cn-h">Gesendet über Versandwege</h3><div class="card"><div class="table-wrap"><table class="list"><thead><tr><th>Zeit</th><th>Versandweg</th><th>Datei</th><th>Typ</th><th>Status</th><th>Prüfung</th><th></th></tr></thead><tbody>${d.sent.slice(0, 100).map(x => `<tr>
+        <td class="nowrap">${fmtDT(x.at)}</td><td>${esc(x.channelText)}<small>${esc(x.source || "")}</small></td>
+        <td><b>${esc(x.fileName)}</b><small>${fmtSize(x.size)}</small></td><td>${esc(x.connectType || "")}</td>
+        <td class="nowrap">${x.status === "fehlerhaft" ? '<span class="badge missing">zurückgehalten</span>' : '<span class="badge ok">gesendet</span>'}</td>
+        <td class="nowrap">${agCheck(x)}</td><td class="nowrap">${agLinks(x)}</td></tr>`).join("")}</tbody></table></div></div>` : "";
   };
   let deb;
   $("#cnSearch").oninput = () => { clearTimeout(deb); deb = setTimeout(draw, 200); };

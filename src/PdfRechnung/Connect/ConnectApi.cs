@@ -16,12 +16,13 @@ public static class ConnectApi
         {
             var sp = ctx.HttpContext.RequestServices;
             var a = sp.GetRequiredService<PortalAccess>().For(ctx.HttpContext);
-            if (!a.Authenticated || !(a.SeeAll || a.IsAdmin)) return Results.Json(new { error = "Keine Berechtigung." }, statusCode: 403);
+            var area = ctx.HttpContext.Request.RouteValues["area"] as string;
+            if (!(area == "ausgang" ? a.SeeOutbound : a.SeeInbound)) return Results.Json(new { error = "Keine Berechtigung." }, statusCode: 403);
             if (!sp.GetRequiredService<IOptionsMonitor<ConnectOptions>>().CurrentValue.Enabled) return Results.Json(new { error = "ERP Suite Connect ist nicht eingeschaltet." }, statusCode: 404);
             return await next(ctx);
         });
 
-        g.MapGet("/{area}", (string area, string? archiv, IOptionsMonitor<ConnectOptions> opt, InboundLog book) =>
+        g.MapGet("/{area}", (string area, string? archiv, IOptionsMonitor<ConnectOptions> opt, InboundLog book, OutboundLog outBook) =>
         {
             if (area is not ("eingang" or "ausgang")) return Results.NotFound();
             var o = opt.CurrentValue;
@@ -35,7 +36,8 @@ public static class ConnectApi
                 hasArchive = ConnectFiles.Folder(o, area, true) is not null,
                 version = ConnectSchema.Current.Version,
                 files = exists ? ConnectFiles.List(folder!) : new(),
-                received = area == "eingang" && archiv is not ("1" or "true") ? book.List(null, null, null, null, false, 300, "connect") : null
+                received = area == "eingang" && archiv is not ("1" or "true") ? book.List(null, null, null, null, false, 300, "connect") : null,
+                sent = area == "ausgang" && archiv is not ("1" or "true") ? outBook.List(null, null, null, null, null, 300, "connect") : null
             });
         });
 

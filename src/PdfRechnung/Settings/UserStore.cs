@@ -39,6 +39,10 @@ public sealed class PortalUser
     public string Visibility { get; set; } = "eigene";
     /// <summary>Benutzer-IDs, deren Belege zusätzlich sichtbar sind (z. B. Vertretung, Sekretariat).</summary>
     public List<string> AlsoSees { get; set; } = new();
+    /// <summary>Sieht den Eingang (abgerufene/empfangene Dateien, ERP Suite Connect Eingang). null = wie „Sieht Belege: alle“.</summary>
+    public bool? SeeInbound { get; set; }
+    /// <summary>Sieht den Ausgang (über Ausgangsordner gesendete Dateien, ERP Suite Connect Ausgang). null = wie „Sieht Belege: alle“.</summary>
+    public bool? SeeOutbound { get; set; }
     /// <summary>Vorgabe des Admins für MAPI-Mails dieses Benutzers ("" = globaler Standard).</summary>
     public string MapiMode { get; set; } = "";
     /// <summary>Darstellung im Portal: "" = wie das System, "hell", "dunkel". Stellt der Benutzer selbst ein.</summary>

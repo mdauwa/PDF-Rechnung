@@ -24,6 +24,10 @@ public sealed class AppSettings
     public PdfRechnung.Delivery.DeliveryOptions Delivery { get; set; } = new();
     /// <summary>ERP Suite Connect (Webshop-Schnittstelle): Ordner anzeigen und Dateien prüfen.</summary>
     public PdfRechnung.Connect.ConnectOptions Connect { get; set; } = new();
+    /// <summary>Benachrichtigung bei Problemen ohne Reaktion.</summary>
+    public PdfRechnung.Monitoring.AlertOptions Alerts { get; set; } = new();
+    /// <summary>Versandweg Filialverbund: Verteilung an Standorte, Filial-Clients.</summary>
+    public PdfRechnung.Exchange.FilialverbundOptions Filialverbund { get; set; } = new();
 }
 
 /// <summary>

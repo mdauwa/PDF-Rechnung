@@ -514,3 +514,9 @@ table.sender-table input { width: 100%; min-width: 160px; }
 .rd-msgs { list-style: none; padding: 0; margin: .3rem 0; }
 .rd-msgs li { padding: .2rem 0; }
 .rd-actions { margin: .8rem 0; }
+
+/* gotomaxx: Zuordnung Suchwort → Kennbuchstabe */
+.gx-typemap { width: auto; min-width: 26rem; max-width: 40rem; margin: .4rem 0 .8rem; }
+.gx-typemap td { padding: .2rem .4rem; }
+.gx-typemap td:last-child { width: 9rem; }
+.gx-typemap input { width: 100%; box-sizing: border-box; }

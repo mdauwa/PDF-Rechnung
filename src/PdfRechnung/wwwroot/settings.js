@@ -12,6 +12,7 @@ const TABS = [
   ["dienst", "Dienst"],
   ["server", "Server & Zertifikat"],
   ["eingang", "Drucker & Eingang"],
+  ["gotomaxx", "gotomaxx"],
   ["briefpapier", "Briefpapier"],
   ["mail", "E-Mail & Versand"],
   ["mailvorlagen", "Mail-Vorlagen"],
@@ -36,7 +37,7 @@ const TABS = [
 const ST_GROUPS = [
   ["benutzer", "Benutzer", "users", ["benutzer"]],
   ["system", "Dienst & Zugang", "settings", ["dienst", "server", "anmeldung", "benachrichtigung", "api"]],
-  ["belege", "Drucker & Belege", "doc", ["eingang", "briefpapier", "erechnung", "ablage"]],
+  ["belege", "Drucker & Belege", "doc", ["eingang", "gotomaxx", "briefpapier", "erechnung", "ablage"]],
   ["email", "E-Mail", "send", ["mail", "mailvorlagen", "regeln", "mapi", "statuslink"]],
   ["versand", "Versand & Partner", "upload", ["versandwege", "kunden", "filialverbund", "connect"]],
   ["erp", "ERP & Mandanten", "inbox", ["erp", "mandanten"]]
@@ -112,7 +113,7 @@ function drawTab() {
   document.querySelectorAll("#stTabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === ST.tab));
   const body = $("#stBody");
   if (!ST.s) return;
-  const fn = { dienst: tabService, server: tabServer, eingang: tabInbox, briefpapier: tabStationery, mail: tabMail, mailvorlagen: tabTemplates, erechnung: tabInvoice, ablage: tabStorage, benutzer: tabUsers, anmeldung: tabAuth,
+  const fn = { dienst: tabService, server: tabServer, eingang: tabInbox, gotomaxx: tabGotomaxx, briefpapier: tabStationery, mail: tabMail, mailvorlagen: tabTemplates, erechnung: tabInvoice, ablage: tabStorage, benutzer: tabUsers, anmeldung: tabAuth,
     erp: tabErp, mapi: tabMapi, statuslink: tabStatusLink, regeln: tabRules, mandanten: tabMandanten, versandwege: tabDelivery, kunden: tabCustomers, connect: tabConnect,
     benachrichtigung: tabAlerts, api: tabApi, filialverbund: tabFilialverbund }[ST.tab] || tabService;
   body.innerHTML = fn();
@@ -641,8 +642,12 @@ function tabInbox() {
          Belegpost schreibt deshalb mit, wann welche <code>wwa.exe</code> die Druckwarteschlange aufruft (Windows-Ereignisablaufverfolgung), und ordnet den Druck
          der Benutzernummer aus deren Befehlszeile zu – wie <code>@@pb000@@</code>. <b>Steuerzeichen im Druck (<code>@@pb@@</code>, <code>@@pu@@</code>) haben Vorrang.</b>
          Drucken zwei Benutzer im selben Moment, bekommt der Vorgang eine Warnung.</p>
-       <div id="printerOrigin"></div>`) +
-    section("Weiterleitung an gotomaxx PDFMAILER", gotomaxxSection()) +
+       <div id="printerOrigin"></div>`);
+}
+
+/** Alles rund um gotomaxx PDFMAILER: Weiterleitung (mit Freigabe) und Protokoll-Anbindung. */
+function tabGotomaxx() {
+  return section("Weiterleitung an gotomaxx PDFMAILER", gotomaxxSection()) +
     section("gotomaxx-Protokoll einlesen und ans ERP melden", gotomaxxLogSection());
 }
 
@@ -702,7 +707,8 @@ function gotomaxxLogSection() {
       ${field("Mandant (global)", inText("gotomaxxLog.mandant", "leer = allgemeine ERP-Verbindung"), "Gilt, wenn dem druckenden Benutzer kein Mandant zugewiesen ist (Einstellungen → Benutzer).")}
     </div>
     ${field("Belegart und -nummer im Dokumentnamen (regulärer Ausdruck, Gruppen art und nr)", inText("gotomaxxLog.titlePattern", "Standard"), "Leer = Standard, z. B. „WA-Auftrag (alle Belege) - 20241001 (0NA)“ → Nummer 20241001, Index 0NA20241001.")}
-    <div class="grid3">${L.typeMap.map((m, i) => `${field(i ? "" : "Suchwort im Betreff/Dateinamen", inText(`gotomaxxLog.typeMap.${i}.text`, "Rechnung"))}${field(i ? "" : "3. Stelle im Belegindex", inText(`gotomaxxLog.typeMap.${i}.code`, "R"))}<div></div>`).join("")}</div>
+    <table class="list gx-typemap"><thead><tr><th>Suchwort im Betreff/Dateinamen</th><th>3. Stelle im Belegindex</th></tr></thead>
+      <tbody>${L.typeMap.map((m, i) => `<tr><td>${inText(`gotomaxxLog.typeMap.${i}.text`, "Rechnung")}</td><td>${inText(`gotomaxxLog.typeMap.${i}.code`, "R")}</td></tr>`).join("")}</tbody></table>
     <div class="actions"><button class="btn ghost" data-st="gx-read">Jetzt lesen</button></div>`;
 }
 

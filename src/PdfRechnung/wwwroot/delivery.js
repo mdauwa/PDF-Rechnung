@@ -86,7 +86,7 @@ function channelFields(c, P, bind, own) {
   }
   if (t === "gotomaxx") {
     const printers = ST.data?.printers || [];
-    out += `<div class="grid2">${sel("printer", "gotomaxx-Drucker", [["", own ? "wie global" : "Standarddrucker (Drucker & Eingang)"], ...printers.map(p => [p, p]),
+    out += `<div class="grid2">${sel("printer", "gotomaxx-Drucker", [["", own ? "wie global" : "Standarddrucker (Einstellungen → gotomaxx)"], ...printers.map(p => [p, p]),
       ...(c.printer && !printers.includes(c.printer) ? [[c.printer, c.printer + " (nicht installiert)"]] : [])])}</div>`;
   }
   if (t === "mail") {

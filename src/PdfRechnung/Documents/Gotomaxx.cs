@@ -142,7 +142,7 @@ public sealed class GotomaxxService : BackgroundService
     public async Task<(bool Ok, string Message)> HandOverNowAsync(string id, string by, CancellationToken ct)
     {
         var o = Options;
-        if (!o.Enabled) return (false, "Die Weiterleitung an gotomaxx ist nicht eingerichtet (Einstellungen → Drucker & Eingang).");
+        if (!o.Enabled) return (false, "Die Weiterleitung an gotomaxx ist nicht eingerichtet (Einstellungen → Drucker & Belege → gotomaxx).");
         var v = _store.Update(id, x =>
         {
             if (x.Status is VorgangStatus.Sending or VorgangStatus.Discarded) return false;
@@ -183,7 +183,7 @@ public sealed class GotomaxxService : BackgroundService
             var printer = string.IsNullOrWhiteSpace(v.GotomaxxPrinter) ? o.Printer.Trim() : v.GotomaxxPrinter.Trim();
             string? error = null, how = null;
             if (!o.Enabled) error = "Die Weiterleitung an gotomaxx ist ausgeschaltet.";
-            else if (printer.Length == 0) error = "Kein gotomaxx-Drucker eingestellt (Einstellungen → Drucker & Eingang).";
+            else if (printer.Length == 0) error = "Kein gotomaxx-Drucker eingestellt (Einstellungen → Drucker & Belege → gotomaxx).";
             else
             {
                 try

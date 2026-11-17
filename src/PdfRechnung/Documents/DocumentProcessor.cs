@@ -378,7 +378,7 @@ public sealed class DocumentProcessor
             if (o.Enabled) { target = v.Mail.RoutePrinter ?? ""; why = $"Weiterleitung an gotomaxx ({v.Mail.RouteReason})"; }
             else
             {
-                v.Messages.Add(new CheckMessage(DocumentChecker.Error, $"Versandweg gotomaxx ({v.Mail.RouteReason}), aber die Weiterleitung an gotomaxx ist nicht eingerichtet (Einstellungen → Drucker & Eingang)."));
+                v.Messages.Add(new CheckMessage(DocumentChecker.Error, $"Versandweg gotomaxx ({v.Mail.RouteReason}), aber die Weiterleitung an gotomaxx ist nicht eingerichtet (Einstellungen → Drucker & Belege → gotomaxx)."));
                 v.UpdateStatus();
                 return false;
             }
@@ -406,7 +406,7 @@ public sealed class DocumentProcessor
         }
         if (p.GotomaxxSet && p.GotomaxxPrinter != "0" && !o.Enabled)
         {
-            v.Messages.Add(new CheckMessage(DocumentChecker.Error, "@@pg@@: Die Weiterleitung an gotomaxx ist angefordert, aber nicht eingerichtet (Einstellungen → Drucker & Eingang)."));
+            v.Messages.Add(new CheckMessage(DocumentChecker.Error, "@@pg@@: Die Weiterleitung an gotomaxx ist angefordert, aber nicht eingerichtet (Einstellungen → Drucker & Belege → gotomaxx)."));
             v.UpdateStatus();
         }
         return false;

@@ -17,6 +17,29 @@ public static class VorgangApi
         Owners = a.Authenticated && a.Visible is not null ? a.Visible.ToList() : Array.Empty<string>()
     };
 
+    public sealed record Anlage(int Nr, string Name, long Size, string Path);
+
+    /// <summary>
+    /// Herunterladbare Anlagen: nur Dateien, die im Ordner des Vorgangs liegen (z. B. Anhänge einer normalen E-Mail) –
+    /// keine beliebigen Pfade aus Steuerzeichen.
+    /// </summary>
+    public static List<Anlage> Anlagen(DocumentStore store, Vorgang v)
+    {
+        var dir = Path.GetFullPath(store.DirectoryFor(v)).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var list = new List<Anlage>();
+        for (var i = 0; i < v.Mail.Attachments.Count; i++)
+        {
+            try
+            {
+                var full = Path.GetFullPath(v.Mail.Attachments[i]);
+                if (full.StartsWith(dir, StringComparison.OrdinalIgnoreCase) && File.Exists(full))
+                    list.Add(new Anlage(i, Path.GetFileName(full), new FileInfo(full).Length, full));
+            }
+            catch (Exception) { }
+        }
+        return list;
+    }
+
     public static void Map(WebApplication app)
     {
         var g = app.MapGroup("/api/vorgaenge");
@@ -73,6 +96,8 @@ public static class VorgangApi
             {
                 vorgang = v,
                 hasSendPdf = store.FilePath(id, DocumentStore.SendFile) is not null,
+                // Anlagen, die im Vorgang liegen (z. B. normale E-Mail): Name und Größe zum Herunterladen
+                anlagen = Anlagen(store, v).Select(x => new { nr = x.Nr, name = x.Name, size = x.Size }),
                 mandant = cfg.GetSection("Mandanten").Get<MandantOptions>()?.Find(v.Mandant) is { } md
                     ? new { number = md.Number, name = md.Name, configured = true } : v.Mandant is null ? null : new { number = v.Mandant, name = "", configured = false },
                 mailEnabled = mail.Enabled,
@@ -93,6 +118,13 @@ public static class VorgangApi
             return download == true
                 ? Results.File(path, "application/pdf", name)
                 : Results.File(path, "application/pdf", enableRangeProcessing: true);
+        });
+
+        g.MapGet("/{id}/anlage/{nr:int}", (string id, int nr, DocumentStore store) =>
+        {
+            var v = store.Get(id);
+            var a = v is null ? null : Anlagen(store, v).FirstOrDefault(x => x.Nr == nr);
+            return a is null ? Results.NotFound() : Results.File(a.Path, "application/octet-stream", a.Name);
         });
 
         g.MapGet("/{id}/text", (string id, DocumentStore store) =>

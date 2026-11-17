@@ -489,3 +489,9 @@ table.sender-table input { width: 100%; min-width: 160px; }
 .fv-task { border: 1px solid var(--line, #e3e7ee); border-radius: 10px; padding: 12px 14px; margin: 0 0 12px; }
 .fv-task h5 { margin: 10px 0 4px; font-size: 13px; }
 .fv-wf { border-top: 1px dashed var(--line, #e3e7ee); padding-top: 6px; }
+
+/* normale E-Mail im Vorgang */
+.vd-mail .mail-head th { width: 6rem; }
+.vd-mail .mail-body { white-space: pre-wrap; font-family: inherit; margin: .8rem 0; padding: .8rem; border: 1px solid var(--border); border-radius: 6px; max-height: 50vh; overflow: auto; background: var(--surface-2); }
+.vd-mail .mail-files { list-style: none; padding: 0; margin: .3rem 0; }
+.vd-mail .mail-files li { padding: .3rem 0; border-bottom: 1px solid var(--border); }

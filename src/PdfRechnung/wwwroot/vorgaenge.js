@@ -163,7 +163,7 @@ function drawTable() {
       ${canSel ? `<td class="cb">${selectable(v) ? `<input type="checkbox" data-id="${esc(v.id)}" ${VL.selected.has(v.id) ? "checked" : ""}>` : ""}</td>` : ""}
       ${showMd ? `<td class="nowrap">${esc(v.mandant || "")}</td>` : ""}<td class="nowrap who" title="${esc(v.printUser || v.source || "")}">${esc(v.ownerName || v.printUser || v.source)}</td>
       <td class="nowrap">${fmtDT(v.createdAt)}</td>
-      <td><b>${esc(v.documentType)} ${esc(v.voucherId || "")}</b><small>${esc(v.voucherDate || "")}</small></td>
+      <td>${v.documentType === "E-Mail" && !v.voucherId ? `<b title="E-Mail">✉ ${esc(v.subject || "(ohne Betreff)")}</b><small>E-Mail</small>` : `<b>${esc(v.documentType)} ${esc(v.voucherId || "")}</b><small>${esc(v.voucherDate || "")}</small>`}</td>
       <td>${esc(v.buyerName || "")}<small>${esc(v.buyerId || "")}</small></td>
       <td class="num nowrap">${fmtMoney(v.grossAmount, v.currency)}</td>
       <td>${v.mailEnabled ? esc(listText(v.to)) || '<span class="muted">–</span>' : '<span class="muted">kein Versand</span>'}</td>
@@ -204,7 +204,9 @@ async function renderVorgang(view) {
 function drawVorgang(view, data) {
   const v = data.vorgang, inv = v.invoice || {}, f = inv.fields || {};
   const editable = portal.canSend && !["versendet", "inVersand", "verworfen"].includes(v.status);
-  $("#viewTitle").textContent = v.voucherId ? `${v.documentType} ${v.voucherId}` : (v.mail.fileName || v.originalFileName || v.documentType);
+  const plain = !!v.mail.plain; // normale E-Mail (z. B. „Senden“ aus Word): Mail statt PDF anzeigen
+  $("#viewTitle").textContent = plain ? `E-Mail: ${v.mail.subject || "(ohne Betreff)"}`
+    : v.voucherId ? `${v.documentType} ${v.voucherId}` : (v.mail.fileName || v.originalFileName || v.documentType);
   const msgs = v.messages || [];
   const lvl = { fehler: ["missing", "Fehler"], warnung: ["partial", "Warnung"], info: ["free", "Hinweis"] };
 
@@ -230,7 +232,14 @@ function drawVorgang(view, data) {
     if (portal.gotomaxx && !["inVersand", "verworfen"].includes(v.status) && !(route === "gotomaxx" && !["gotomaxx", "versendet"].includes(v.status)))
       actions.push(`<button class="btn ghost" data-a="gotomaxx" title="Druckt den Beleg auf den gotomaxx-PDFMAILER-Drucker – gotomaxx übernimmt dann den Versand">${["gotomaxx", "versendet"].includes(v.status) ? "Erneut an gotomaxx …" : "An gotomaxx übergeben"}</button>`);
   }
-  actions.push(`<a class="btn ghost" href="api/vorgaenge/${encodeURIComponent(v.id)}/pdf?download=true">PDF herunterladen</a>`);
+  if (plain) {
+    actions.length = 0;
+    if (portal.canSend && portal.userId && !["verworfen"].includes(v.status))
+      actions.push(`<button class="btn" data-a="outlook" title="Öffnet die E-Mail mit allen Anhängen als Entwurf in deinem Outlook (über den Belegpost Melder)">${icon("send")} In Outlook öffnen</button>`);
+    if (portal.canSend && !["versendet", "verworfen"].includes(v.status)) actions.push(`<button class="btn ghost" data-a="verwerfen">Verwerfen</button>`);
+    if (portal.canSend && v.status === "verworfen") actions.push(`<button class="btn ghost" data-a="wiederherstellen">Wiederherstellen</button>`);
+  }
+  else actions.push(`<a class="btn ghost" href="api/vorgaenge/${encodeURIComponent(v.id)}/pdf?download=true">PDF herunterladen</a>`);
   if (portal.isAdmin && ["verworfen", "versendet", "ohneVersand"].includes(v.status)) actions.push(`<button class="btn ghost" data-a="loeschen">Löschen</button>`);
 
   const autoInfo = data.autoSendAt && ["bereit", "warnung"].includes(v.status)
@@ -241,9 +250,29 @@ function drawVorgang(view, data) {
   const n = x => x === null || x === undefined ? "" : Number(x).toLocaleString("de-AT", { maximumFractionDigits: 4 });
   const m2 = x => x === null || x === undefined ? "" : Number(x).toLocaleString("de-AT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  const anl = data.anlagen || [];
+  const size = n => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1).replace(".", ",")} KB` : `${(n / 1048576).toFixed(1).replace(".", ",")} MB`;
+  const mailCard = () => `
+      <div class="vd-pdf card vd-mail">
+        <div class="card-head"><h2>E-Mail</h2><span class="meta-inline">${esc(v.source)}</span></div>
+        <table class="kv mail-head">
+          <tr><th>Von</th><td>${esc(v.ownerName || v.printUser || "–")}${v.printUser && v.ownerName && v.printUser !== v.ownerName ? ` <span class="meta-inline">(${esc(v.printUser)})</span>` : ""}${!v.ownerUserId ? ' <span class="badge partial" title="Diesem Windows-Benutzer ist kein Portal-Benutzer zugeordnet (Einstellungen → Benutzer → Druck-Benutzer)">nicht zugeordnet</span>' : ""}</td></tr>
+          <tr><th>An</th><td>${esc(listText(v.mail.to)) || "–"}</td></tr>
+          ${(v.mail.cc || []).length ? `<tr><th>CC</th><td>${esc(listText(v.mail.cc))}</td></tr>` : ""}
+          ${(v.mail.bcc || []).length ? `<tr><th>BCC</th><td>${esc(listText(v.mail.bcc))}</td></tr>` : ""}
+          <tr><th>Betreff</th><td><b>${esc(v.mail.subject || "(ohne Betreff)")}</b></td></tr>
+          <tr><th>Datum</th><td>${fmtDT(v.createdAt)}</td></tr>
+        </table>
+        ${rteIsHtml(v.mail.body) ? `<div class="rte-view mail-body">${rteClean(v.mail.body).html}</div>`
+          : `<pre class="mail-body">${esc(v.mail.body || "")}</pre>`}
+        <h3>Anhänge (${anl.length})</h3>
+        ${anl.length ? `<ul class="mail-files">${anl.map(a => `<li><a href="api/vorgaenge/${encodeURIComponent(v.id)}/anlage/${a.nr}" download>${esc(a.name)}</a> <span class="meta-inline">${size(a.size)}</span></li>`).join("")}</ul>`
+          : '<p class="meta">Keine Anhänge.</p>'}
+      </div>`;
+
   view.innerHTML = `
     <div class="vd">
-      <div class="vd-pdf card">
+      ${plain ? mailCard() : `<div class="vd-pdf card">
         <div class="card-head"><h2>Vorschau</h2>
           ${data.hasSendPdf ? `<div class="pdf-switch"><button data-pdf="versand" class="active">Versand-PDF</button><button data-pdf="original">Original</button></div>` : ""}
           <span class="meta-inline">${v.pages} Seite(n) · ${esc(v.source)}${v.originalFileName ? " · " + esc(v.originalFileName) : ""}
@@ -253,7 +282,7 @@ function drawVorgang(view, data) {
         <p class="help" id="vdPdfHelp">${data.hasSendPdf
           ? `Versand-PDF: so geht der Beleg hinaus – ${v.removedCodes ? `${v.removedCodes} Steuerzeichen entfernt` : "keine Steuerzeichen"}${v.stationery ? `, Briefpapier „${esc(v.stationery)}“` : ", ohne Briefpapier"}.`
           : "Kein Versand-PDF – bitte die Meldungen prüfen und „Neu prüfen“."}</p>
-      </div>
+      </div>`}
       <div class="vd-side">
         <div class="card">
           <div class="card-head"><h2>Status</h2>${badge(v.status)}</div>
@@ -271,7 +300,7 @@ function drawVorgang(view, data) {
           <p class="meta">Lade Zeitstrahl …</p>
         </div>
 
-        <div class="card">
+        ${plain ? "" : `<div class="card">
           <div class="card-head"><h2>Versand</h2>${editable ? `<label class="check"><input type="checkbox" id="mEnabled" ${v.mail.enabled ? "checked" : ""}> per E-Mail versenden</label>` : (v.mail.enabled ? "" : '<span class="badge free">kein Versand</span>')}</div>
           <div class="mailform">
             <label class="field"><span class="lbl">An</span><input id="mTo" value="${esc(listText(v.mail.to))}" ${editable ? "" : "readonly"} placeholder="empfaenger@kunde.at; weitere@kunde.at"></label>
@@ -316,16 +345,16 @@ function drawVorgang(view, data) {
             ${inv.prepaidAmount ? `<tr><th>Bereits bezahlt</th><td class="num">${m2(inv.prepaidAmount)}</td></tr>` : ""}
             ${inv.duePayableAmount !== null && inv.duePayableAmount !== undefined ? `<tr><th>Offen</th><td class="num">${m2(inv.duePayableAmount)}</td></tr>` : ""}
           </table>` : ""}
-        </div>
+        </div>`}
 
         <div class="card">
           <details><summary><b>Verlauf</b> (${(v.history || []).length})</summary>
             <table class="list mini">${(v.history || []).slice().reverse().map(h => `<tr><td class="nowrap">${fmtDT(h.at)}</td><td>${esc(h.by)}</td><td>${esc(h.action)}</td><td>${esc(h.text || "")}</td></tr>`).join("")}</table>
           </details>
-          <details><summary><b>Steuerzeichen</b> (${(v.codes || []).length})</summary>
+          ${plain ? "" : `<details><summary><b>Steuerzeichen</b> (${(v.codes || []).length})</summary>
             <div class="codes">${(v.codes || []).map(c => `<div><span class="pg">S.${c.page}</span><code>@@${esc(c.code)}${esc(c.value)}@@</code></div>`).join("") || '<p class="meta">Keine Steuerzeichen gefunden.</p>'}</div>
             <p><a href="api/vorgaenge/${encodeURIComponent(v.id)}/text" target="_blank" rel="noopener">Ausgelesenen Text anzeigen</a></p>
-          </details>
+          </details>`}
         </div>
 
         ${rulesCard(v, data.mandant)}

@@ -277,7 +277,8 @@ public static class MelderApi
             var v = store.Get(id);
             if (v is null || !a.CanSee(v)) return Results.NotFound();
             if (a.UserId is null) return Results.BadRequest(new { error = "Nur mit einem Portal-Benutzer möglich (Melder ist an den Benutzer gekoppelt)." });
-            if (!a.Outlook || !a.CanSend) return Results.Json(new { error = "Senden über Outlook ist für dich nicht freigeschaltet – bitte an einen Administrator wenden." }, statusCode: 403);
+            // normale E-Mails öffnen sich immer im eigenen Outlook (wie ein Mailclient) – dafür braucht es keine Outlook-Freigabe
+            if (!a.CanSend || (!a.Outlook && !v.Mail.Plain)) return Results.Json(new { error = "Senden über Outlook ist für dich nicht freigeschaltet – bitte an einen Administrator wenden." }, statusCode: 403);
             if (!v.Mail.Enabled) return Results.BadRequest(new { error = "Für diesen Beleg ist kein E-Mail-Versand vorgesehen." });
             if (v.Status == VorgangStatus.Error) return Results.BadRequest(new { error = "Der Vorgang hat Fehler – bitte zuerst beheben (z. B. Empfänger, Anlagen)." });
             if (hub.Subscribers(a.UserId) == 0) return Results.BadRequest(new { error = "Kein Melder verbunden – bitte den Belegpost Melder auf diesem PC starten." });

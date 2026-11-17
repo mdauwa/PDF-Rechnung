@@ -184,4 +184,27 @@ public sealed class DeliveryTests : IDisposable
         Assert.False(ohne.SeeInbound);
         Assert.True(PdfRechnung.Services.PortalAccess.ForUser(new PortalUser { Id = "d", IsAdmin = true, SeeInbound = false }).SeeInbound);
     }
+
+    [Fact]
+    public void Anlagen_nur_aus_dem_Vorgangsordner()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "pdfr-anl-" + Guid.NewGuid().ToString("N")[..8]); Directory.CreateDirectory(dir);
+        try
+        {
+            var settings = new PdfRechnung.Settings.SettingsStore(dir);
+            var store = new DocumentStore(settings, Microsoft.Extensions.Logging.Abstractions.NullLogger<DocumentStore>.Instance);
+            var v = new Vorgang { Id = "mail1", Mail = new MailData { Plain = true } };
+            var own = Path.Combine(store.DirectoryFor(v), "anlagen"); Directory.CreateDirectory(own);
+            File.WriteAllText(Path.Combine(own, "a.txt"), "hallo");
+            var fremd = Path.Combine(dir, "geheim.txt"); File.WriteAllText(fremd, "x");
+            v.Mail.Attachments.Add(Path.Combine(own, "a.txt"));
+            v.Mail.Attachments.Add(fremd);                                  // z. B. Pfad aus @@ma@@ – nicht herunterladbar
+            v.Mail.Attachments.Add(Path.Combine(own, "..", "..", "x.txt")); // Ausbruch aus dem Ordner
+            var a = Single(VorgangApi.Anlagen(store, v));
+            Assert.Equal(0, a.Nr); Assert.Equal("a.txt", a.Name); Assert.Equal(5, a.Size);
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
+    }
+
+    private static T Single<T>(IEnumerable<T> x) => Assert.Single(x);
 }

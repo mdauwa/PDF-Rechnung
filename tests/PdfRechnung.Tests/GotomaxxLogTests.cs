@@ -42,9 +42,9 @@ public class GotomaxxLogTests
     {
         var o = new GotomaxxLogOptions();
         Assert.Equal(new[] { "0NA20241001" }, GotomaxxLogService.Candidates(o, E("WA-Auftrag (alle Belege) - 20241001 (0NA)", "20241001")));
-        Assert.Equal(new[] { "0NR4711" }, GotomaxxLogService.Candidates(o, E("Rechnung - 4711", "4711")));
-        Assert.Equal(new[] { "0NL4711" }, GotomaxxLogService.Candidates(o, E("Lieferschein 4711", "4711")));
-        Assert.Equal(new[] { "0NR4711", "0NL4711", "0NA4711", "0NN4711", "0Nb4711" }, GotomaxxLogService.Candidates(o, E("Beleg - 4711", "4711")));
+        Assert.Equal(new[] { "0NR 1234567" }, GotomaxxLogService.Candidates(o, E("Rechnung - 1234567", "1234567")));
+        Assert.Equal(new[] { "0NL    4711" }, GotomaxxLogService.Candidates(o, E("Lieferschein 4711", "4711")));
+        Assert.Equal(new[] { "0NR    4711", "0NL    4711", "0NA    4711", "0NN    4711", "0Nb    4711" }, GotomaxxLogService.Candidates(o, E("Beleg - 4711", "4711")));
     }
 
     private sealed class NoServices : IServiceProvider { public object? GetService(Type t) => null; }

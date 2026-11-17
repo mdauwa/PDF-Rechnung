@@ -671,6 +671,7 @@ function gotomaxxLogSection() {
     <div class="grid3">
       ${field("Anfang des Belegindex", inText("gotomaxxLog.indexPrefix", "0N"), "Wenn er nicht im Dokumentnamen steht, z. B. „(0NA)“.")}
       ${field("Suchreihenfolge der Belegart", inText("gotomaxxLog.searchOrder", "R, L, A, N, b"), "Wenn die Belegart nicht im Namen steht: Rechnung, Lieferschein, Auftrag, Angebot, Bestellung.")}
+      ${field("Stellen der Belegnummer", inNum("gotomaxxLog.numberWidth", 0, 20), "Kürzere Nummern rechtsbündig mit Leerzeichen, z. B. „0NR 1234567“ (Standard 8).")}
       ${field("Mandant", inText("gotomaxxLog.mandant", "leer = allgemeine ERP-Verbindung"))}
     </div>
     ${field("Belegart und -nummer im Dokumentnamen (regulärer Ausdruck, Gruppen art und nr)", inText("gotomaxxLog.titlePattern", "Standard"), "Leer = Standard, z. B. „WA-Auftrag (alle Belege) - 20241001 (0NA)“ → Nummer 20241001, Index 0NA20241001.")}

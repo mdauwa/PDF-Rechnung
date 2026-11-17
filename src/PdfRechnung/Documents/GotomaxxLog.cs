@@ -26,6 +26,8 @@ public sealed class GotomaxxLogOptions
     public string IndexPrefix { get; set; } = "0N";
     /// <summary>Wort im Dokumentnamen → Belegart-Kennbuchstabe im Index, z. B. „Rechnung=R“.</summary>
     public List<GotomaxxTypeMapping> TypeMap { get; set; } = DefaultTypeMap();
+    /// <summary>Stellen der Belegnummer im Index: kürzere Nummern rechtsbündig mit Leerzeichen, z. B. „0NR 1234567“.</summary>
+    public int NumberWidth { get; set; } = 8;
     /// <summary>Lässt sich die Belegart nicht erraten: in dieser Reihenfolge suchen.</summary>
     public string SearchOrder { get; set; } = "R, L, A, N, b";
 
@@ -381,7 +383,9 @@ public sealed class GotomaxxLogService : BackgroundService
     /// </summary>
     public static List<string> Candidates(GotomaxxLogOptions o, GotomaxxLogEntry e)
     {
-        var nr = e.DocNumber ?? "";
+        var raw = (e.DocNumber ?? "").Trim();
+        // Belegnummer rechtsbündig: kürzere Nummern mit Leerzeichen auffüllen („0NR 1234567“)
+        var nr = o.NumberWidth > 0 && raw.Length < o.NumberWidth ? raw.PadLeft(o.NumberWidth) : raw;
         var list = new List<string>();
         var text = e.Source ?? "";
         var idx = Regex.Match(text, @"\((?<idx>[0-9A-Za-z]{2}[A-Za-z])\)\s*(?:\.pdf)?\s*$");

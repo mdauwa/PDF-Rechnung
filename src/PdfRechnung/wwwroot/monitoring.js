@@ -262,6 +262,12 @@ function fvStandort(i) {
 /* ---------------- Ereignisse ---------------- */
 
 function monitorInput(el, e) {
+  if (el.dataset && el.dataset.gxprof !== undefined) {
+    const L = (ST.s.gotomaxxLog ||= {});
+    L.profiles = (L.profiles || []).filter(x => x !== el.dataset.gxprof);
+    if (el.checked) L.profiles.push(el.dataset.gxprof);
+    markDirty(); return true;
+  }
   if (el.dataset?.fvlist) {
     set(ST.s, el.dataset.fvlist, el.value.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean));
     markDirty(); return true;

@@ -12,6 +12,9 @@ public sealed class GotomaxxLogOptions
     public bool Enabled { get; set; }
     /// <summary>Ordner der gotomaxx-Protokolle (usage_*.dat). Leer = C:\ProgramData\gotomaxx\pdfmailer6.</summary>
     public string Folder { get; set; } = "";
+    /// <summary>Überwachte Drucker (gotomaxx-Profile). Leer = alle.</summary>
+    public List<string> Profiles { get; set; } = new();
+    public bool Watches(string profile) => Profiles.Count == 0 || Profiles.Any(p => string.Equals(p.Trim(), profile, StringComparison.OrdinalIgnoreCase));
     /// <summary>Wie oft gelesen wird (Sekunden).</summary>
     public int IntervalSeconds { get; set; } = 60;
     /// <summary>Beim ersten Lesen so viele Tage zurück übernehmen.</summary>
@@ -152,9 +155,11 @@ public sealed class GotomaxxLogService : BackgroundService
         if (File.Exists(copy + "-shm")) File.Delete(copy + "-shm");
 
         long last; List<long> open;
+        var marks = Marks();
         using (var c = _db.Open())
         {
-            last = BelegpostDb.Scalar(c, "SELECT MAX(eintrag_id) FROM gotomaxx_protokoll WHERE datei=@d", ("@d", name)) is long l ? l : -1;
+            var stored = BelegpostDb.Scalar(c, "SELECT MAX(eintrag_id) FROM gotomaxx_protokoll WHERE datei=@d", ("@d", name)) is long l ? l : -1;
+            last = Math.Max(stored, marks.TryGetValue(name, out var m) ? m : -1);
             open = new();
             using var cmd = BelegpostDb.Cmd(c, "SELECT eintrag_id FROM gotomaxx_protokoll WHERE datei=@d AND status=0 AND zeit > @z", ("@d", name), ("@z", BelegpostDb.Ms(DateTimeOffset.Now.AddDays(-2))));
             using var r = cmd.ExecuteReader();
@@ -177,6 +182,11 @@ public sealed class GotomaxxLogService : BackgroundService
                     r.IsDBNull(4) ? null : r.GetString(4), r.IsDBNull(5) ? 0 : r.GetInt64(5), r.IsDBNull(6) ? -1 : (int)r.GetInt64(6), r.IsDBNull(7) ? null : r.GetString(7)));
         }
         if (rows.Count == 0) return 0;
+        // Bis hierher gelesen – auch Einträge nicht überwachter Drucker nicht erneut lesen
+        marks[name] = Math.Max(last, rows.Max(x => x.Id));
+        SaveMarks(marks);
+        rows = rows.Where(x => o.Watches(x.Profile)).ToList();
+        if (rows.Count == 0) return 0;
         using (var c = _db.Open())
         using (var tx = c.BeginTransaction())
         {
@@ -196,6 +206,44 @@ public sealed class GotomaxxLogService : BackgroundService
             tx.Commit();
         }
         return rows.Count;
+    }
+
+    private string MarksFile => Path.Combine(Path.GetDirectoryName(_temp)!, "..", "gotomaxx-stand.json");
+    private Dictionary<string, long> Marks()
+    {
+        try { return File.Exists(MarksFile) ? System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, long>>(File.ReadAllText(MarksFile)) ?? new() : new(); }
+        catch (Exception) { return new(); }
+    }
+    private void SaveMarks(Dictionary<string, long> m)
+    {
+        try { File.WriteAllText(MarksFile, System.Text.Json.JsonSerializer.Serialize(m)); } catch (Exception) { }
+    }
+
+    /// <summary>Alle gotomaxx-Profile in den Protokolldateien (für die Auswahl in den Einstellungen).</summary>
+    public List<string> AvailableProfiles()
+    {
+        var o = _opt.CurrentValue;
+        var set = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            if (!Directory.Exists(o.FolderOrDefault)) return set.ToList();
+            Directory.CreateDirectory(_temp);
+            foreach (var path in Directory.GetFiles(o.FolderOrDefault, "usage_*.dat"))
+            {
+                var copy = Path.Combine(_temp, "liste_" + Path.GetFileName(path));
+                File.Copy(path, copy, true);
+                if (File.Exists(path + "-wal")) File.Copy(path + "-wal", copy + "-wal", true);
+                using var g = new SqliteConnection($"Data Source={copy};Pooling=False");
+                g.Open();
+                using var cmd = g.CreateCommand();
+                cmd.CommandText = "SELECT DISTINCT profileName FROM Entry WHERE profileName IS NOT NULL";
+                using var r = cmd.ExecuteReader();
+                while (r.Read()) set.Add(r.GetString(0));
+            }
+        }
+        catch (Exception ex) { _log.LogInformation(ex, "gotomaxx-Profile lesen"); }
+        foreach (var p in ProfileNames()) set.Add(p);
+        return set.ToList();
     }
 
     /// <summary>Portal-Benutzer zum Windows-Benutzer im gotomaxx-Protokoll (Druck-Benutzer bzw. Anmeldename, ohne Domäne).</summary>
@@ -391,13 +439,27 @@ public sealed class GotomaxxLogService : BackgroundService
         var idx = Regex.Match(text, @"\((?<idx>[0-9A-Za-z]{2}[A-Za-z])\)\s*(?:\.pdf)?\s*$");
         if (idx.Success) { list.Add(idx.Groups["idx"].Value + nr); return list; }
         var prefix = string.IsNullOrWhiteSpace(o.IndexPrefix) ? "0N" : o.IndexPrefix.Trim();
-        var map = (o.TypeMap.Count > 0 ? o.TypeMap : GotomaxxLogOptions.DefaultTypeMap()).Where(m => m.Text.Trim().Length > 0 && m.Code.Trim().Length > 0).ToList();
-        var guessed = map.Where(m => text.Contains(m.Text.Trim(), StringComparison.OrdinalIgnoreCase)).Select(m => m.Code.Trim()).Distinct().ToList();
+        var map = (o.TypeMap.Count > 0 ? o.TypeMap : GotomaxxLogOptions.DefaultTypeMap()).Select(SplitMapping)
+            .Where(m => m.Text.Length > 0 && m.Code.Length > 0).ToList();
+        // Gesucht wird nach dem Wort („Angebot“), der Kennbuchstabe („N“) kommt an die 3. Stelle des Index
+        var hay = text + " " + (e.DocType ?? "");
+        var guessed = map.Where(m => hay.Contains(m.Text, StringComparison.OrdinalIgnoreCase)).Select(m => m.Code).Distinct().ToList();
         var order = guessed.Count > 0 ? guessed
             : (o.SearchOrder ?? "").Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
         if (order.Count == 0) order = new() { "R", "L", "A", "N", "b" };
         foreach (var art in order) { var c = prefix + art + nr; if (!list.Contains(c)) list.Add(c); }
         return list;
+    }
+
+    /// <summary>„Angebot (N)“ im Suchwort: Klammer abtrennen, Buchstabe in der Klammer gilt als Kennbuchstabe.</summary>
+    private static (string Text, string Code) SplitMapping(GotomaxxTypeMapping m)
+    {
+        var text = (m.Text ?? "").Trim(); var code = (m.Code ?? "").Trim();
+        var k = Regex.Match(text, @"^(?<t>.*?)\s*\((?<c>[A-Za-z])\)$");
+        if (k.Success) { text = k.Groups["t"].Value.Trim(); if (code.Length == 0) code = k.Groups["c"].Value; }
+        var kc = Regex.Match(code, @"^\(?(?<c>[A-Za-z])\)?$");
+        if (kc.Success) code = kc.Groups["c"].Value;
+        return (text, code);
     }
 
     /// <summary>Vorgang, den Belegpost an gotomaxx übergeben hat: gleicher Dokumentname, vor dem Protokolleintrag übergeben.</summary>
@@ -507,7 +569,8 @@ public sealed class GotomaxxLogService : BackgroundService
             using var cmd = BelegpostDb.Cmd(c, "SELECT DISTINCT profil FROM gotomaxx_protokoll ORDER BY profil COLLATE NOCASE");
             using var r = cmd.ExecuteReader();
             var list = new List<string>();
-            while (r.Read()) list.Add(r.GetString(0));
+            var o = _opt.CurrentValue;
+            while (r.Read()) if (o.Watches(r.GetString(0))) list.Add(r.GetString(0));
             return list;
         }
         catch (Exception) { return new(); }

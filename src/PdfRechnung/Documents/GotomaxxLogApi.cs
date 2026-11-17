@@ -61,6 +61,9 @@ public static class GotomaxxLogApi
             return Results.Ok(new { ok = true });
         });
 
+        app.MapGet("/api/admin/gotomaxx-protokoll/profile", (HttpContext ctx, GotomaxxLogService log) =>
+            Settings.AdminApi.IsAdmin(ctx) ? Results.Ok(log.AvailableProfiles()) : Results.Json(new { error = "Keine Berechtigung." }, statusCode: 403));
+
         app.MapPost("/api/admin/gotomaxx-protokoll/lesen", async (HttpContext ctx, GotomaxxLogService log, CancellationToken ct) =>
         {
             if (!Settings.AdminApi.IsAdmin(ctx)) return Results.Json(new { error = "Keine Berechtigung." }, statusCode: 403);

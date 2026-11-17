@@ -45,6 +45,11 @@ public class GotomaxxLogTests
         Assert.Equal(new[] { "0NR 1234567" }, GotomaxxLogService.Candidates(o, E("Rechnung - 1234567", "1234567")));
         Assert.Equal(new[] { "0NL    4711" }, GotomaxxLogService.Candidates(o, E("Lieferschein 4711", "4711")));
         Assert.Equal(new[] { "0NR    4711", "0NL    4711", "0NA    4711", "0NN    4711", "0Nb    4711" }, GotomaxxLogService.Candidates(o, E("Beleg - 4711", "4711")));
+        // Gesucht wird nach dem Wort, der Buchstabe kommt an die 3. Stelle
+        Assert.Equal(new[] { "0NN    4711" }, GotomaxxLogService.Candidates(o, E("Angebot - 4711", "4711")));
+        Assert.Equal(new[] { "0Nb    4711" }, GotomaxxLogService.Candidates(o, E("Bestellung 4711.pdf", "4711")));
+        var falsch = new GotomaxxLogOptions { TypeMap = { new() { Text = "Angebot (N)", Code = "" } } };
+        Assert.Equal(new[] { "0NN    4711" }, GotomaxxLogService.Candidates(falsch, E("Angebot - 4711", "4711")));
     }
 
     private sealed class NoServices : IServiceProvider { public object? GetService(Type t) => null; }
@@ -72,6 +77,8 @@ public class GotomaxxLogTests
                     cmd.Parameters.AddWithValue("$s", src); cmd.Parameters.AddWithValue("$t", now); cmd.Parameters.AddWithValue("$st", st); cmd.Parameters.AddWithValue("$d", det);
                     cmd.ExecuteNonQuery();
                 }
+                cmd.CommandText = "INSERT INTO Entry(profileName,user,computer,source,timestamp,state,detail) VALUES('Lager','x','PC2','Rechnung - 1',$t,3,'')";
+                cmd.Parameters.Clear(); cmd.Parameters.AddWithValue("$t", now); cmd.ExecuteNonQuery();
             }
             var settings = new SettingsStore(dir);
             var store = new DocumentStore(settings, NullLogger<DocumentStore>.Instance);
@@ -80,7 +87,7 @@ public class GotomaxxLogTests
             var hub = new PdfRechnung.Services.EventHub();
             var sub = hub.Subscribe("u1", null);
             var erp = new ErpFeedbackService(store.Db, store, settings, new StaticOptions<PdfRechnung.ErpOptions>(new PdfRechnung.ErpOptions()), new NoServices(), NullLogger<ErpFeedbackService>.Instance);
-            var opt = new GotomaxxLogOptions { Enabled = true, Folder = gx };
+            var opt = new GotomaxxLogOptions { Enabled = true, Folder = gx, Profiles = { "Rechnungsversand" } };
             var log = new GotomaxxLogService(store.Db, store, new StaticOptions<GotomaxxLogOptions>(opt), erp, settings, NullLogger<GotomaxxLogService>.Instance, users, hub);
             Assert.Equal(2, await log.ScanAsync(CancellationToken.None));
             Assert.Null(log.State.Error);
@@ -95,7 +102,9 @@ public class GotomaxxLogTests
             Assert.Equal("hinweis", ev!.Kind);
             Assert.Single(log.List(null, null, "fehler", null, null, owners: new[] { "u1" }));
             Assert.Empty(log.List(null, null, null, null, null, owners: new[] { "u2" }));
-            Assert.Equal(0, await log.ScanAsync(CancellationToken.None)); // nichts Neues
+            Assert.Equal(0, await log.ScanAsync(CancellationToken.None)); // nichts Neues, auch „Lager“ nicht erneut gelesen
+            Assert.Equal(new[] { "Rechnungsversand" }, log.ProfileNames());
+            Assert.Equal(new[] { "Lager", "Rechnungsversand" }, log.AvailableProfiles());
         }
         finally { try { Directory.Delete(dir, true); } catch { } }
     }

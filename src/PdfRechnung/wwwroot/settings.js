@@ -646,6 +646,21 @@ function tabInbox() {
     section("gotomaxx-Protokoll einlesen und ans ERP melden", gotomaxxLogSection());
 }
 
+let GXP = null;
+async function loadGxProfiles() {
+  try { GXP = await api("GET", "api/admin/gotomaxx-protokoll/profile"); } catch { GXP = []; }
+  const box = document.getElementById("gxProfiles"); if (box && ST.s) box.innerHTML = gxProfilesInner(ST.s.gotomaxxLog);
+}
+function gxProfilesInner(L) {
+  const sel = L.profiles || [];
+  const all = [...new Set([...(GXP || []), ...sel])].sort((a, b) => a.localeCompare(b, "de"));
+  if (GXP === null) { loadGxProfiles(); return '<span class="meta-inline">Lade Drucker aus den Protokollen …</span>'; }
+  return (all.length ? all.map(p => `<label class="check"><input type="checkbox" data-gxprof="${esc(p)}" ${sel.includes(p) ? "checked" : ""}> ${esc(p)}</label>`).join("")
+    : '<span class="meta-inline">In den Protokollen wurde noch kein Drucker gefunden.</span>')
+    + `<p class="help">Keiner angehakt = alle Drucker überwachen. Gelistet werden die gotomaxx-Profile aus den Protokolldateien.</p>`;
+}
+function gxProfilesHtml(L) { return `<div id="gxProfiles">${gxProfilesInner(L)}</div>`; }
+
 function gotomaxxLogSection() {
   ST.s.gotomaxxLog ||= {};
   const L = ST.s.gotomaxxLog;
@@ -655,6 +670,8 @@ function gotomaxxLogSection() {
       Je Eintrag: Dokument, Windows-Benutzer, Rechner, ob gespeichert/gedruckt/gemailt wurde oder welcher Fehler auftrat.
       Belege, die Belegpost an gotomaxx übergeben hat, bekommen ihr Ergebnis im Vorgang (versendet bzw. Fehler 840) und melden über die ERP-Rückmeldung.
       Direkt aus dem ERP gedruckte Belege: Belegpost errät den Belegindex aus dem Dokumentnamen und prüft ihn im ERP (BELEG.GET).</p>
+    <h4>Überwachte Drucker</h4>
+    ${gxProfilesHtml(L)}
     <div class="grid3">
       ${field("Protokollordner", inText("gotomaxxLog.folder", "C:\\ProgramData\\gotomaxx\\pdfmailer6"), "Leer = C:\\ProgramData\\gotomaxx\\pdfmailer6")}
       ${field("Lesen alle … Sekunden", inNum("gotomaxxLog.intervalSeconds", 15, 3600))}
@@ -670,12 +687,12 @@ function gotomaxxLogSection() {
     ${inCheck("gotomaxxLog.lookupErp", "Belegindex aus dem Dokumentnamen erraten und im ERP prüfen")}
     <div class="grid3">
       ${field("Anfang des Belegindex", inText("gotomaxxLog.indexPrefix", "0N"), "Wenn er nicht im Dokumentnamen steht, z. B. „(0NA)“.")}
-      ${field("Suchreihenfolge der Belegart", inText("gotomaxxLog.searchOrder", "R, L, A, N, b"), "Wenn die Belegart nicht im Namen steht: Rechnung, Lieferschein, Auftrag, Angebot, Bestellung.")}
+      ${field("Suchreihenfolge der Belegart", inText("gotomaxxLog.searchOrder", "R, L, A, N, b"), "Kennbuchstaben (3. Stelle), wenn kein Suchwort passt: R = Rechnung, L = Lieferschein, A = Auftrag, N = Angebot, b = Bestellung.")}
       ${field("Stellen der Belegnummer", inNum("gotomaxxLog.numberWidth", 0, 20), "Kürzere Nummern rechtsbündig mit Leerzeichen, z. B. „0NR 1234567“ (Standard 8).")}
       ${field("Mandant", inText("gotomaxxLog.mandant", "leer = allgemeine ERP-Verbindung"))}
     </div>
     ${field("Belegart und -nummer im Dokumentnamen (regulärer Ausdruck, Gruppen art und nr)", inText("gotomaxxLog.titlePattern", "Standard"), "Leer = Standard, z. B. „WA-Auftrag (alle Belege) - 20241001 (0NA)“ → Nummer 20241001, Index 0NA20241001.")}
-    <div class="grid3">${L.typeMap.map((m, i) => `${field(i ? "" : "Wort im Namen", inText(`gotomaxxLog.typeMap.${i}.text`, "Rechnung"))}${field(i ? "" : "Belegart", inText(`gotomaxxLog.typeMap.${i}.code`, "R"))}<div></div>`).join("")}</div>
+    <div class="grid3">${L.typeMap.map((m, i) => `${field(i ? "" : "Suchwort im Betreff/Dateinamen", inText(`gotomaxxLog.typeMap.${i}.text`, "Rechnung"))}${field(i ? "" : "3. Stelle im Belegindex", inText(`gotomaxxLog.typeMap.${i}.code`, "R"))}<div></div>`).join("")}</div>
     <div class="actions"><button class="btn ghost" data-st="gx-read">Jetzt lesen</button></div>`;
 }
 

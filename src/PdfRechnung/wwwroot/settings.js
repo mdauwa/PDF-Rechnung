@@ -357,7 +357,7 @@ async function onAction(e) {
       case "eq-page": EQ.offset = Math.max(0, EQ.offset + (+btn.dataset.dir) * EQ.limit); loadErpQueue(); break;
       case "eq-reload": loadErpQueue(); break;
       case "eq-goto": stGoto("erpqueue"); break;
-      case "lic-check": { const r = await api("POST", "api/admin/lizenz/pruefen"); drawLicense(r); msg(r.lastError ? r.lastError : "Lizenz abgerufen.", !r.lastError); if (typeof loadLicenseBanner === "function") loadLicenseBanner(); break; }
+      case "lic-check": { const r = await api("POST", "api/admin/lizenz/pruefen"); drawLicense(r); msg(r.lastError ? r.lastError : "Lizenz aktualisiert.", !r.lastError); if (typeof loadLicenseBanner === "function") loadLicenseBanner(); break; }
       case "lic-copy": try { await navigator.clipboard.writeText(btn.dataset.v); toast("Kopiert"); } catch { msg("Bitte markieren und kopieren: " + btn.dataset.v); } break;
       case "dms-check": { const r = await api("POST", "api/admin/ablage/pruefen", { folder: ST.s.storage?.documentFolder || "" }); msg(r.message, true); break; }
       case "dms-move":
@@ -1666,9 +1666,7 @@ function drawLicense(l) {
       <tr><th>eRechnung</th><td>${yes(l.eRechnung, "ZUGFeRD/XRechnung, Rechnungsdaten")}</td></tr>
       <tr><th>Datenaustausch</th><td>${yes(l.datenaustausch, "Filialverbund, FTP/SFTP, Austausch-API")}</td></tr>
       <tr><th>Module laut Lizenz</th><td>${l.modules?.length ? l.modules.map(esc).join(", ") : "–"}</td></tr>
-      <tr><th>Abfrage</th><td>${esc(l.checkEvery)}${l.nextCheck ? ` · nächste ${fmtDT(l.nextCheck)}` : ""}</td></tr>
-      <tr><th>Zuletzt bestätigt</th><td>${l.lastSuccess ? fmtDT(l.lastSuccess) : "noch nie"}${l.graceEnd ? `<br><small>ohne Verbindung gültig bis ${fmtDT(l.graceEnd)}</small>` : ""}</td></tr>
-      <tr><th>Letzter Versuch</th><td>${l.lastAttempt ? fmtDT(l.lastAttempt) : "–"}${l.lastError ? `<br><span class="bad">${esc(l.lastError)}</span>` : ""}</td></tr>
+      <tr><th>Letzte Aktualisierung</th><td>${l.lastSuccess ? fmtDT(l.lastSuccess) : "noch nie"}${l.lastError ? `<br><span class="bad">${esc(l.lastError)}</span>` : ""}</td></tr>
     </table>
     </div>
     <details class="lic-tech"><summary>Technische Angaben</summary>
@@ -1676,11 +1674,10 @@ function drawLicense(l) {
       <tr><th>Produkt</th><td>${esc(l.productCode)} · ${esc(l.productId)}${l.tokenEmbedded ? "" : ` · <span class="bad">kein Registrierungstoken eingebaut</span>`}</td></tr>
       <tr><th>Installation</th><td class="mono">${esc(l.installationId || "noch nicht registriert")}</td></tr>
       <tr><th>Client</th><td class="mono">${esc(l.clientId)}</td></tr>
-      <tr><th>Lizenzserver</th><td class="mono">${esc(l.server)}</td></tr>
     </table></details>
-    <p class="help">Belegpost meldet sich beim ersten Start selbst beim Lizenzserver an (Port 443, sonst 8889) und fragt die Lizenz in den ersten 30 Tagen täglich, danach wöchentlich ab – bei Störung stündlich erneut.
+    <p class="help">Belegpost meldet sich selbst beim Lizenzserver an und aktualisiert die Lizenz regelmäßig.
       Freischaltung, Module, Abo und Updateberechtigung legt der Hersteller fest; dafür bei Bedarf den Lizenzcode angeben.
-      Ohne Verbindung gilt die zuletzt bestätigte Lizenz 14 Tage weiter. Ohne gültige Lizenz nimmt Belegpost Drucke weiter an, versendet aber nichts und meldet nichts ans ERP – nach der Freischaltung geht es automatisch weiter.</p>`;
+      Ohne gültige Lizenz nimmt Belegpost Drucke weiter an, versendet aber nichts und meldet nichts ans ERP – nach der Freischaltung geht es automatisch weiter.</p>`;
 }
 
 /* ---------------- Tab: ERP-Warteschlange (seitenweise) ---------------- */

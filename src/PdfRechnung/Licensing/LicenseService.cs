@@ -231,17 +231,14 @@ public sealed class LicenseService : BackgroundService
         return new
         {
             mode = g.Mode, reason = g.Reason, @base = g.Base, eRechnung = g.EInvoice, datenaustausch = g.Exchange,
-            productCode = ProductCode, productId = ProductId, productVersion = ProductVersion, server = s.Server ?? string.Join(" / ", Servers),
+            productCode = ProductCode, productId = ProductId, productVersion = ProductVersion,
             tokenEmbedded = RegistrationToken is not null,
             s.LicenseCode, s.InstallationId, s.ClientId, s.CustomerNumber, s.Active, modules = s.ModuleNames, moduleCodes = s.Modules,
             status = s.Status, statusText = StatusText(s.Status, s.BlockReason), s.LicenseModel, s.Blocked, s.BlockReason,
             s.UpdatesAllowed, validUntil = s.ValidUntil, updatesAllowedUntil = s.UpdatesAllowedUntil,
             s.ReportedVersion, s.VersionAllowed, s.VersionStatus, versionText = VersionText(s.VersionStatus),
-            s.LastSuccess, s.LastAttempt, s.LastError, s.FirstStart,
-            nextCheck = (s.LastSuccess is { } ls ? ls + CheckInterval : (DateTimeOffset?)null),
-            checkEvery = CheckInterval.TotalDays >= 7 ? "wöchentlich" : "täglich",
-            trialEnd = s.EverActive ? (DateTimeOffset?)null : s.FirstStart + TrialPeriod,
-            graceEnd = s.LastSuccess is { } ok ? ok + OfflineGrace : (DateTimeOffset?)null
+            s.LastSuccess, s.LastError,
+            trialEnd = s.EverActive ? (DateTimeOffset?)null : s.FirstStart + TrialPeriod
         };
     }
 
@@ -407,7 +404,9 @@ public sealed class LicenseService : BackgroundService
                 return json.Deserialize<Detail>()!;
             }
         }
-        throw new InvalidOperationException("Lizenzserver nicht erreichbar – " + string.Join("; ", problems));
+        _log.LogWarning("Lizenzserver nicht erreichbar: {Details}", string.Join("; ", problems));
+        throw new InvalidOperationException(problems.Any(p => p.Contains("anderer Dienst"))
+            ? "Lizenzserver nicht erreichbar (unerwartete Antwort)." : "Lizenzserver nicht erreichbar.");
     }
 
     public sealed class LicenseApiException(string? code, int status) : Exception(Describe(code, status))

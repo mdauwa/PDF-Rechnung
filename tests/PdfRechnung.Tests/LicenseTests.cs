@@ -101,7 +101,6 @@ public class LicenseTests : IDisposable
             var server = new FakeServer { Port443 = "html" };
             var svc = new LicenseService(new SettingsStore(_dir), NullLogger<LicenseService>.Instance, server, publishGlobally: false);
             Assert.True(await svc.RefreshAsync(default));
-            Assert.Contains(":8889/", ((dynamic)svc.Status()).server as string + "/");
             Assert.Contains(server.Requests, r => r.RequestUri!.Port == 8889);
 
             server.Port443 = "down"; server.Down = false;
@@ -113,7 +112,8 @@ public class LicenseTests : IDisposable
             { Servers = new[] { "https://license.erpaustria.com/api/v2", "https://license.erpaustria.com:443/x/api/v2" } };
             Directory.CreateDirectory(_dir + "2");
             Assert.False(await svc2.RefreshAsync(default));
-            Assert.Contains("anderer Dienst", ((dynamic)svc2.Status()).LastError as string);
+            Assert.Contains("unerwartete Antwort", ((dynamic)svc2.Status()).LastError as string);
+            Assert.DoesNotContain("8889", ((dynamic)svc2.Status()).LastError as string);
 
             // Sperre wirkt sofort, auch in der Testzeit
             server.Blocked = true; server.Status = "blocked";

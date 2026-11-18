@@ -26,7 +26,7 @@ public static class License
     public static void ResetForTests(LicenseGate? g = null) => _current = g ?? LicenseGate.Unrestricted;
 
     public const string ModuleEInvoice = "bp1000md01";
-    public const string ModuleExchange = "bw1000md02";
+    public const string ModuleExchange = "bp1000md02";
 
     public static string BaseMessage => $"Belegpost ist nicht lizenziert ({Current.Reason}) – Drucke werden angenommen, aber nicht versendet. Einstellungen → Lizenz.";
     public static string EInvoiceMessage => "Das Modul eRechnung ist nicht lizenziert – keine ZUGFeRD/XRechnung. Einstellungen → Lizenz.";

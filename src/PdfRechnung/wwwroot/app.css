@@ -549,7 +549,13 @@ table.sender-table input { width: 100%; min-width: 160px; }
 .settings.wide { max-width: none; }
 .head-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .eq-list { width: 100%; }
-.eq-list .eq-msg { white-space: normal; overflow-wrap: anywhere; word-break: normal; min-width: 240px; }
+.eq-list { table-layout: fixed; }
+.eq-list td { padding-top: 3px !important; padding-bottom: 3px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eq-list .eq-msg { max-width: 0; }
+.eq-list .eq-msg span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eq-list .eq-f { font-size: 11px; color: var(--muted); font-family: ui-monospace, Consolas, monospace; }
+.eq-list .btn.small { padding: 1px 8px; }
+.eq-list .badge { padding-top: 0; padding-bottom: 0; }
 
 /* Blätterleiste */
 .pager { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 12px; }

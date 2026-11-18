@@ -92,7 +92,7 @@ public static class AdminApi
                 localAddresses = NetworkBinding.LocalAddresses(),
                 dataDirectory = store.DataDirectory,
                 inboxFolder = InboxWatcher.ResolveFolder(s.Inbox, store),
-                documentsFolder = docs.Root,
+                documentsFolder = docs.DocumentRoot,
                 setupMode = rt.SetupMode,
                 placeholders = Placeholders.BuiltIn.Select(x => "{" + x + "}").ToArray()
             });

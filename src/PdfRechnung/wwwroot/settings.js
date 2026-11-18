@@ -125,7 +125,7 @@ function drawTab() {
   if (ST.tab === "benutzer" && !ST.devices) loadDevices();
   if (ST.tab === "erp") loadErpStatus();
   if (ST.tab === "erpqueue") loadErpQueue();
-  if (ST.tab === "ablage") loadDocStorage();
+  if (ST.tab === "dienst") loadDocStorage();
   if (ST.tab === "mapi") loadMapiStatus();
   if (ST.tab === "eingang") loadPrinterStatus();
   if (ST.tab === "versandwege") loadDeliveryRuns();
@@ -501,9 +501,15 @@ async function restart() {
 
 function tabService() {
   return section("Windows-Dienst", `<div id="svcBox"><p class="meta">Lade Status …</p></div>`) +
-    section("Speicherort", `<p class="meta">Einstellungen, Schlüssel und Zertifikate liegen in <code>${esc(ST.data.dataDirectory)}</code>,
-      die Vorgänge in <code>${esc(ST.data.documentsFolder)}</code>. Passwörter werden verschlüsselt gespeichert.
-      Bei einem Update der Programmdateien bleiben diese Ordner unverändert.</p>`);
+    section("Speicherort", `<p class="meta">Datenbank, Einstellungen, Schlüssel und Zertifikate liegen lokal in <code>${esc(ST.data.dataDirectory)}</code>.
+      Passwörter werden verschlüsselt gespeichert. Bei einem Update der Programmdateien bleiben die Ordner unverändert.</p>
+      ${field("Belegordner (für alle Mandanten)", inText("storage.documentFolder", "z. B. D:\\Belegpost\\Belege oder \\\\server\\belege"),
+        "Leer = Ordner „vorgaenge“ im Datenordner. Darin legt Belegpost je Mandant automatisch einen Unterordner an: Mandant-4\\JJJJ\\MM\\Vorgang (Nummer ohne Vornullen, Belege ohne Mandant unter „Allgemein“). Die Ordnernamen hängen nur an der Mandantennummer und ändern sich nicht, wenn die Bezeichnung geändert wird.")}
+      <div class="actions"><button class="btn ghost" data-st="dms-check">Ordner prüfen</button></div>
+      <div id="dmsState"><p class="meta">Lade …</p></div>
+      <p class="help">Neue Vorgänge landen nach dem Speichern sofort im neuen Ordner. Vorhandene verschiebt „Vorhandene Belege verschieben“ im Hintergrund –
+        erst kopieren und prüfen, dann umstellen, dann den alten Ordner löschen. Wird einem Vorgang nachträglich ein anderer Mandant zugeordnet, wandert er in dessen Ordner.
+        Den Belegordner beim Virenscanner ausnehmen; bei einer Freigabe braucht das Computerkonto des Servers (Dienst läuft als SYSTEM) Schreibrechte.</p>`);
 }
 
 async function loadService() {
@@ -1164,15 +1170,7 @@ function tabInvoice() {
 /* ---------------- Tab: Ablage ---------------- */
 
 function tabStorage() {
-  return section("Belegordner",
-    `${field("Vorgänge (PDFs, E-Rechnungen, Text) ablegen in", inText("storage.documentFolder", "z. B. D:\\Belegpost\\Belege oder \\\\server\\belege"),
-        "Leer = Ordner „vorgaenge“ im Datenordner. Aufbau: Belegordner\\Mandant-…\\JJJJ\\MM\\Vorgang – so kommen sich gleiche Belegnummern verschiedener Mandanten nicht in die Quere. Datenbank und Schlüssel bleiben im Datenordner (lokal = schnell).")}
-     <div class="actions"><button class="btn ghost" data-st="dms-check">Ordner prüfen</button></div>
-     <div id="dmsState"><p class="meta">Lade …</p></div>
-     <p class="help">Neue Vorgänge landen nach dem Speichern sofort im neuen Ordner. Vorhandene verschiebt „Vorhandene Belege verschieben“ im Hintergrund –
-       erst kopieren und prüfen, dann umstellen, dann den alten Ordner löschen. Ändert sich der Mandant eines Vorgangs, wird er automatisch umgelegt.
-       Den Belegordner beim Virenscanner ausnehmen; bei einer Freigabe braucht das Computerkonto des Servers (Dienst läuft als SYSTEM) Schreibrechte.</p>`) +
-    section("Aufbewahrung",
+  return section("Aufbewahrung",
     `<div class="grid2">${field("Abgeschlossene Vorgänge löschen nach (Tagen)", inNum("storage.retentionDays", 0, 36500), "0 = nie löschen. Betrifft nur versendete, verworfene und Vorgänge ohne Versand.")}</div>
      <p class="help">Das Portal ist kein Archiv im Sinne der Aufbewahrungspflichten – dafür den Exportordner oder das DMS verwenden.</p>`) +
     section("Export",
@@ -1195,7 +1193,7 @@ async function loadDocStorage() {
       ${p.lastError ? `<br><span class="bad">${esc(p.lastError)}</span>` : ""}</p>` : ""}
     <div class="actions">${p.running ? `<button class="btn ghost" data-st="dms-stop">Anhalten</button>`
       : `<button class="btn ghost" data-st="dms-move" ${ST.dirty ? "disabled" : ""}>Vorhandene Belege verschieben …</button>`}</div>`;
-  if (p.running) dmsTimer = setTimeout(() => { if (ST.tab === "ablage") loadDocStorage(); }, 2000);
+  if (p.running) dmsTimer = setTimeout(() => { if (ST.tab === "dienst") loadDocStorage(); }, 2000);
 }
 
 /* ---------------- Tab: ERP Suite Connect ---------------- */
@@ -1631,7 +1629,7 @@ async function loadErpStatus() {
 
 /* ---------------- Tab: ERP-Warteschlange (seitenweise) ---------------- */
 
-const ST_WIDE_TABS = ["erpqueue"];
+const ST_WIDE_TABS = ["erpqueue", "benutzer"];
 
 const EQ = { status: "", q: "", mandant: "", offset: 0, limit: 50, data: null, error: "" };
 const EQ_LABEL = { offen: ["partial", "offen"], erledigt: ["ok", "erledigt"], fehler: ["missing", "Fehler"], ersetzt: ["free", "ersetzt"], verworfen: ["free", "verworfen"] };
@@ -1650,6 +1648,13 @@ function tabErpQueue() {
     </div>
     <div id="erpQueue"><p class="meta">Lade …</p></div>`,
     `<div class="head-actions"><button class="btn ghost" data-st="eq-reload">Aktualisieren</button><button class="btn ghost" data-st="erp-retry-all">Offene jetzt versuchen</button></div>`);
+}
+
+/** Meldung bzw. geschriebene Belegfelder – einzeilig und klein, vollständig beim Darüberfahren. */
+function eqFields(j) {
+  const f = j.fields ? Object.entries(j.fields).map(([k, v]) => `${k}=${v}`) : [];
+  const all = [j.message, ...f].filter(Boolean).join("\n");
+  return `${j.message ? `<span class="eq-text" title="${esc(all)}">${esc(j.message)}</span>` : ""}${!j.message && f.length ? `<span class="eq-f" title="${esc(all)}">${esc(f.join(" · "))}</span>` : ""}`;
 }
 
 let eqTimer = null, eqSeq = 0;
@@ -1732,11 +1737,11 @@ async function loadErpQueue() {
   const link = j => j.vorgangId.startsWith("gx:")
     ? `<span title="direkt gedruckt (gotomaxx-Protokoll)">${esc(j.erpIndex)}</span>`
     : `<a href="#/vorgang?id=${encodeURIComponent(j.vorgangId)}">${esc(j.erpIndex)}</a>`;
-  qb.innerHTML = items.length ? `${pager}<div class="table-wrap"><table class="list mini eq-list"><thead><tr><th>Zeit</th><th>Belegindex</th><th>Mandant · SecuredApp</th><th>Code</th><th>Status</th><th>Meldung / Felder</th><th></th></tr></thead><tbody>
+  qb.innerHTML = items.length ? `${pager}<div class="table-wrap"><table class="list mini eq-list"><colgroup><col style="width:125px"><col style="width:115px"><col style="width:195px"><col style="width:58px"><col style="width:200px"><col><col style="width:185px"></colgroup><thead><tr><th>Zeit</th><th>Belegindex</th><th>Mandant · SecuredApp</th><th>Code</th><th>Status</th><th>Meldung / Felder</th><th></th></tr></thead><tbody>
       ${items.map(j => `<tr><td class="nowrap">${fmtDT(j.done || j.created)}</td><td class="mono nowrap">${link(j)}</td>
         <td class="nowrap">${erpJobTarget(j)}</td>
         <td><span class="badge code" title="${esc(j.codeText || "")}">${esc(j.code)}</span></td><td><span class="badge ${EQ_LABEL[j.status]?.[0] || ""}">${EQ_LABEL[j.status]?.[1] || esc(j.status)}</span>${j.status === "offen" && j.attempts ? `<small> Versuch ${j.attempts + 1} um ${fmtDT(j.nextAttempt)}</small>` : ""}</td>
-        <td class="eq-msg">${j.message ? esc(j.message) : j.fields ? Object.entries(j.fields).map(([k, v]) => `<span class="mono">${esc(k)}</span>=${esc(v)}`).join("<br>") : ""}</td>
+        <td class="eq-msg">${eqFields(j)}</td>
         <td class="nowrap"><button class="btn ghost small" data-st="eq-resend" data-id="${j.id}" title="Noch einmal ans ERP senden – wahlweise an einen anderen Mandanten">Neu senden …</button>
           ${["fehler", "offen"].includes(j.status) ? `<button class="btn ghost small" data-st="erp-job-discard" data-id="${j.id}" title="Verwerfen" aria-label="Verwerfen">✕</button>` : ""}</td></tr>`).join("")}
       </tbody></table></div>${total > items.length ? pager : ""}`

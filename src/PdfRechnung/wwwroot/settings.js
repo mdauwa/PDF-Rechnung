@@ -1654,7 +1654,7 @@ function drawLicense(l) {
     <div class="grid2">
     <table class="kv">
       <tr><th>Lizenzcode</th><td>${copy(l.licenseCode)}</td></tr>
-      <tr><th>Kunde</th><td>${esc(l.customerNumber || "noch nicht zugeordnet")}</td></tr>
+      ${l.customerNumber ? `<tr><th>Kunde</th><td>${esc(l.customerNumber)}</td></tr>` : ""}
       <tr><th>Status beim Hersteller</th><td>${esc(l.statusText || "–")}${l.blocked ? ` <span class="badge missing">gesperrt</span>` : ""}</td></tr>
       <tr><th>Lizenzart</th><td>${model}${l.licenseModel === "subscription" ? ` · ${l.validUntil ? (new Date(l.validUntil) > new Date() ? "gültig bis " : "abgelaufen am ") + d(l.validUntil) : "ohne hinterlegtes Ende"}` : l.licenseModel === "purchase" ? " · unbefristet" : ""}</td></tr>
       <tr><th>Updates</th><td>${l.lastSuccess ? `<span class="badge ${l.updatesAllowed ? "ok" : "missing"}">${l.updatesAllowed ? "erlaubt" : "nicht erlaubt"}</span>${l.updatesAllowedUntil ? ` ${l.updatesAllowed ? "bis" : "endete am"} ${d(l.updatesAllowedUntil)}` : ""}` : "–"}</td></tr>
@@ -1665,7 +1665,7 @@ function drawLicense(l) {
       <tr><th>Grundfunktion</th><td>${yes(l.base, "Versand, Portal, ERP-Rückmeldung")}</td></tr>
       <tr><th>eRechnung</th><td>${yes(l.eRechnung, "ZUGFeRD/XRechnung, Rechnungsdaten")}</td></tr>
       <tr><th>Datenaustausch</th><td>${yes(l.datenaustausch, "Filialverbund, FTP/SFTP, Austausch-API")}</td></tr>
-      <tr><th>Module laut Lizenz</th><td>${l.modules?.length ? l.modules.map(esc).join(", ") : "–"}</td></tr>
+      <tr><th>Module laut Lizenz</th><td>${l.modules?.length ? l.modules.map((m, i) => `${esc(m)} <small class="mono meta-inline">${esc(l.moduleCodes?.[i] || "")}</small>`).join("<br>") : "–"}</td></tr>
       <tr><th>Letzte Aktualisierung</th><td>${l.lastSuccess ? fmtDT(l.lastSuccess) : "noch nie"}${l.lastError ? `<br><span class="bad">${esc(l.lastError)}</span>` : ""}</td></tr>
     </table>
     </div>

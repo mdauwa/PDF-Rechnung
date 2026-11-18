@@ -32,13 +32,14 @@ const TABS = [
   ["anmeldung", "Anmeldung"],
   ["benachrichtigung", "Benachrichtigung"],
   ["api", "REST-API"],
-  ["filialverbund", "Filialverbund"]
+  ["filialverbund", "Filialverbund"],
+  ["lizenz", "Lizenz"]
 ];
 
 /** Einstellungen im Menü links: Gruppen mit ihren Reitern. */
 const ST_GROUPS = [
   ["benutzer", "Benutzer", "users", ["benutzer"]],
-  ["system", "Dienst & Zugang", "settings", ["dienst", "server", "anmeldung", "benachrichtigung", "api"]],
+  ["system", "Dienst & Zugang", "settings", ["dienst", "lizenz", "server", "anmeldung", "benachrichtigung", "api"]],
   ["belege", "Drucker & Belege", "doc", ["eingang", "gotomaxx", "briefpapier", "erechnung", "ablage"]],
   ["email", "E-Mail", "send", ["mail", "mailvorlagen", "regeln", "bilder", "mapi", "statuslink"]],
   ["versand", "Versand & Partner", "upload", ["versandwege", "kunden", "filialverbund", "connect"]],
@@ -116,7 +117,7 @@ function drawTab() {
   const body = $("#stBody");
   if (!ST.s) return;
   const fn = { dienst: tabService, server: tabServer, eingang: tabInbox, gotomaxx: tabGotomaxx, briefpapier: tabStationery, mail: tabMail, mailvorlagen: tabTemplates, erechnung: tabInvoice, ablage: tabStorage, benutzer: tabUsers, anmeldung: tabAuth,
-    erp: tabErp, erpqueue: tabErpQueue, mapi: tabMapi, statuslink: tabStatusLink, regeln: tabRules, bilder: tabImages, mandanten: tabMandanten, versandwege: tabDelivery, kunden: tabCustomers, connect: tabConnect,
+    erp: tabErp, erpqueue: tabErpQueue, lizenz: tabLicense, mapi: tabMapi, statuslink: tabStatusLink, regeln: tabRules, bilder: tabImages, mandanten: tabMandanten, versandwege: tabDelivery, kunden: tabCustomers, connect: tabConnect,
     benachrichtigung: tabAlerts, api: tabApi, filialverbund: tabFilialverbund }[ST.tab] || tabService;
   body.innerHTML = fn();
   // Listen-Reiter nutzen die ganze Seitenbreite
@@ -125,6 +126,7 @@ function drawTab() {
   if (ST.tab === "benutzer" && !ST.devices) loadDevices();
   if (ST.tab === "erp") loadErpStatus();
   if (ST.tab === "erpqueue") loadErpQueue();
+  if (ST.tab === "lizenz") loadLicense();
   if (ST.tab === "dienst") loadDocStorage();
   if (ST.tab === "mapi") loadMapiStatus();
   if (ST.tab === "eingang") loadPrinterStatus();
@@ -355,6 +357,8 @@ async function onAction(e) {
       case "eq-page": EQ.offset = Math.max(0, EQ.offset + (+btn.dataset.dir) * EQ.limit); loadErpQueue(); break;
       case "eq-reload": loadErpQueue(); break;
       case "eq-goto": stGoto("erpqueue"); break;
+      case "lic-check": { const r = await api("POST", "api/admin/lizenz/pruefen"); drawLicense(r); msg(r.lastError ? r.lastError : "Lizenz abgerufen.", !r.lastError); if (typeof loadLicenseBanner === "function") loadLicenseBanner(); break; }
+      case "lic-copy": try { await navigator.clipboard.writeText(btn.dataset.v); toast("Kopiert"); } catch { msg("Bitte markieren und kopieren: " + btn.dataset.v); } break;
       case "dms-check": { const r = await api("POST", "api/admin/ablage/pruefen", { folder: ST.s.storage?.documentFolder || "" }); msg(r.message, true); break; }
       case "dms-move":
         if (!await confirmDialog("Vorhandene Belege verschieben", "Alle Vorgänge werden in den eingestellten Belegordner (je Mandant und Monat) verschoben. Das läuft im Hintergrund und kann bei vielen Belegen dauern. Jetzt starten?", "Verschieben")) break;
@@ -1625,6 +1629,44 @@ async function loadErpStatus() {
       <div class="actions"><button class="btn ghost" data-st="erp-check" ${st.configured ? "" : "disabled"}>Verbindung prüfen</button>
         ${st.pass === "RegistrationOutcomeUnknown" ? `<button class="btn danger-ghost" data-st="erp-confirm-reg">Registrierung zurücksetzen …</button>` : ""}</div></div>`;
   } catch (e) { const box = $("#erpStatus"); if (box) box.innerHTML = `<p class="bad">${esc(e.message)}</p>`; }
+}
+
+/* ---------------- Tab: Lizenz ---------------- */
+
+function tabLicense() {
+  return section("Lizenz", `<div id="licBox"><p class="meta">Lade …</p></div>`, `<button class="btn ghost" data-st="lic-check">Jetzt prüfen</button>`);
+}
+
+async function loadLicense() {
+  try { drawLicense(await api("GET", "api/admin/lizenz")); }
+  catch (e) { const b = $("#licBox"); if (b) b.innerHTML = `<p class="bad">${esc(e.message)}</p>`; }
+}
+
+function drawLicense(l) {
+  const b = $("#licBox"); if (!b) return;
+  const modeText = { lizenziert: ["ok", "lizenziert"], test: ["partial", "Testzeit"], abgelaufen: ["missing", "abgelaufen"], ungueltig: ["missing", "nicht lizenziert"] }[l.mode] || ["", l.mode];
+  const yes = (ok, txt) => `<span class="badge ${ok ? "ok" : "missing"}">${ok ? "frei" : "gesperrt"}</span> ${txt}`;
+  const copy = v => v ? `<code>${esc(v)}</code> <button class="btn ghost small" data-st="lic-copy" data-v="${esc(v)}" title="Kopieren">⧉</button>` : "–";
+  b.innerHTML = `
+    <p><span class="badge ${modeText[0]}">${esc(modeText[1])}</span> ${esc(l.reason || "")}</p>
+    <table class="kv">
+      <tr><th>Lizenzcode</th><td>${copy(l.licenseCode)} <small class="help">bei Bestellung bzw. Freischaltung angeben</small></td></tr>
+      <tr><th>Kunde</th><td>${esc(l.customerNumber || "noch nicht zugeordnet")}</td></tr>
+      <tr><th>Grundfunktion</th><td>${yes(l.base, "Druck, Mailversand, Portal, ERP-Rückmeldung")}</td></tr>
+      <tr><th>eRechnung</th><td>${yes(l.eRechnung, "ZUGFeRD/XRechnung erzeugen, Rechnungsdaten bearbeiten")}</td></tr>
+      <tr><th>Datenaustausch</th><td>${yes(l.datenaustausch, "Filialverbund, FTP/SFTP, Eingang/Ausgang, Austausch-API")}</td></tr>
+      ${l.modules?.length ? `<tr><th>Freigeschaltete Module</th><td>${l.modules.map(esc).join(", ")}</td></tr>` : ""}
+      ${l.trialEnd ? `<tr><th>Testzeit bis</th><td>${fmtDT(l.trialEnd)}</td></tr>` : ""}
+      <tr><th>Zuletzt bestätigt</th><td>${l.lastSuccess ? fmtDT(l.lastSuccess) : "noch nie"}${l.graceEnd ? ` · gilt ohne Verbindung bis ${fmtDT(l.graceEnd)}` : ""}</td></tr>
+      <tr><th>Letzter Versuch</th><td>${l.lastAttempt ? fmtDT(l.lastAttempt) : "–"}${l.lastError ? `<br><span class="bad">${esc(l.lastError)}</span>` : ""}</td></tr>
+      <tr><th>Produkt</th><td>${esc(l.productCode)} · ${esc(l.productId)}${l.tokenEmbedded ? "" : ` · <span class="bad">kein Registrierungstoken eingebaut</span>`}</td></tr>
+      <tr><th>Installation</th><td class="mono">${esc(l.installationId || "noch nicht registriert")}<br><small>Client ${esc(l.clientId)}</small></td></tr>
+      <tr><th>Lizenzserver</th><td class="mono">${esc(l.server)}</td></tr>
+    </table>
+    <p class="help">Belegpost meldet sich beim ersten Start selbst beim Lizenzserver an und fragt die Lizenz alle 6 Stunden ab (bei Störung alle 30 Minuten).
+      Die Freischaltung und die Module legt der Hersteller fest. Ohne Verbindung gilt die zuletzt bestätigte Lizenz 14 Tage weiter.
+      Ohne gültige Lizenz nimmt Belegpost Drucke weiter an, versendet aber nichts und meldet nichts ans ERP – nach der Freischaltung geht es automatisch weiter.
+      Der Server muss <code>license.erpaustria.com</code> auf Port 8889 (HTTPS) erreichen.</p>`;
 }
 
 /* ---------------- Tab: ERP-Warteschlange (seitenweise) ---------------- */

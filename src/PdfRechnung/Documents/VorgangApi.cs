@@ -177,6 +177,7 @@ public static class VorgangApi
 
         g.MapPut("/{id}/rechnungsdaten", (string id, InvoiceCorrectionRequest req, DocumentStore store, DocumentProcessor proc, PortalAccess access, HttpContext ctx) =>
         {
+            if (!PdfRechnung.Licensing.License.Current.EInvoice) return Results.Json(new { error = PdfRechnung.Licensing.License.EInvoiceMessage }, statusCode: 402);
             var a = access.For(ctx);
             if (!a.CanSend) return Forbidden();
             var v0 = store.Get(id);

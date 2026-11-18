@@ -129,7 +129,7 @@ public sealed class InboundService : BackgroundService
             try
             {
                 var last = Last();
-                foreach (var job in Jobs())
+                foreach (var job in PdfRechnung.Licensing.License.Current.Exchange ? Jobs() : Enumerable.Empty<InboundJob>())
                 {
                     if (ct.IsCancellationRequested) break;
                     var now = DateTime.Now; var s = job.Settings;

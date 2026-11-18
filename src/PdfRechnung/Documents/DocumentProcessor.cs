@@ -202,6 +202,11 @@ public sealed class DocumentProcessor
         var fmt = InvoiceFormat.Find(v.FormatCode ?? v.Invoice.FormatCode);
         var profile = CiiWriter.ProfileFor(fmt?.Code);
         if (fmt is null || profile is null || v.Mail.Route == MailRoute.Gotomaxx) return pdf;
+        if (!PdfRechnung.Licensing.License.Current.EInvoice)
+        {
+            v.LayoutMessages.Add(new CheckMessage(DocumentChecker.Warning, $"{fmt.Name} wird nicht erzeugt: " + PdfRechnung.Licensing.License.EInvoiceMessage));
+            return pdf;
+        }
         try
         {
             var xml = CiiWriter.Write(v.Invoice, new CiiWriter.Options(profile, v.Mail.To.FirstOrDefault()));

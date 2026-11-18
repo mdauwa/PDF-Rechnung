@@ -124,6 +124,8 @@ builder.Services.AddSingleton(sp => new RuntimeControl(sp.GetRequiredService<IHo
 
 // ---- Vorgänge ----
 builder.Services.AddSingleton<EventHub>();
+builder.Services.AddSingleton<PdfRechnung.Licensing.LicenseService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<PdfRechnung.Licensing.LicenseService>());
 builder.Services.AddSingleton<DocumentStore>();
 builder.Services.AddSingleton<DocumentRelocator>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<DocumentRelocator>());
@@ -264,6 +266,7 @@ if (entra.IsConfigured)
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+app.Services.GetRequiredService<PdfRechnung.Licensing.LicenseService>(); // Lizenzstand vor allen anderen Diensten laden
 store.Saved += () => ((IConfigurationRoot)app.Configuration).Reload();
 
 if (server.EnableHttp && server.RedirectHttpToHttps) app.UseHttpsRedirection();
@@ -365,6 +368,7 @@ StatusLinkService.Map(app);
 PdfRechnung.Erp.ErpApi.Map(app);
 AuthApi.Map(app);
 AdminApi.Map(app);
+PdfRechnung.Licensing.LicenseApi.Map(app);
 PdfRechnung.Delivery.DeliveryApi.Map(app);
 PdfRechnung.Delivery.As2Receiver.Map(app);
 PdfRechnung.Delivery.InboundApi.Map(app);

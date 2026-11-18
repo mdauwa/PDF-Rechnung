@@ -143,6 +143,7 @@ public sealed class GotomaxxService : BackgroundService
     {
         var o = Options;
         if (!o.Enabled) return (false, "Die Weiterleitung an gotomaxx ist nicht eingerichtet (Einstellungen → Drucker & Belege → gotomaxx).");
+        if (!PdfRechnung.Licensing.License.Current.Base) return (false, PdfRechnung.Licensing.License.BaseMessage);
         var v = _store.Update(id, x =>
         {
             if (x.Status is VorgangStatus.Sending or VorgangStatus.Discarded) return false;
@@ -166,6 +167,9 @@ public sealed class GotomaxxService : BackgroundService
 
         await foreach (var id in _queue.Reader.ReadAllAsync(ct))
         {
+            // ohne Lizenz warten (der Vorgang bleibt „in Übergabe“ und geht nach der Freischaltung weiter)
+            while (!PdfRechnung.Licensing.License.Current.Base && !ct.IsCancellationRequested)
+                try { await Task.Delay(TimeSpan.FromMinutes(1), ct); } catch (OperationCanceledException) { return; }
             try { await HandleAsync(id, "Weiterleitung", ct); }
             catch (Exception ex) when (!ct.IsCancellationRequested) { _log.LogWarning(ex, "gotomaxx: Übergabe {Id}", id); }
         }

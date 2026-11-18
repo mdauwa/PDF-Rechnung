@@ -105,6 +105,8 @@ public sealed class DeliveryService
     /// <summary>Einen Nicht-Mail-Versandweg ausführen. Liefert das Ziel (für den Verlauf).</summary>
     public async Task<string> DeliverAsync(Vorgang v, CustomerChannel ch, CancellationToken ct)
     {
+        if (!PdfRechnung.Licensing.License.Current.Exchange && ch.Settings.Type is not (ChannelType.Mail or ChannelType.Gotomaxx))
+            throw new InvalidOperationException(PdfRechnung.Licensing.License.ExchangeMessage);
         var s = Effective(ch.Settings);
         switch (s.Type)
         {

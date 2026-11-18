@@ -53,6 +53,7 @@ public sealed class SendService
             if (v is null) return (false, "Vorgang nicht gefunden.");
             if (v.Status == VorgangStatus.Discarded) return (false, "Der Vorgang ist verworfen.");
             if (v.Status == VorgangStatus.Error && !force) return (false, "Der Vorgang hat Fehler. Bitte zuerst beheben oder „Trotzdem senden“ wählen.");
+            if (!PdfRechnung.Licensing.License.Current.Base) return (false, PdfRechnung.Licensing.License.BaseMessage);
 
             // Versandwege des Kunden (neu planen, solange noch nichts erfolgreich war; „erneut senden“ = alle noch einmal)
             var delivery = _sp?.GetService<PdfRechnung.Delivery.DeliveryService>();
@@ -346,7 +347,7 @@ public sealed class AutoSendWorker : BackgroundService
     public async Task RunOnce(CancellationToken ct)
     {
         var o = _opt.CurrentValue;
-        if (!o.Enabled) return;
+        if (!o.Enabled || !PdfRechnung.Licensing.License.Current.Base) return; // ohne Lizenz: nur annehmen
         var due = DateTimeOffset.Now.AddMinutes(-Math.Max(0, o.AutoSendDelayMinutes));
         var statuses = o.AutoSendWithWarnings ? new[] { VorgangStatus.Ready, VorgangStatus.Warning } : new[] { VorgangStatus.Ready };
         var candidates = _store.Query(new VorgangFilter { SeeAll = true, Statuses = statuses, Before = due.AddSeconds(1), Limit = 500 }).Where(v =>

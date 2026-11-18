@@ -303,7 +303,7 @@ public sealed class ErpFeedbackService : BackgroundService
     public async Task<bool> RunOnceAsync(CancellationToken ct)
     {
         var o = _opt.CurrentValue;
-        if (!o.Enabled) return false;
+        if (!o.Enabled || !PdfRechnung.Licensing.License.Current.Base) return false; // ohne Lizenz bleiben Aufträge offen
         ErpJob? job;
         using (var c = _db.Open())
             job = ReadJobs(c, "WHERE status='offen' AND naechster_versuch <= @n ORDER BY naechster_versuch, id LIMIT 1", ("@n", BelegpostDb.Ms(DateTimeOffset.Now))).FirstOrDefault();

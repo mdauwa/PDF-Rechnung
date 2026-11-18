@@ -206,6 +206,7 @@ async function init() {
   try { if (window.top !== window.self) document.body.classList.add("embedded"); } catch { document.body.classList.add("embedded"); }
   await loadPortal();
   startLive();
+  loadLicenseBanner();
   $("#menu").addEventListener("click", e => {
     const t = e.target.closest("[data-menu-toggle]");
     if (t) {
@@ -224,6 +225,24 @@ async function init() {
   $("#backdrop").onclick = () => toggleSidebar(false);
   window.addEventListener("hashchange", route);
   route();
+}
+
+/* ---------------- Lizenz-Hinweis ---------------- */
+
+async function loadLicenseBanner() {
+  if (!portal.authenticated) return;
+  let l; try { l = await api("GET", "api/lizenz"); } catch { return; }
+  let b = $("#licenseBanner");
+  const show = l.mode === "test" || !l.base;
+  if (!show) { b?.remove(); }
+  else {
+    if (!b) { b = document.createElement("div"); b.id = "licenseBanner"; $("#view").before(b); }
+    b.className = "license-banner " + (l.base ? "test" : "bad");
+    b.innerHTML = l.base
+      ? `Belegpost läuft in der Testzeit (${esc(l.reason)}). ${portal.isAdmin ? `<a href="#/einstellungen?g=system&t=lizenz">Lizenz</a>` : ""}`
+      : `<b>Keine gültige Lizenz</b> – ${esc(l.reason)}. Drucke werden angenommen, aber nicht versendet und nicht ans ERP gemeldet. ${portal.isAdmin ? `<a href="#/einstellungen?g=system&t=lizenz">Lizenz anzeigen</a>` : "Bitte den Administrator informieren."}`;
+  }
+  setTimeout(loadLicenseBanner, 30 * 60 * 1000);
 }
 
 /* ---------------- Live-Hinweise (neuer Beleg von mir gedruckt) ---------------- */

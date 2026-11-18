@@ -561,3 +561,9 @@ table.sender-table input { width: 100%; min-width: 160px; }
 .pager { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 12px; }
 .pager-nav { display: flex; gap: 6px; align-items: center; }
 .pager-nav select { width: auto; padding: 4px 8px; font-size: 12px; }
+
+/* Lizenz-Hinweis */
+.license-banner { margin: 12px 24px 0; padding: 10px 14px; border-radius: 10px; font-size: 14px; }
+.license-banner.test { background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); }
+.license-banner.bad { background: #fdecec; border: 1px solid #f3b9b9; color: #8a1f1f; }
+.license-banner a { margin-left: 6px; }

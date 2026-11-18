@@ -8,3 +8,6 @@ publish/
 # Lokaler Projektordner: fertige Ausgabe und Ablagen nicht versionieren
 Ausgabe/
 Claude outputs/
+
+# Lizenz: Registrierungstoken nie ins Git
+src/PdfRechnung/Licensing/registration.token

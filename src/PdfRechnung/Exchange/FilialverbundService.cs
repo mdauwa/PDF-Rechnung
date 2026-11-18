@@ -30,7 +30,7 @@ public sealed class FilialverbundService : BackgroundService
         try { await Task.Delay(TimeSpan.FromSeconds(10), ct); } catch (OperationCanceledException) { return; }
         while (!ct.IsCancellationRequested)
         {
-            if (_opt.CurrentValue.Enabled) await DistributeAsync(ct);
+            if (_opt.CurrentValue.Enabled && PdfRechnung.Licensing.License.Current.Exchange) await DistributeAsync(ct);
             try { await Task.Delay(TimeSpan.FromSeconds(20), ct); } catch (OperationCanceledException) { break; }
         }
     }

@@ -51,6 +51,8 @@
     <EmbeddedResource Include="Edi\Validierung.zip" LogicalName="Edi.Validierung.zip" />
     <Content Remove="Connect\ErpSuiteConnect.json" />
     <EmbeddedResource Include="Connect\ErpSuiteConnect.json" LogicalName="ErpSuiteConnect.json" />
+    <!-- Registrierungstoken der Lizenz-API: liegt nur lokal (nicht im Git), wird beim Bauen eingebettet -->
+    <EmbeddedResource Include="Licensing\registration.token" LogicalName="Licensing.registration.token" Condition="Exists('Licensing\registration.token')" />
     <None Include="..\BelegpostMapi\out\BelegpostMapi-*.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" Link="%(Filename)%(Extension)" />
   </ItemGroup>
 
@@ -58,4 +60,7 @@
     <InternalsVisibleTo Include="PdfRechnung.Tests" />
   </ItemGroup>
 
+  <Target Name="WarnMissingLicenseToken" BeforeTargets="Build" Condition="'$(Configuration)' == 'Release' And !Exists('Licensing\registration.token')">
+    <Warning Text="Licensing\registration.token fehlt – diese Belegpost.exe kann sich nicht beim Lizenzserver registrieren." />
+  </Target>
 </Project>

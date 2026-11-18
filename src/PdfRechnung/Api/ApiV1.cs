@@ -97,6 +97,7 @@ public static class ApiV1
             var k = Key(ctx.HttpContext);
             if (k is null) return Unauthorized();
             if (!k.Has(ApiKey.ScopeExchange)) return Forbidden("Datenaustausch");
+            if (!PdfRechnung.Licensing.License.Current.Exchange) return Results.Json(new { error = PdfRechnung.Licensing.License.ExchangeMessage }, statusCode: 402);
             var o = ctx.HttpContext.RequestServices.GetRequiredService<IOptionsMonitor<FilialverbundOptions>>().CurrentValue;
             var s = o.Find(k.Standort);
             if (!o.Enabled) return Results.Json(new { error = "Der Filialverbund ist nicht eingeschaltet." }, statusCode: 409);

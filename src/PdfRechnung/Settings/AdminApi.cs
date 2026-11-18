@@ -494,6 +494,43 @@ public static class AdminApi
                 ? Results.Ok(new { message = "Dienst wird entfernt (Administrator-Abfrage bestätigt)." })
                 : Results.BadRequest(new { error = "Die Administrator-Abfrage wurde abgebrochen." });
         });
+
+        // ---------- Belegordner (Ablage der Vorgänge) ----------
+        g.MapGet("/ablage", (DocumentStore docs, DocumentRelocator mover, SettingsStore st) =>
+        {
+            var (total, outside) = docs.CountOutsideRoot();
+            return Results.Ok(new
+            {
+                dataDirectory = st.DataDirectory, documentRoot = docs.DocumentRoot, defaultRoot = docs.Root,
+                total, outside, freeBytes = FreeBytes(docs.DocumentRoot), progress = mover.State()
+            });
+        });
+        g.MapPost("/ablage/pruefen", (FolderCheck body) =>
+        {
+            var folder = body.Folder?.Trim();
+            if (string.IsNullOrEmpty(folder)) return Results.Ok(new { ok = true, message = "Leer = Ablage im Datenordner." });
+            if (!Path.IsPathFullyQualified(folder)) return Results.BadRequest(new { error = "Bitte einen vollständigen Pfad angeben, z. B. D:\\Belegpost\\Belege oder \\\\server\\freigabe\\Belege." });
+            try
+            {
+                Directory.CreateDirectory(folder);
+                var probe = Path.Combine(folder, $".belegpost-test-{Guid.NewGuid():N}.tmp");
+                File.WriteAllText(probe, "test");
+                File.Delete(probe);
+                var free = FreeBytes(folder);
+                return Results.Ok(new { ok = true, message = "Ordner ist erreichbar und beschreibbar" + (free is { } f ? $" – frei: {f / 1024d / 1024 / 1024:0.0} GB." : ".") });
+            }
+            catch (Exception ex) { return Results.BadRequest(new { error = "Nicht beschreibbar für den Dienst: " + ex.Message }); }
+        });
+        g.MapPost("/ablage/verschieben", (DocumentRelocator mover) =>
+            mover.Start() ? Results.Ok(new { ok = true }) : Results.BadRequest(new { error = "Das Verschieben läuft bereits." }));
+        g.MapPost("/ablage/verschieben/stopp", (DocumentRelocator mover) => { mover.Stop(); return Results.Ok(new { ok = true }); });
+    }
+
+    public sealed record FolderCheck(string? Folder);
+
+    private static long? FreeBytes(string folder)
+    {
+        try { return new DriveInfo(Path.GetPathRoot(Path.GetFullPath(folder))!).AvailableFreeSpace; } catch { return null; }
     }
 
     private static bool StartPlain(string args)

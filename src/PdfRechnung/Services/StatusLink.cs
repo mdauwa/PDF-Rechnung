@@ -99,12 +99,22 @@ public sealed class StatusLinkService
         var latest = vorgaenge[0];
         var current = events.LastOrDefault(e => StatusCode.IsStatus(e.Code))?.Code ?? latest.StatusCode;
         var show = _opt.CurrentValue.ShowVoucherNumber;
+        // PDFs: je Vorgang (neueste zuerst) das Versand-PDF, sonst das gedruckte
+        var pdfs = new List<StatusPdf>();
+        if (_opt.CurrentValue.ShowPdf)
+            foreach (var x in vorgaenge)
+                if (PdfPath(x.Id) is not null)
+                    pdfs.Add(new StatusPdf(pdfs.Count, x.Id, x.CreatedAt, $"{(show ? x.DocumentType : "Beleg")}{(show && x.VoucherId is { } nr ? " " + nr : "")}"));
         return new StatusView(
             show ? latest.DocumentType : "Beleg",
             show ? latest.VoucherId : null,
             current, StatusCode.Text(current), StatusCode.Light(current),
-            events.Select(e => new StatusStep(e.At, e.Code, e.CodeText, PublicChannel(e.Channel))).ToList());
+            events.Select(e => new StatusStep(e.At, e.Code, e.CodeText, PublicChannel(e.Channel))).ToList(), pdfs);
     }
+
+    /// <summary>Versand-PDF des Vorgangs, sonst das gedruckte.</summary>
+    public string? PdfPath(string vorgangId) =>
+        _store.FilePath(vorgangId, DocumentStore.SendFile) ?? _store.FilePath(vorgangId, DocumentStore.PdfFile);
 
     /// <summary>Kanal nur grob (keine Server-/Ordnernamen).</summary>
     private static string? PublicChannel(string? c) => c switch
@@ -147,7 +157,7 @@ public sealed class StatusLinkService
 
     // ---------------- Seite ----------------
 
-    public static string RenderHtml(StatusView v, string title)
+    public static string RenderHtml(StatusView v, string title, string? token = null)
     {
         static string H(string? s) => WebUtility.HtmlEncode(s ?? "");
         var color = v.Light switch { "ok" => "#1f8a4c", "fehler" => "#c0392b", "neutral" => "#7f8c8d", _ => "#d68910" };
@@ -164,10 +174,26 @@ public sealed class StatusLinkService
           .Append("li:before{content:'';position:absolute;left:-6px;top:5px;width:10px;height:10px;border-radius:50%;background:#9aa8b6}")
           .Append("li:last-child:before{background:").Append(color).Append("}")
           .Append(".t{font-weight:600}.d{color:#5d6b7a;font-size:13px}.f{margin-top:18px;color:#8a97a5;font-size:12px}")
-          .Append("</style></head><body><div class=\"card\">")
+          .Append(".card.wide{max-width:980px}.pdf{margin:6px 0 22px}.pdf a{display:inline-block;margin:0 8px 8px 0;padding:7px 12px;border-radius:8px;border:1px solid #c9d3dd;color:#1d2733;text-decoration:none;font-size:14px}")
+          .Append(".pdf a.p{background:#1f5fbf;border-color:#1f5fbf;color:#fff}.pdf .d{display:block;margin-bottom:6px}")
+          .Append("iframe{width:100%;height:75vh;border:1px solid #dde3e9;border-radius:8px;margin-top:6px;background:#fff}")
+          .Append("</style></head><body><div class=\"card").Append(v.Pdfs.Count > 0 && token is not null ? " wide" : "").Append("\">")
           .Append("<h1>").Append(H(title)).Append(" · Belegstatus</h1>")
           .Append("<h2>").Append(H(v.DocumentType)).Append(v.VoucherId is null ? "" : " " + H(v.VoucherId)).Append("</h2>")
-          .Append("<div class=\"st\"><span class=\"dot\" style=\"background:").Append(color).Append("\"></span>").Append(H(v.StatusText)).Append("</div><ol>");
+          .Append("<div class=\"st\"><span class=\"dot\" style=\"background:").Append(color).Append("\"></span>").Append(H(v.StatusText)).Append("</div>");
+        if (token is not null && v.Pdfs.Count > 0)
+        {
+            var t = WebUtility.UrlEncode(token);
+            sb.Append("<div class=\"pdf\">");
+            foreach (var p in v.Pdfs)
+            {
+                if (v.Pdfs.Count > 1) sb.Append("<span class=\"d\">").Append(H(p.Label)).Append(" vom ").Append(p.Created.ToString("dd.MM.yyyy HH:mm")).Append("</span>");
+                sb.Append("<a class=\"p\" href=\"").Append(t).Append("/pdf/").Append(p.Nr).Append("\" target=\"_blank\" rel=\"noopener\">Beleg ansehen (PDF)</a>")
+                  .Append("<a href=\"").Append(t).Append("/pdf/").Append(p.Nr).Append("?download=true\">Herunterladen</a>");
+            }
+            sb.Append("<iframe src=\"").Append(t).Append("/pdf/0#view=FitH\" title=\"Beleg\"></iframe></div>");
+        }
+        sb.Append("<ol>");
         foreach (var s in v.Steps)
             sb.Append("<li><div class=\"t\">").Append(H(s.Text)).Append(s.Channel is null ? "" : " (" + H(s.Channel) + ")")
               .Append("</div><div class=\"d\">").Append(s.At.ToString("dd.MM.yyyy HH:mm")).Append("</div></li>");
@@ -198,15 +224,32 @@ public sealed class StatusLinkService
                 return Results.Ok(new
                 {
                     belegart = v.DocumentType, belegnummer = v.VoucherId, status = v.Code, statusText = v.StatusText, ampel = v.Light,
-                    verlauf = v.Steps.Select(s => new { zeit = s.At, code = s.Code, text = s.Text, kanal = s.Channel })
+                    verlauf = v.Steps.Select(s => new { zeit = s.At, code = s.Code, text = s.Text, kanal = s.Channel }),
+                    pdf = v.Pdfs.Select(p => new { nr = p.Nr, bezeichnung = p.Label, erstellt = p.Created, url = $"{token}/pdf/{p.Nr}" })
                 });
-            return Results.Content(RenderHtml(v, portal.Value.Title), "text/html; charset=utf-8");
+            return Results.Content(RenderHtml(v, portal.Value.Title, token), "text/html; charset=utf-8");
+        });
+
+        // Beleg als PDF (inline ansehen; ?download=1 zum Speichern)
+        app.MapGet("/s/{token}/pdf/{nr:int}", (string token, int nr, bool? download, HttpContext ctx, StatusLinkService svc, StatusLinkLimiter limiter) =>
+        {
+            Headers(ctx);
+            if (!svc.IsAllowed(ctx) || !limiter.Allow(ctx.Connection.RemoteIpAddress) || svc.Resolve(token) is not { } v
+                || nr < 0 || nr >= v.Pdfs.Count || svc.PdfPath(v.Pdfs[nr].VorgangId) is not { } path)
+                return Results.Content(NotFoundHtml, "text/html; charset=utf-8", statusCode: 404);
+            var name = string.Concat(v.Pdfs[nr].Label.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch)).Trim() + ".pdf";
+            ctx.Response.Headers["Content-Disposition"] = $"{(download == true ? "attachment" : "inline")}; filename*=UTF-8''{Uri.EscapeDataString(name)}";
+            return Results.File(path, "application/pdf");
         });
     }
 }
 
 public sealed record StatusStep(DateTimeOffset At, string Code, string Text, string? Channel);
-public sealed record StatusView(string DocumentType, string? VoucherId, string? Code, string StatusText, string Light, List<StatusStep> Steps);
+public sealed record StatusPdf(int Nr, string VorgangId, DateTimeOffset Created, string Label);
+public sealed record StatusView(string DocumentType, string? VoucherId, string? Code, string StatusText, string Light, List<StatusStep> Steps, List<StatusPdf>? PdfList = null)
+{
+    public List<StatusPdf> Pdfs => PdfList ?? new();
+}
 
 /// <summary>Einfaches Rate-Limit je IP für den Status-Link (60 Abrufe pro Minute).</summary>
 public sealed class StatusLinkLimiter

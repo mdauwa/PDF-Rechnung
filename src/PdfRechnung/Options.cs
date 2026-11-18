@@ -146,6 +146,8 @@ public sealed class StatusLinkOptions
     public int ExpiryDays { get; set; } = 180;
     /// <summary>Belegart und Belegnummer anzeigen.</summary>
     public bool ShowVoucherNumber { get; set; } = true;
+    /// <summary>Beleg (Versand-PDF, sonst das gedruckte PDF) über den Link ansehen und herunterladen.</summary>
+    public bool ShowPdf { get; set; } = true;
     public bool Enabled => AllowedNetworks.Any(n => !string.IsNullOrWhiteSpace(n));
 }
 
@@ -424,6 +426,11 @@ public sealed class StorageOptions
     public string ExportFolder { get; set; } = "";
     /// <summary>Tägliche Datenbanksicherungen aufbewahren (Anzahl). 0 = keine Sicherung.</summary>
     public int DatabaseBackups { get; set; } = 14;
+    /// <summary>
+    /// Belegordner für die Vorgänge (PDFs, XML, Text) – z. B. eigene Platte oder Freigabe. Leer = „vorgaenge“ im Datenordner.
+    /// Aufbau: Belegordner\Mandant-…\JJJJ\MM\Vorgang. Datenbank und Schlüssel bleiben im Datenordner.
+    /// </summary>
+    public string DocumentFolder { get; set; } = "";
 }
 
 /// <summary>Briefpapiere (z. B. je Firma). Auswahl per Steuerzeichen @@bpName@@, sonst das Standard-Briefpapier.</summary>

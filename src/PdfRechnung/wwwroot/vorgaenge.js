@@ -30,7 +30,8 @@ const listText = l => (l || []).join(", ");
 
 /* ---------------- Liste ---------------- */
 
-const VL = { timer: null, selected: new Set(), items: [] };
+const VL = { timer: null, selected: new Set(), items: [], offset: 0, limit: 100, total: 0 };
+try { VL.limit = +localStorage.getItem("vl.limit") || 100; } catch { }
 
 async function renderVorgaenge(view) {
   clearInterval(VL.timer);
@@ -39,6 +40,7 @@ async function renderVorgaenge(view) {
   const f = FILTERS[fkey];
   $("#viewTitle").textContent = f.title;
   VL.selected.clear();
+  VL.offset = 0;
   const search = store.get("vl.q", "");
 
   view.innerHTML = `
@@ -62,7 +64,9 @@ async function renderVorgaenge(view) {
     <div class="notice" id="vlMsg" hidden></div>
     <div class="kpis" id="vlKpis"></div>
     <div class="card">
+      <div id="vlPagerTop"></div>
       <div class="table-wrap"><table class="list vlist" id="vlTable"><tbody><tr><td class="meta">Lade Vorgänge …</td></tr></tbody></table></div>
+      <div id="vlPager"></div>
     </div>`;
 
   const load = async () => {
@@ -74,9 +78,16 @@ async function renderVorgaenge(view) {
     const s = $("#vlSearch").value.trim(); if (s) p.set("q", s);
     if ($("#vlFrom").value) p.set("from", $("#vlFrom").value);
     if ($("#vlTo").value) p.set("to", $("#vlTo").value);
+    p.set("offset", VL.offset); p.set("limit", VL.limit);
     try {
       const r = await api("GET", "api/vorgaenge?" + p);
+      // Seite leer geworden (z. B. nach Versand)? eine Seite zurück
+      if (!r.items.length && VL.offset > 0 && r.total) { VL.offset = Math.max(0, Math.floor((r.total - 1) / VL.limit) * VL.limit); return load(); }
       VL.items = r.items;
+      VL.total = r.total ?? r.items.length;
+      const pg = r.total > r.items.length || VL.offset > 0 ? pagerHtml(VL.offset, VL.limit, VL.total, r.items.length) : "";
+      $("#vlPager").innerHTML = pg;
+      $("#vlPagerTop").innerHTML = pg;
       drawKpis(r);
       drawTable();
       updateMenuCounts(r.counts, r);
@@ -85,8 +96,9 @@ async function renderVorgaenge(view) {
   const showMsg = (t, ok) => { const n = $("#vlMsg"); n.hidden = !t; n.className = "notice" + (ok ? " ok" : ""); n.textContent = t || ""; };
 
   let deb;
-  $("#vlSearch").oninput = () => { clearTimeout(deb); deb = setTimeout(() => { store.set("vl.q", $("#vlSearch").value); load(); }, 300); };
-  for (const id of ["vlStatus", "vlFrom", "vlTo"]) { const el = $("#" + id); if (el) el.onchange = load; }
+  $("#vlSearch").oninput = () => { clearTimeout(deb); deb = setTimeout(() => { store.set("vl.q", $("#vlSearch").value); VL.offset = 0; load(); }, 300); };
+  for (const id of ["vlStatus", "vlFrom", "vlTo"]) { const el = $("#" + id); if (el) el.onchange = () => { VL.offset = 0; load(); }; }
+  bindPager(view.querySelector(".card"), VL, load, "vl.limit");
   $("#vlReload").onclick = load;
   if (portal.canSend) {
     $("#vlUpload").onclick = () => $("#vlFile").click();
@@ -475,7 +487,7 @@ async function loadTimeline(v) {
       <div><b>${esc(e.text)}</b>${e.channel ? ` <span class="meta-inline">(${esc(e.channel)})</span>` : ""}<small>${fmtDT(e.at)}${e.by ? " · " + esc(e.by) : ""}${e.note ? " · " + esc(e.note) : ""}</small></div></li>`).join("")}</ol>
     ${t.statusLink ? `<div class="statuslink"><span class="lbl">Status-Link</span><input readonly value="${esc(t.statusLink)}" id="vdLink">
       <button class="btn ghost small" id="vdLinkCopy">Kopieren</button>${portal.isAdmin ? `<button class="btn ghost small" id="vdLinkNew" title="Neuen Link erzeugen – der alte funktioniert dann nicht mehr">Neu</button>` : ""}</div>
-      <p class="help">Ohne Anmeldung aus den freigegebenen Netzen abrufbar. Zeigt nur Belegart, Belegnummer und diesen Zeitstrahl.</p>` : ""}
+      <p class="help">Ohne Anmeldung aus den freigegebenen Netzen abrufbar. Zeigt Belegart, Belegnummer, diesen Zeitstrahl und – wenn eingestellt – den Beleg als PDF.</p>` : ""}
     ${t.erpEnabled ? `<h3>ERP-Rückmeldung ${t.erpIndex ? `<span class="meta-inline">Belegindex ${esc(t.erpIndex)}</span>` : ""}</h3>
       ${!t.erpIndex ? `<p class="meta">Kein Belegindex (@@pi@@) im Beleg – es wird nichts ins ERP zurückgeschrieben.</p>`
         : erp.length ? `<ul class="erp-jobs">${erp.map(j => `<li><span class="badge code">${esc(j.code)}</span>

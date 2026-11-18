@@ -262,6 +262,11 @@ public sealed class BelegpostDb
         """
         ALTER TABLE erp_auftrag ADD COLUMN mandant TEXT;
         ALTER TABLE erp_auftrag ADD COLUMN secure_app TEXT;
+        """,
+        // 10: Indizes für große Datenmengen (Listen ohne Druckerfilter, Warteschlange nach Mandant)
+        """
+        CREATE INDEX IF NOT EXISTS ix_gx_zeit ON gotomaxx_protokoll(zeit);
+        CREATE INDEX IF NOT EXISTS ix_erp_auftrag_mandant ON erp_auftrag(mandant);
         """
     };
 

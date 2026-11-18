@@ -125,6 +125,7 @@ function drawTab() {
   if (ST.tab === "benutzer" && !ST.devices) loadDevices();
   if (ST.tab === "erp") loadErpStatus();
   if (ST.tab === "erpqueue") loadErpQueue();
+  if (ST.tab === "ablage") loadDocStorage();
   if (ST.tab === "mapi") loadMapiStatus();
   if (ST.tab === "eingang") loadPrinterStatus();
   if (ST.tab === "versandwege") loadDeliveryRuns();
@@ -354,6 +355,11 @@ async function onAction(e) {
       case "eq-page": EQ.offset = Math.max(0, EQ.offset + (+btn.dataset.dir) * EQ.limit); loadErpQueue(); break;
       case "eq-reload": loadErpQueue(); break;
       case "eq-goto": stGoto("erpqueue"); break;
+      case "dms-check": { const r = await api("POST", "api/admin/ablage/pruefen", { folder: ST.s.storage?.documentFolder || "" }); msg(r.message, true); break; }
+      case "dms-move":
+        if (!await confirmDialog("Vorhandene Belege verschieben", "Alle Vorgänge werden in den eingestellten Belegordner (je Mandant und Monat) verschoben. Das läuft im Hintergrund und kann bei vielen Belegen dauern. Jetzt starten?", "Verschieben")) break;
+        await api("POST", "api/admin/ablage/verschieben"); loadDocStorage(); break;
+      case "dms-stop": await api("POST", "api/admin/ablage/verschieben/stopp"); loadDocStorage(); break;
       case "eq-resend": await eqResend(+btn.dataset.id); break;
       case "erp-preview": {
         const r = await api("POST", "api/admin/erp/vorschau", { vorgangId: $("#erpPvId").value.trim() || null, code: $("#erpPvCode").value || null, erp: ST.s.erp });
@@ -1158,11 +1164,38 @@ function tabInvoice() {
 /* ---------------- Tab: Ablage ---------------- */
 
 function tabStorage() {
-  return section("Aufbewahrung",
+  return section("Belegordner",
+    `${field("Vorgänge (PDFs, E-Rechnungen, Text) ablegen in", inText("storage.documentFolder", "z. B. D:\\Belegpost\\Belege oder \\\\server\\belege"),
+        "Leer = Ordner „vorgaenge“ im Datenordner. Aufbau: Belegordner\\Mandant-…\\JJJJ\\MM\\Vorgang – so kommen sich gleiche Belegnummern verschiedener Mandanten nicht in die Quere. Datenbank und Schlüssel bleiben im Datenordner (lokal = schnell).")}
+     <div class="actions"><button class="btn ghost" data-st="dms-check">Ordner prüfen</button></div>
+     <div id="dmsState"><p class="meta">Lade …</p></div>
+     <p class="help">Neue Vorgänge landen nach dem Speichern sofort im neuen Ordner. Vorhandene verschiebt „Vorhandene Belege verschieben“ im Hintergrund –
+       erst kopieren und prüfen, dann umstellen, dann den alten Ordner löschen. Ändert sich der Mandant eines Vorgangs, wird er automatisch umgelegt.
+       Den Belegordner beim Virenscanner ausnehmen; bei einer Freigabe braucht das Computerkonto des Servers (Dienst läuft als SYSTEM) Schreibrechte.</p>`) +
+    section("Aufbewahrung",
     `<div class="grid2">${field("Abgeschlossene Vorgänge löschen nach (Tagen)", inNum("storage.retentionDays", 0, 36500), "0 = nie löschen. Betrifft nur versendete, verworfene und Vorgänge ohne Versand.")}</div>
      <p class="help">Das Portal ist kein Archiv im Sinne der Aufbewahrungspflichten – dafür den Exportordner oder das DMS verwenden.</p>`) +
     section("Export",
       field("Versendete Belege zusätzlich ablegen in", inText("storage.exportFolder", "\\\\server\\archiv\\rechnungen"), "Leer = aus. Der Dienst braucht Schreibrechte (läuft als SYSTEM → Computerkonto des Servers berechtigen)."));
+}
+
+let dmsTimer = null;
+async function loadDocStorage() {
+  clearTimeout(dmsTimer);
+  const box = $("#dmsState"); if (!box) return;
+  let r;
+  try { r = await api("GET", "api/admin/ablage"); } catch (e) { box.innerHTML = `<p class="bad">${esc(e.message)}</p>`; return; }
+  const p = r.progress || {};
+  const gb = b => b == null ? "" : ` · frei ${(b / 1024 / 1024 / 1024).toLocaleString("de-AT", { maximumFractionDigits: 1 })} GB`;
+  const n = x => (x || 0).toLocaleString("de-AT");
+  box.innerHTML = `<p class="meta">Aktuell: <code>${esc(r.documentRoot)}</code>${gb(r.freeBytes)} · ${n(r.total)} Vorgänge${r.outside ? `, davon <b>${n(r.outside)}</b> noch an anderer Stelle` : ", alle im Belegordner"}.
+      ${ST.dirty ? "<br><b>Erst speichern</b>, dann verschieben." : ""}</p>
+    ${p.started ? `<p class="meta">${p.running ? "Verschieben läuft" : p.cancelled ? "Verschieben abgebrochen" : "Zuletzt verschoben"} (${fmtDT(p.started)}${p.finished ? " – " + fmtDT(p.finished) : ""}):
+      ${n(p.checked)} geprüft · ${n(p.moved)} verschoben${p.skipped ? ` · ${n(p.skipped)} übersprungen (im Versand)` : ""}${p.missing ? ` · ${n(p.missing)} ohne Ordner` : ""}${p.failed ? ` · <span class="bad">${n(p.failed)} Fehler</span>` : ""}${p.leftovers ? ` · ${n(p.leftovers)} alte Ordner noch nicht gelöscht` : ""}
+      ${p.lastError ? `<br><span class="bad">${esc(p.lastError)}</span>` : ""}</p>` : ""}
+    <div class="actions">${p.running ? `<button class="btn ghost" data-st="dms-stop">Anhalten</button>`
+      : `<button class="btn ghost" data-st="dms-move" ${ST.dirty ? "disabled" : ""}>Vorhandene Belege verschieben …</button>`}</div>`;
+  if (p.running) dmsTimer = setTimeout(() => { if (ST.tab === "ablage") loadDocStorage(); }, 2000);
 }
 
 /* ---------------- Tab: ERP Suite Connect ---------------- */
@@ -1772,10 +1805,12 @@ function mapiUsersTable(users) {
 /* ---------------- Tab: Status-Link ---------------- */
 
 function tabStatusLink() {
-  ST.s.statusLink ||= { allowedNetworks: [], trustedProxies: [], expiryDays: 180, showVoucherNumber: true };
+  ST.s.statusLink ||= { allowedNetworks: [], trustedProxies: [], expiryDays: 180, showVoucherNumber: true, showPdf: true };
+  if (ST.s.statusLink.showPdf === undefined) ST.s.statusLink.showPdf = true;
   return section("Status-Link",
     `<p class="help">Jeder Beleg bekommt einen Link <code>/s/…</code>, der ohne Anmeldung zeigt, was mit dem Beleg passiert ist – Belegart, Belegnummer,
-       Statuscodes mit Datum und Uhrzeit (z. B. versendet, über Outlook bestätigt, im ERP bestätigt). Empfänger, Kunden, Beträge oder Inhalte werden nie angezeigt.
+       Statuscodes mit Datum und Uhrzeit (z. B. versendet, über Outlook bestätigt, im ERP bestätigt) und – wenn eingeschaltet – den Beleg selbst als PDF zum Ansehen und Herunterladen.
+       Empfänger und Mailtexte werden nie angezeigt.
        Den Link kann die ERP-Rückmeldung in ein Belegfeld schreiben (Wert „Status-Link“).</p>
      <div class="grid2">
        ${field("Freigegebene IP-Bereiche", inLines("statusLink.allowedNetworks", "192.168.10.0/24\n10.0.0.0/8"), "Nur aus diesen Netzen abrufbar (CIDR oder einzelne Adressen). Leer = Status-Link aus.")}
@@ -1783,7 +1818,10 @@ function tabStatusLink() {
        ${field("Gültig nach dem letzten Ereignis (Tage)", inNum("statusLink.expiryDays", 0, 3650), "0 = unbegrenzt.")}
        ${field("Portal-Adresse für Links", inText("portal.publicUrl", `https://${(ST.data.hostNames || ["server"])[0]}:${ST.s.server.httpsPort}`), "Leer = erster Servername.")}
      </div>
-     ${inCheck("statusLink.showVoucherNumber", "Belegart und Belegnummer anzeigen")}`);
+     ${inCheck("statusLink.showVoucherNumber", "Belegart und Belegnummer anzeigen")}
+     ${inCheck("statusLink.showPdf", "Beleg als PDF anzeigen und herunterladen (Versand-PDF, sonst das gedruckte)")}
+     <p class="help">Mit PDF zeigt der Link den ganzen Beleg samt Beträgen. Er ist trotzdem nur aus den freigegebenen Netzen und mit dem zufälligen Token erreichbar –
+       „Link neu erzeugen“ im Vorgang macht einen weitergegebenen Link ungültig.</p>`);
 }
 
 /* ---------------- Tab: Mandanten ---------------- */

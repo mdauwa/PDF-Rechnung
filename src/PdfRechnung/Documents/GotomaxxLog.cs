@@ -591,7 +591,12 @@ public sealed class GotomaxxLogService : BackgroundService
 
     /// <param name="owners">null = alle; sonst nur Einträge dieser Benutzer (Sichtbarkeit).</param>
     public List<GotomaxxLogEntry> List(string? profile, string? text, string? state, DateTimeOffset? from, DateTimeOffset? before, int limit = 1000, bool onlyUnassigned = false,
-        IReadOnlyCollection<string>? owners = null)
+        IReadOnlyCollection<string>? owners = null, int offset = 0) =>
+        Page(profile, text, state, from, before, limit, onlyUnassigned, owners, offset, count: false).Items;
+
+    /// <summary>Eine Seite (neueste zuerst) und – mit <paramref name="count"/> – die Gesamtzahl für den Filter.</summary>
+    public (List<GotomaxxLogEntry> Items, long Total) Page(string? profile, string? text, string? state, DateTimeOffset? from, DateTimeOffset? before, int limit,
+        bool onlyUnassigned, IReadOnlyCollection<string>? owners, int offset, bool count = true)
     {
         using var c = _db.Open();
         var w = new List<string>(); var p = new List<(string, object?)>();
@@ -610,16 +615,29 @@ public sealed class GotomaxxLogService : BackgroundService
         if (from is not null) { w.Add("zeit >= @f"); p.Add(("@f", BelegpostDb.Ms(from.Value))); }
         if (before is not null) { w.Add("zeit < @b"); p.Add(("@b", BelegpostDb.Ms(before.Value))); }
         if (onlyUnassigned) w.Add("erp_status IS NULL AND status IN (1,2,3)");
-        p.Add(("@l", Math.Clamp(limit, 1, 5000)));
-        using var cmd = BelegpostDb.Cmd(c, Select + (w.Count > 0 ? " WHERE " + string.Join(" AND ", w) : "") + " ORDER BY zeit DESC, nr DESC LIMIT @l", p.ToArray());
+        var where = w.Count > 0 ? " WHERE " + string.Join(" AND ", w) : "";
+        long total = count ? BelegpostDb.Scalar(c, "SELECT COUNT(*) FROM gotomaxx_protokoll" + where, p.ToArray()) is long n ? n : 0 : 0;
+        p.Add(("@l", Math.Clamp(limit, 1, 5000))); p.Add(("@off", Math.Max(0, offset)));
+        using var cmd = BelegpostDb.Cmd(c, Select + where + " ORDER BY zeit DESC, nr DESC LIMIT @l OFFSET @off", p.ToArray());
         using var r = cmd.ExecuteReader();
         var list = new List<GotomaxxLogEntry>();
         while (r.Read()) list.Add(Read(r));
-        return list;
+        return (list, count ? total : list.Count);
     }
 
     /// <summary>Drucker (gotomaxx-Profile) mit Zählern.</summary>
+    private (DateTime At, List<object> Data)? _profilesCache;
+
+    /// <summary>Drucker mit Zählern – 30 s zwischengespeichert (bei sehr großen Protokollen ist das Zählen teuer).</summary>
     public List<object> Profiles()
+    {
+        if (_profilesCache is { } pc && DateTime.UtcNow - pc.At < TimeSpan.FromSeconds(30)) return pc.Data;
+        var data = ProfilesUncached();
+        _profilesCache = (DateTime.UtcNow, data);
+        return data;
+    }
+
+    private List<object> ProfilesUncached()
     {
         using var c = _db.Open();
         using var cmd = BelegpostDb.Cmd(c, "SELECT profil, COUNT(*), SUM(status=1), SUM(status IN (2,3)), MAX(zeit) FROM gotomaxx_protokoll GROUP BY profil ORDER BY profil COLLATE NOCASE");

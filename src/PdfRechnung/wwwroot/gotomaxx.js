@@ -4,12 +4,14 @@
    Gotomaxx → je Drucker (gotomaxx-Profil): Protokoll mit Belegdaten und ERP-Rückmeldung
    ========================================================= */
 
-const GX = { items: [] };
+const GX = { items: [], offset: 0, limit: 100, total: 0 };
+try { GX.limit = +localStorage.getItem("gx.limit") || 100; } catch { }
 
 async function renderGotomaxx(view) {
   clearInterval(VL.timer);
   const printer = new URLSearchParams(location.hash.split("?")[1] || "").get("d") || "";
   $("#viewTitle").textContent = printer ? `gotomaxx – ${printer}` : "gotomaxx";
+  GX.offset = 0;
   view.innerHTML = `
     <div class="toolbar">
       <div class="filters">
@@ -21,7 +23,7 @@ async function renderGotomaxx(view) {
       <div class="filters"><button class="btn ghost" id="gxReload">Aktualisieren</button></div>
     </div>
     <div class="notice" id="gxMsg" hidden></div>
-    <div class="card"><div class="table-wrap"><table class="list eglist" id="gxTable"><tbody><tr><td class="meta">Lade …</td></tr></tbody></table></div></div>
+    <div class="card" id="gxCard"><div id="gxPagerTop"></div><div class="table-wrap"><table class="list eglist" id="gxTable"><tbody><tr><td class="meta">Lade …</td></tr></tbody></table></div><div id="gxPager"></div></div>
     <p class="meta">Aus dem Protokoll von gotomaxx PDFMAILER: ob der Beleg verarbeitet (gespeichert, gedruckt, gemailt) wurde oder welcher Fehler auftrat,
       und ob das Ergebnis ans ERP zurückgemeldet wurde. Belege, die Belegpost an gotomaxx übergeben hat, werden über den Vorgang gemeldet;
       direkt aus dem ERP gedruckte über den erratenen Belegindex.</p>`;
@@ -30,13 +32,17 @@ async function renderGotomaxx(view) {
     const p = new URLSearchParams(); if (printer) p.set("drucker", printer);
     const q = $("#gxSearch").value.trim(); if (q) p.set("q", q);
     for (const [id, k] of [["gxStatus", "status"], ["gxFrom", "from"], ["gxTo", "to"]]) if ($("#" + id).value) p.set(k, $("#" + id).value);
+    p.set("offset", GX.offset); p.set("limit", GX.limit);
     try { const r = await api("GET", "api/gotomaxx-protokoll?" + p); if (!Array.isArray(r.items)) throw new Error("Das Protokoll konnte nicht geladen werden. Läuft schon die neue Version des Dienstes (Dienst neu starten)?");
-      GX.items = r.items; GX.canChange = r.canChange; show(""); drawGotomaxx(); }
+      GX.items = r.items; GX.canChange = r.canChange; GX.total = r.total ?? r.items.length; show(""); drawGotomaxx();
+      const pg = GX.total > r.items.length || GX.offset > 0 ? pagerHtml(GX.offset, GX.limit, GX.total, r.items.length) : "";
+      $("#gxPager").innerHTML = pg; $("#gxPagerTop").innerHTML = pg; }
     catch (e) { show(e.message); if (!GX.items.length) $("#gxTable").innerHTML = `<tbody><tr><td class="empty">Keine Daten.</td></tr></tbody>`; }
   };
   let deb;
-  $("#gxSearch").oninput = () => { clearTimeout(deb); deb = setTimeout(load, 300); };
-  for (const id of ["gxStatus", "gxFrom", "gxTo"]) $("#" + id).onchange = load;
+  $("#gxSearch").oninput = () => { clearTimeout(deb); deb = setTimeout(() => { GX.offset = 0; load(); }, 300); };
+  for (const id of ["gxStatus", "gxFrom", "gxTo"]) $("#" + id).onchange = () => { GX.offset = 0; load(); };
+  bindPager($("#gxCard"), GX, load, "gx.limit");
   $("#gxReload").onclick = load;
   $("#gxTable").addEventListener("click", async e => {
     const b = e.target.closest("[data-gx-retry]"); if (!b) return;

@@ -124,6 +124,13 @@ public sealed class DatabaseAndErpTests : IDisposable
         Assert.DoesNotContain("geheim@kunde.at", html);
         Assert.DoesNotContain("Geheimkunde", html);
         Assert.Contains("R-9", html);
+        // PDF über den Link
+        Assert.Single(view.Pdfs);
+        Assert.NotNull(svc.PdfPath(view.Pdfs[0].VorgangId));
+        Assert.Contains($"{token}/pdf/0", StatusLinkService.RenderHtml(view, "Belegpost", token));
+        opt.ShowPdf = false;
+        Assert.Empty(svc.Resolve(token)!.Pdfs);
+        opt.ShowPdf = true;
         Assert.Null(svc.Resolve("falsch"));
         svc.Revoke(v);
         Assert.Null(svc.Resolve(token));
@@ -292,6 +299,57 @@ public sealed class DatabaseAndErpTests : IDisposable
         Assert.True(store.Get(v.Id)!.MandantManual);
         Assert.Null(proc.Recheck(v.Id, "Test")!.Mandant);
         Assert.Throws<ArgumentException>(() => erp.Resend(a.Id, "999", false, "Admin"));
+    }
+
+    [Fact]
+    public void Belegordner_je_Mandant_und_Verschieben()
+    {
+        Directory.CreateDirectory(_dir);
+        var settings = new SettingsStore(_dir);
+        var so = new StorageOptions();
+        var store = new DocumentStore(settings, NullLogger<DocumentStore>.Instance, new StaticOptions<StorageOptions>(so));
+        var s = DefaultSettings.Create();
+        var proc = new DocumentProcessor(store, new StaticOptions<MailOptions>(s.Mail), new StaticOptions<InvoiceOptions>(s.Invoice),
+            NullLogger<DocumentProcessor>.Instance, settings: settings);
+        var a = proc.Process(TestData.Pdf(new[] { "@@pm000004@@", "@@toa@kunde.at@@" }), "Eingang", "a.pdf");
+        var b = proc.Process(TestData.Pdf(new[] { "@@toa@kunde.at@@" }), "Eingang", "b.pdf");
+        var dirA = store.Directory_(a.Id)!;
+        Assert.Contains(Path.Combine("vorgaenge", "Mandant-4", a.CreatedAt.ToString("yyyy"), a.CreatedAt.ToString("MM"), a.Id), dirA);
+        Assert.Contains(Path.Combine("vorgaenge", "Allgemein"), store.Directory_(b.Id)!);
+        Assert.Equal((2L, 0L), store.CountOutsideRoot());
+
+        // neuer Belegordner: neue Vorgänge landen dort, vorhandene werden verschoben
+        so.DocumentFolder = Path.Combine(_dir, "belege-neu");
+        Assert.Equal((2L, 2L), store.CountOutsideRoot());
+        var c = proc.Process(TestData.Pdf(new[] { "@@toa@kunde.at@@" }), "Eingang", "c.pdf");
+        Assert.StartsWith(so.DocumentFolder, store.Directory_(c.Id)!);
+        Assert.Equal(DocumentStore.RelocateResult.Moved, store.Relocate(a.Id, out var left));
+        Assert.Null(left);
+        Assert.StartsWith(Path.Combine(so.DocumentFolder, "Mandant-4"), store.Directory_(a.Id)!);
+        Assert.True(File.Exists(store.FilePath(a.Id, DocumentStore.PdfFile)));
+        Assert.False(Directory.Exists(dirA));
+        Assert.Equal(DocumentStore.RelocateResult.Unchanged, store.Relocate(a.Id, out _));
+
+        // Mandant geändert → Ordner gehört woanders hin
+        string? changed = null;
+        store.MandantChanged += id => changed = id;
+        store.Update(b.Id, v => { v.Mandant = "7"; return true; });
+        Assert.Equal(b.Id, changed);
+        Assert.Equal(DocumentStore.RelocateResult.Moved, store.Relocate(b.Id, out _));
+        Assert.Contains(Path.Combine("belege-neu", "Mandant-7"), store.Directory_(b.Id)!);
+        Assert.Equal((3L, 0L), store.CountOutsideRoot());
+    }
+
+    [Fact]
+    public void Vorgangsliste_blaettert()
+    {
+        var (store, proc, _, _) = Create();
+        for (var i = 0; i < 5; i++) proc.Process(TestData.Pdf(new[] { "@@toa@kunde.at@@" }), "Eingang", $"{i}.pdf");
+        var f = new VorgangFilter { SeeAll = true, Limit = 2 };
+        Assert.Equal(5, store.Count(f));
+        var p1 = store.Query(f); var p3 = store.Query(f with { Offset = 4 });
+        Assert.Equal(2, p1.Count); Assert.Single(p3);
+        Assert.DoesNotContain(p3[0].Id, p1.Select(x => x.Id));
     }
 
     private sealed class EmptyServices : IServiceProvider { public object? GetService(Type t) => null; }

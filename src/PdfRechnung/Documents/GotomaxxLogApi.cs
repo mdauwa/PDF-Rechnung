@@ -39,16 +39,17 @@ public static class GotomaxxLogApi
             state = new { at = log.State.At, error = log.State.Error, files = log.State.Files }
         }));
 
-        g.MapGet("", (string? drucker, string? q, string? status, string? from, string? to, GotomaxxLogService log, Erp.ErpFeedbackService erp, HttpContext ctx) =>
+        g.MapGet("", (string? drucker, string? q, string? status, string? from, string? to, int? offset, int? limit, GotomaxxLogService log, Erp.ErpFeedbackService erp, HttpContext ctx) =>
         {
-            var items = log.List(drucker, q, status,
+            var (items, total) = log.Page(drucker, q, status,
                 DateOnly.TryParse(from, out var f) ? new DateTimeOffset(f.ToDateTime(TimeOnly.MinValue)) : null,
-                DateOnly.TryParse(to, out var t) ? new DateTimeOffset(t.AddDays(1).ToDateTime(TimeOnly.MinValue)) : null, 1000,
-                owners: Owners(ctx));
+                DateOnly.TryParse(to, out var t) ? new DateTimeOffset(t.AddDays(1).ToDateTime(TimeOnly.MinValue)) : null,
+                Math.Clamp(limit ?? 100, 1, 500), false, Owners(ctx), Math.Max(0, offset ?? 0));
             var a = ctx.RequestServices.GetRequiredService<PortalAccess>().For(ctx);
             return Results.Ok(new
             {
                 items = items.Select(e => Item(e, erp)),
+                total, offset = Math.Max(0, offset ?? 0), limit = Math.Clamp(limit ?? 100, 1, 500),
                 canChange = a.CanSend
             });
         });

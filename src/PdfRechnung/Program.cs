@@ -125,6 +125,8 @@ builder.Services.AddSingleton(sp => new RuntimeControl(sp.GetRequiredService<IHo
 // ---- Vorgänge ----
 builder.Services.AddSingleton<EventHub>();
 builder.Services.AddSingleton<DocumentStore>();
+builder.Services.AddSingleton<DocumentRelocator>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<DocumentRelocator>());
 builder.Services.AddSingleton(new PdfRechnung.Delivery.CustomerStore(store.DataDirectory));
 builder.Services.AddSingleton<PdfRechnung.Delivery.DeliveryService>();
 builder.Services.AddSingleton(new PdfRechnung.Delivery.InboundLog(database, store.DataDirectory));

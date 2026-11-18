@@ -58,7 +58,7 @@ public static class VorgangApi
             return await next(ctx);
         });
 
-        g.MapGet("", (string? status, string? q, string? from, string? to, string? mine, DocumentStore store, PortalAccess access, HttpContext ctx, Delivery.InboundLog book) =>
+        g.MapGet("", (string? status, string? q, string? from, string? to, string? mine, int? offset, int? limit, DocumentStore store, PortalAccess access, HttpContext ctx, Delivery.InboundLog book) =>
         {
             var acc = access.For(ctx);
             var me = acc.UserId;
@@ -71,7 +71,8 @@ public static class VorgangApi
                 From = DateOnly.TryParse(from, out var f) ? new DateTimeOffset(f.ToDateTime(TimeOnly.MinValue)) : null,
                 Before = DateOnly.TryParse(to, out var t) ? new DateTimeOffset(t.AddDays(1).ToDateTime(TimeOnly.MinValue)) : null,
                 Text = string.IsNullOrWhiteSpace(q) ? null : q,
-                Limit = 2000
+                Offset = Math.Max(0, offset ?? 0),
+                Limit = Math.Clamp(limit ?? 100, 1, 500)
             };
             var today = new DateTimeOffset(DateTime.Today);
             var mineOpen = me is null ? 0 : store.Count(vis with
@@ -82,6 +83,7 @@ public static class VorgangApi
             return Results.Ok(new
             {
                 items = store.Query(filter).Select(v => v.Summary()),
+                total = store.Count(filter), offset = filter.Offset, limit = filter.Limit,
                 counts = store.CountByStatus(vis),
                 mine = mineOpen,
                 sentToday = store.CountSentBetween(vis, today, today.AddDays(1)),

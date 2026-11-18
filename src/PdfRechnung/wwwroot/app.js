@@ -344,6 +344,37 @@ function confirmDialog(title, text, okLabel = "OK", danger = false) {
   });
 }
 
+/**
+ * Blätterleiste für lange Listen: „1–100 von 12 345“, Zurück/Weiter und Einträge pro Seite.
+ * Knöpfe tragen data-page="-1|1", die Auswahl data-pagesize.
+ */
+function pagerHtml(offset, limit, total, shown) {
+  if (!total) return "";
+  const from = offset + 1, to = offset + shown;
+  return `<div class="pager">
+    <span class="meta">${from.toLocaleString("de-AT")}–${to.toLocaleString("de-AT")} von ${total.toLocaleString("de-AT")}</span>
+    <span class="pager-nav">
+      <select data-pagesize aria-label="Einträge pro Seite">${[50, 100, 200, 500].map(n => `<option value="${n}" ${n === limit ? "selected" : ""}>${n} pro Seite</option>`).join("")}</select>
+      <button class="btn ghost small" data-page="-1" ${offset > 0 ? "" : "disabled"}>← Zurück</button>
+      <button class="btn ghost small" data-page="1" ${to < total ? "" : "disabled"}>Weiter →</button>
+    </span></div>`;
+}
+
+/** Klicks/Änderungen an der Blätterleiste in <paramref name="root"/> an ein Zustandsobjekt {offset, limit} binden. */
+function bindPager(root, state, reload, storeKey) {
+  root.addEventListener("click", e => {
+    const b = e.target.closest("[data-page]"); if (!b || b.disabled) return;
+    state.offset = Math.max(0, state.offset + (+b.dataset.page) * state.limit);
+    reload(); root.scrollIntoView?.({ block: "start" });
+  });
+  root.addEventListener("change", e => {
+    const s = e.target.closest("[data-pagesize]"); if (!s) return;
+    state.limit = +s.value; state.offset = 0;
+    if (storeKey) try { localStorage.setItem(storeKey, s.value); } catch { }
+    reload();
+  });
+}
+
 /** Kurze Meldung unten rechts. */
 function toast(text, ok = true) {
   const t = document.createElement("div");

@@ -550,3 +550,8 @@ table.sender-table input { width: 100%; min-width: 160px; }
 .head-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .eq-list { width: 100%; }
 .eq-list .eq-msg { white-space: normal; overflow-wrap: anywhere; word-break: normal; min-width: 240px; }
+
+/* Blätterleiste */
+.pager { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 12px; }
+.pager-nav { display: flex; gap: 6px; align-items: center; }
+.pager-nav select { width: auto; padding: 4px 8px; font-size: 12px; }

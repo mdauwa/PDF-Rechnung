@@ -41,18 +41,37 @@ public sealed class DocumentStore
     private readonly object _lock = new();
     private readonly ILogger<DocumentStore> _log;
 
-    public DocumentStore(SettingsStore settings, ILogger<DocumentStore> log)
+    public DocumentStore(SettingsStore settings, ILogger<DocumentStore> log, Microsoft.Extensions.Options.IOptionsMonitor<StorageOptions>? storage = null)
     {
         _log = log;
+        _storage = storage;
+        _dataDirectory = settings.DataDirectory;
         Db = BelegpostDb.For(settings.DataDirectory);
         Root = Path.Combine(settings.DataDirectory, "vorgaenge");
         Directory.CreateDirectory(Root);
-        ImportLegacy();
+        // alte meta.json-Ablage nur einmal durchsuchen – bei sehr vielen Vorgängen würde das jeden Start bremsen
+        var marker = Path.Combine(settings.DataDirectory, "vorgaenge-uebernommen.txt");
+        if (!File.Exists(marker))
+        {
+            ImportLegacy();
+            try { File.WriteAllText(marker, $"Übernahme der alten Ablage abgeschlossen: {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss}"); } catch { /* beim nächsten Start erneut */ }
+        }
         RecoverInterrupted();
     }
 
+    private readonly Microsoft.Extensions.Options.IOptionsMonitor<StorageOptions>? _storage;
+    private readonly string _dataDirectory;
+
     public BelegpostDb Db { get; }
+    /// <summary>Standard-Ablage im Datenordner (auch Ziel, wenn der eingestellte Belegordner nicht erreichbar ist).</summary>
     public string Root { get; }
+
+    /// <summary>Eingestellter Belegordner (Einstellungen → Ablage), sonst <see cref="Root"/>. Datenbank und Schlüssel bleiben immer im Datenordner.</summary>
+    public string DocumentRoot => _storage?.CurrentValue.DocumentFolder is { Length: > 0 } f && !string.IsNullOrWhiteSpace(f) ? f.Trim() : Root;
+
+    /// <summary>Unterordner je Mandant – gleiche Belegnummern verschiedener Mandanten kommen sich so nicht in die Quere.</summary>
+    public static string MandantFolder(string? mandant) =>
+        MandantOptions.Normalize(mandant) is { } m ? "Mandant-" + MandantOptions.Key(m) : "Allgemein";
     public event Action<Vorgang>? Changed;
     /// <summary>Neuer Eintrag im Zeitstrahl (z. B. für die ERP-Rückmeldung).</summary>
     public event Action<VorgangEvent, Vorgang>? StatusChanged;
@@ -297,13 +316,23 @@ public sealed class DocumentStore
     // ---------------- Schreiben ----------------
 
     /// <summary>Legt einen neuen Vorgang mit seinen Dateien an.</summary>
-    /// <summary>Ordner, in dem ein neuer Vorgang angelegt wird.</summary>
-    public string DirectoryFor(Vorgang v) => Path.Combine(Root, v.CreatedAt.ToString("yyyy"), v.CreatedAt.ToString("MM"), v.Id);
+    /// <summary>Ordner, in den ein Vorgang gehört: Belegordner\Mandant\JJJJ\MM\Vorgang.</summary>
+    public string DirectoryFor(Vorgang v) => DirectoryFor(v, DocumentRoot);
+
+    public static string DirectoryFor(Vorgang v, string root) =>
+        Path.Combine(root, MandantFolder(v.Mandant), v.CreatedAt.ToString("yyyy"), v.CreatedAt.ToString("MM"), v.Id);
 
     public void Create(Vorgang v, byte[] pdf, string text, byte[]? sendPdf = null)
     {
         var dir = DirectoryFor(v);
-        Directory.CreateDirectory(dir);
+        try { Directory.CreateDirectory(dir); }
+        catch (Exception ex) when (DocumentRoot != Root)
+        {
+            // Belegordner nicht erreichbar (z. B. Netzlaufwerk weg): nichts verlieren, im Datenordner ablegen – wird später verschoben
+            _log.LogWarning(ex, "Belegordner {Root} nicht erreichbar – Vorgang {Id} wird im Datenordner abgelegt", DocumentRoot, v.Id);
+            dir = DirectoryFor(v, Root);
+            Directory.CreateDirectory(dir);
+        }
         File.WriteAllBytes(Path.Combine(dir, PdfFile), pdf);
         if (sendPdf is not null) File.WriteAllBytes(Path.Combine(dir, SendFile), sendPdf);
         if (v.PendingEInvoice is not null) File.WriteAllBytes(Path.Combine(dir, XmlFile), v.PendingEInvoice);
@@ -344,6 +373,7 @@ public sealed class DocumentStore
     {
         Vorgang v;
         VorgangEvent? ev = null;
+        string? oldMandant;
         lock (_lock)
         {
             using var c = Db.Open();
@@ -353,6 +383,7 @@ public sealed class DocumentStore
             v = row.Value.V;
             var oldStatus = v.Status;
             var oldSendCount = v.SendCount;
+            oldMandant = v.Mandant;
             if (!change(v)) return v;
             if (v.Status == VorgangStatus.Sent && oldStatus != VorgangStatus.Sent) v.SendCount = oldSendCount + 1;
             if (v.Status != oldStatus && StatusCode.FromVorgang(v, v.SendCount > 1) is { } code && code != v.StatusCode)
@@ -368,7 +399,104 @@ public sealed class DocumentStore
         }
         Changed?.Invoke(v);
         if (ev is not null) StatusChanged?.Invoke(ev, v);
+        if (!string.Equals(MandantFolder(oldMandant), MandantFolder(v.Mandant), StringComparison.OrdinalIgnoreCase)) MandantChanged?.Invoke(v.Id);
         return v;
+    }
+
+    /// <summary>Der Mandant eines Vorgangs hat sich geändert – sein Ordner gehört dann in einen anderen Mandanten-Ordner.</summary>
+    public event Action<string>? MandantChanged;
+
+    public enum RelocateResult { Unchanged, Moved, Skipped, Missing }
+
+    /// <summary>
+    /// Vorgang in den Ordner verschieben, in den er gehört (<see cref="DirectoryFor(Vorgang)"/>): eingestellter Belegordner,
+    /// Mandant, Monat. Erst kopieren und prüfen, dann den Ordner in der Datenbank umstellen, zuletzt den alten löschen.
+    /// Liefert den alten Ordner in <paramref name="leftover"/>, wenn er (z. B. weil eine Datei offen ist) nicht gelöscht werden konnte.
+    /// </summary>
+    public RelocateResult Relocate(string id, out string? leftover) => Relocate(id, out leftover, out _);
+
+    public RelocateResult Relocate(string id, out string? leftover, out string? previous)
+    {
+        leftover = null; previous = null;
+        string oldDir, target;
+        lock (_lock)
+        {
+            using var c = Db.Open();
+            var row = Read(c, id);
+            if (row is null) return RelocateResult.Skipped;
+            var (v, dir) = row.Value;
+            target = DirectoryFor(v);
+            if (SamePath(dir, target)) return RelocateResult.Unchanged;
+            if (v.Status == VorgangStatus.Sending) return RelocateResult.Skipped; // gerade im Versand – später
+            if (!Directory.Exists(dir)) return RelocateResult.Missing;
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            var moved = false;
+            if (!Directory.Exists(target) && string.Equals(Path.GetPathRoot(Path.GetFullPath(dir)), Path.GetPathRoot(Path.GetFullPath(target)), StringComparison.OrdinalIgnoreCase))
+            {
+                try { Directory.Move(dir, target); moved = true; } catch (IOException) { /* z. B. Datei offen – dann kopieren */ } catch (UnauthorizedAccessException) { }
+            }
+            if (!moved) CopyVerified(dir, target);
+            BelegpostDb.Exec(c, "UPDATE vorgang SET ordner=@o WHERE id=@id", ("@o", target), ("@id", id));
+            oldDir = moved ? "" : dir;
+            previous = dir;
+        }
+        if (oldDir.Length > 0)
+        {
+            try { Directory.Delete(oldDir, recursive: true); }
+            catch (Exception ex) { leftover = oldDir; _log.LogInformation("Alter Ordner {Dir} konnte (noch) nicht gelöscht werden: {Msg}", oldDir, ex.Message); }
+        }
+        return RelocateResult.Moved;
+    }
+
+    /// <summary>Leere Elternordner (Monat, Jahr, Mandant) nach dem Verschieben entfernen – nie den Ablage-Stamm selbst.</summary>
+    public void RemoveEmptyParents(string dir)
+    {
+        var roots = new[] { Root, DocumentRoot }.Select(r => Path.GetFullPath(r).TrimEnd('\\', '/')).ToList();
+        var d = Path.GetDirectoryName(Path.GetFullPath(dir));
+        for (var i = 0; i < 3 && d is not null; i++)
+        {
+            if (roots.Any(r => string.Equals(r, d.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))) return;
+            try { if (Directory.Exists(d) && !Directory.EnumerateFileSystemEntries(d).Any()) Directory.Delete(d); else return; }
+            catch { return; }
+            d = Path.GetDirectoryName(d);
+        }
+    }
+
+    public static bool SamePath(string a, string b) =>
+        string.Equals(Path.GetFullPath(a).TrimEnd('\\', '/'), Path.GetFullPath(b).TrimEnd('\\', '/'),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    private static void CopyVerified(string from, string to)
+    {
+        Directory.CreateDirectory(to);
+        foreach (var src in Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories))
+        {
+            var dst = Path.Combine(to, Path.GetRelativePath(from, src));
+            Directory.CreateDirectory(Path.GetDirectoryName(dst)!);
+            File.Copy(src, dst, overwrite: true);
+            if (new FileInfo(src).Length != new FileInfo(dst).Length) throw new IOException($"Kopie von {src} ist unvollständig.");
+        }
+    }
+
+    /// <summary>IDs in Anlagereihenfolge (für das Verschieben in Blöcken; Schlüssel = letzte ID).</summary>
+    public List<(string Id, string Dir)> IdsAfter(string? afterId, int count)
+    {
+        using var c = Db.Open();
+        using var cmd = BelegpostDb.Cmd(c, "SELECT id, ordner FROM vorgang WHERE id > @a ORDER BY id LIMIT @n", ("@a", afterId ?? ""), ("@n", count));
+        using var r = cmd.ExecuteReader();
+        var list = new List<(string, string)>();
+        while (r.Read()) list.Add((r.GetString(0), r.GetString(1)));
+        return list;
+    }
+
+    /// <summary>Wie viele Vorgänge liegen (noch) außerhalb des eingestellten Belegordners?</summary>
+    public (long Total, long Outside) CountOutsideRoot()
+    {
+        var root = Path.GetFullPath(DocumentRoot).TrimEnd('\\', '/') + Path.DirectorySeparatorChar;
+        using var c = Db.Open();
+        var total = BelegpostDb.Scalar(c, "SELECT COUNT(*) FROM vorgang") is long t ? t : 0;
+        var inside = BelegpostDb.Scalar(c, "SELECT COUNT(*) FROM vorgang WHERE substr(ordner, 1, @n) = @r COLLATE NOCASE", ("@n", root.Length), ("@r", root)) is long i ? i : 0;
+        return (total, total - inside);
     }
 
     public bool Delete(string id)
@@ -384,7 +512,7 @@ public sealed class DocumentStore
             BelegpostDb.Exec(c, "DELETE FROM vorgang_ereignis WHERE vorgang_id=@id", ("@id", id));
             tx.Commit();
         }
-        try { Directory.Delete(dir, recursive: true); } catch (Exception ex) { _log.LogWarning(ex, "Ordner {Dir} konnte nicht gelöscht werden", dir); }
+        try { Directory.Delete(dir, recursive: true); RemoveEmptyParents(dir); } catch (Exception ex) { _log.LogWarning(ex, "Ordner {Dir} konnte nicht gelöscht werden", dir); }
         return true;
     }
 

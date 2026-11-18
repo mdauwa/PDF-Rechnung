@@ -10,7 +10,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>BelegpostFiliale</RootNamespace>
     <AssemblyName>Belegpost-Filialclient</AssemblyName>
-    <Version>0.1.0</Version>
     <Product>Belegpost Filial-Client</Product>
     <Company>Belegpost</Company>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>

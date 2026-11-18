@@ -52,7 +52,7 @@ public sealed class LicenseService : BackgroundService
     private static readonly TimeSpan RetryInterval = TimeSpan.FromHours(1);
 
     /// <summary>Gemeldete Programmversion (X-Product-Version) – muss im Versionskatalog des Lizenzservers stehen.</summary>
-    public static string ProductVersion { get; } = (typeof(LicenseService).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{Math.Max(0, v.Build)}" : "0.0.0");
+    public static string ProductVersion { get; } = typeof(LicenseService).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 
     private readonly SettingsStore _settings;
     private readonly ILogger<LicenseService> _log;

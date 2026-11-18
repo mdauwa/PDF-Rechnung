@@ -10,7 +10,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>BelegpostMelder</RootNamespace>
     <AssemblyName>Belegpost-Melder</AssemblyName>
-    <Version>0.1.0</Version>
     <Product>Belegpost Melder</Product>
     <Company>Belegpost</Company>
     <ApplicationIcon>Melder.ico</ApplicationIcon>

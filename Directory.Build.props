@@ -1,0 +1,28 @@
+<Project>
+  <!--
+    Versionierung für alle Belegpost-Programme: 1.0.<Build>
+    <Build> = Anzahl der Git-Commits (steigt mit jedem Commit automatisch; gleicher Stand = gleiche Nummer).
+    Ohne Git (z. B. Quellcode-Kopie) wird 0 verwendet. Hauptversion hier ändern.
+  -->
+  <PropertyGroup>
+    <BelegpostMajorMinor>1.0</BelegpostMajorMinor>
+    <Version>$(BelegpostMajorMinor).0</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+  <Target Name="BelegpostVersion" BeforeTargets="GetAssemblyVersion;GenerateAssemblyInfo;PrepareForBuild">
+    <Exec Command="git rev-list --count HEAD" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low"
+          StandardErrorImportance="low" WorkingDirectory="$(MSBuildThisFileDirectory)" Condition="'$(BelegpostBuild)' == ''">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_BelegpostGitCount" />
+      <Output TaskParameter="ExitCode" PropertyName="_BelegpostGitExit" />
+    </Exec>
+    <PropertyGroup>
+      <BelegpostBuild Condition="'$(BelegpostBuild)' == '' And '$(_BelegpostGitExit)' == '0'">$(_BelegpostGitCount.Trim())</BelegpostBuild>
+      <BelegpostBuild Condition="'$(BelegpostBuild)' == ''">0</BelegpostBuild>
+      <Version>$(BelegpostMajorMinor).$(BelegpostBuild)</Version>
+      <AssemblyVersion>$(Version).0</AssemblyVersion>
+      <FileVersion>$(Version).0</FileVersion>
+      <InformationalVersion>$(Version)</InformationalVersion>
+    </PropertyGroup>
+  </Target>
+</Project>

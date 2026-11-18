@@ -6,7 +6,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>PdfRechnung</RootNamespace>
     <AssemblyName>Belegpost</AssemblyName>
-    <Version>0.1.0</Version>
     <Product>Belegpost</Product>
     <Company>Belegpost</Company>
     <!-- Ziel: Windows Server / Windows 10/11 x64 -->

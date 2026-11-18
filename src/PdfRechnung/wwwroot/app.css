@@ -567,3 +567,4 @@ table.sender-table input { width: 100%; min-width: 160px; }
 .license-banner.test { background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); }
 .license-banner.bad { background: #fdecec; border: 1px solid #f3b9b9; color: #8a1f1f; }
 .license-banner a { margin-left: 6px; }
+.lic-tech { margin: 10px 0; } .lic-tech summary { cursor: pointer; color: var(--muted); }

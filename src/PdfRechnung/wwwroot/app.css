@@ -546,3 +546,7 @@ table.sender-table input { width: 100%; min-width: 160px; }
 .eq-pager { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 8px 0; flex-wrap: wrap; }
 .eq-list .eq-msg { word-break: break-word; min-width: 200px; }
 @media (max-width: 900px) { .eq-filter { grid-template-columns: 1fr 1fr; } }
+.settings.wide { max-width: none; }
+.head-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.eq-list { width: 100%; }
+.eq-list .eq-msg { white-space: normal; overflow-wrap: anywhere; word-break: normal; min-width: 240px; }

@@ -119,6 +119,8 @@ function drawTab() {
     erp: tabErp, erpqueue: tabErpQueue, mapi: tabMapi, statuslink: tabStatusLink, regeln: tabRules, bilder: tabImages, mandanten: tabMandanten, versandwege: tabDelivery, kunden: tabCustomers, connect: tabConnect,
     benachrichtigung: tabAlerts, api: tabApi, filialverbund: tabFilialverbund }[ST.tab] || tabService;
   body.innerHTML = fn();
+  // Listen-Reiter nutzen die ganze Seitenbreite
+  body.closest(".settings")?.classList.toggle("wide", ST_WIDE_TABS.includes(ST.tab));
   if (ST.tab === "benutzer" && !ST.users) loadUsers();
   if (ST.tab === "benutzer" && !ST.devices) loadDevices();
   if (ST.tab === "erp") loadErpStatus();
@@ -1596,6 +1598,8 @@ async function loadErpStatus() {
 
 /* ---------------- Tab: ERP-Warteschlange (seitenweise) ---------------- */
 
+const ST_WIDE_TABS = ["erpqueue"];
+
 const EQ = { status: "", q: "", mandant: "", offset: 0, limit: 50, data: null, error: "" };
 const EQ_LABEL = { offen: ["partial", "offen"], erledigt: ["ok", "erledigt"], fehler: ["missing", "Fehler"], ersetzt: ["free", "ersetzt"], verworfen: ["free", "verworfen"] };
 
@@ -1612,7 +1616,7 @@ function tabErpQueue() {
       ${field("Pro Seite", `<select data-eq="limit">${[25, 50, 100, 200].map(n => opt(String(n), String(n), String(EQ.limit))).join("")}</select>`)}
     </div>
     <div id="erpQueue"><p class="meta">Lade …</p></div>`,
-    `<button class="btn ghost" data-st="eq-reload">Aktualisieren</button><button class="btn ghost" data-st="erp-retry-all">Offene jetzt versuchen</button>`);
+    `<div class="head-actions"><button class="btn ghost" data-st="eq-reload">Aktualisieren</button><button class="btn ghost" data-st="erp-retry-all">Offene jetzt versuchen</button></div>`);
 }
 
 let eqTimer = null, eqSeq = 0;
@@ -1699,7 +1703,7 @@ async function loadErpQueue() {
       ${items.map(j => `<tr><td class="nowrap">${fmtDT(j.done || j.created)}</td><td class="mono nowrap">${link(j)}</td>
         <td class="nowrap">${erpJobTarget(j)}</td>
         <td><span class="badge code" title="${esc(j.codeText || "")}">${esc(j.code)}</span></td><td><span class="badge ${EQ_LABEL[j.status]?.[0] || ""}">${EQ_LABEL[j.status]?.[1] || esc(j.status)}</span>${j.status === "offen" && j.attempts ? `<small> Versuch ${j.attempts + 1} um ${fmtDT(j.nextAttempt)}</small>` : ""}</td>
-        <td class="eq-msg">${esc(j.message || (j.fields ? Object.entries(j.fields).map(([k, v]) => k + "=" + v).join(", ") : ""))}</td>
+        <td class="eq-msg">${j.message ? esc(j.message) : j.fields ? Object.entries(j.fields).map(([k, v]) => `<span class="mono">${esc(k)}</span>=${esc(v)}`).join("<br>") : ""}</td>
         <td class="nowrap"><button class="btn ghost small" data-st="eq-resend" data-id="${j.id}" title="Noch einmal ans ERP senden – wahlweise an einen anderen Mandanten">Neu senden …</button>
           ${["fehler", "offen"].includes(j.status) ? `<button class="btn ghost small" data-st="erp-job-discard" data-id="${j.id}" title="Verwerfen" aria-label="Verwerfen">✕</button>` : ""}</td></tr>`).join("")}
       </tbody></table></div>${total > items.length ? pager : ""}`
@@ -1709,7 +1713,7 @@ async function loadErpQueue() {
 /** Mandant und SecuredApp eines Rückmeldeauftrags (leer = allgemeine Verbindung). */
 function erpJobTarget(j) {
   const md = j.mandant ? `Mandant ${esc(j.mandant)}` : `<span class="meta">allgemein</span>`;
-  return `${md}${j.secureApp ? `<small class="mono"> · ID ${esc(j.secureApp)}</small>` : ""}`;
+  return `${md}${j.secureApp ? `<span class="mono meta-inline"> · ID ${esc(j.secureApp)}</span>` : ""}`;
 }
 
 /* ---------------- Tab: MAPI-Mails ---------------- */

@@ -179,7 +179,8 @@ public static class ErpFieldBuilder
 
 /// <summary>Ein Auftrag der ERP-Rückmeldung (Tabelle erp_auftrag).</summary>
 public sealed record ErpJob(long Id, string ErpIndex, string VorgangId, string Code, DateTimeOffset EventAt, string Status, int Attempts,
-    DateTimeOffset NextAttempt, DateTimeOffset Created, DateTimeOffset? Done, string? Message, string? Fields);
+    DateTimeOffset NextAttempt, DateTimeOffset Created, DateTimeOffset? Done, string? Message, string? Fields,
+    string? Mandant = null, string? SecureApp = null);
 
 public static class ErpJobStatus
 {
@@ -242,6 +243,9 @@ public sealed class ErpFeedbackService : BackgroundService
         return _mandanten?.CurrentValue.Find(mandant) is { } m ? m.ErpFor(global) : global;
     }
 
+    /// <summary>Eingerichteter Mandant in seiner Schreibweise aus den Einstellungen; nicht eingerichtet/leer = "" (allgemeine Verbindung).</summary>
+    private string MandantKey(string? mandant) => _mandanten?.CurrentValue.Find(mandant)?.Number ?? "";
+
     private string PassDirectory => Path.Combine(_settings.DataDirectory, "erp");
 
     // ---------------- Einreihen ----------------
@@ -252,23 +256,26 @@ public sealed class ErpFeedbackService : BackgroundService
         {
             var o = OptionsFor(v);
             if (!o.Enabled || v.ErpIndex is null || !ErpFieldBuilder.ShouldWrite(o, e.Code) || o.Fields.Count == 0) return;
-            Enqueue(v.ErpIndex, v.Id, e.Code, e.At);
+            Enqueue(v.ErpIndex, v.Id, e.Code, e.At, v.Mandant);
         }
         catch (Exception ex) { _log.LogWarning(ex, "ERP-Rückmeldung konnte nicht eingereiht werden ({Id})", v.Id); }
     }
 
-    public long Enqueue(string belndx, string vorgangId, string code, DateTimeOffset at)
+    /// <param name="mandant">Mandant des Belegs – derselbe Belegindex kann in mehreren Mandanten vorkommen, ersetzt wird nur im selben.</param>
+    public long Enqueue(string belndx, string vorgangId, string code, DateTimeOffset at, string? mandant = null)
     {
+        var key = MandantKey(mandant);
+        var app = OptionsFor(mandant).SecureAppId;
         long id;
         using (var c = _db.Open())
         using (var tx = c.BeginTransaction())
         {
-            var newer = BelegpostDb.Scalar(c, "SELECT COUNT(*) FROM erp_auftrag WHERE belndx=@b AND ereignis_zeit > @z AND status IN ('offen','erledigt')",
-                ("@b", belndx), ("@z", BelegpostDb.Ms(at))) is long n && n > 0;
-            BelegpostDb.Exec(c, "UPDATE erp_auftrag SET status='ersetzt', erledigt=@now WHERE belndx=@b AND status='offen' AND ereignis_zeit <= @z",
-                ("@b", belndx), ("@z", BelegpostDb.Ms(at)), ("@now", BelegpostDb.Ms(DateTimeOffset.Now)));
-            BelegpostDb.Exec(c, "INSERT INTO erp_auftrag(belndx, vorgang_id, code, ereignis_zeit, status, naechster_versuch, erstellt) VALUES(@b,@v,@c,@z,@s,@n,@n)",
-                ("@b", belndx), ("@v", vorgangId), ("@c", code), ("@z", BelegpostDb.Ms(at)),
+            var newer = BelegpostDb.Scalar(c, "SELECT COUNT(*) FROM erp_auftrag WHERE belndx=@b AND IFNULL(mandant,'')=@k AND ereignis_zeit > @z AND status IN ('offen','erledigt')",
+                ("@b", belndx), ("@k", key), ("@z", BelegpostDb.Ms(at))) is long n && n > 0;
+            BelegpostDb.Exec(c, "UPDATE erp_auftrag SET status='ersetzt', erledigt=@now WHERE belndx=@b AND IFNULL(mandant,'')=@k AND status='offen' AND ereignis_zeit <= @z",
+                ("@b", belndx), ("@k", key), ("@z", BelegpostDb.Ms(at)), ("@now", BelegpostDb.Ms(DateTimeOffset.Now)));
+            BelegpostDb.Exec(c, "INSERT INTO erp_auftrag(belndx, vorgang_id, code, ereignis_zeit, status, naechster_versuch, erstellt, mandant, secure_app) VALUES(@b,@v,@c,@z,@s,@n,@n,@md,@app)",
+                ("@md", key.Length == 0 ? null : key), ("@app", string.IsNullOrWhiteSpace(app) ? null : app.Trim()), ("@b", belndx), ("@v", vorgangId), ("@c", code), ("@z", BelegpostDb.Ms(at)),
                 ("@s", newer ? ErpJobStatus.Superseded : ErpJobStatus.Open), ("@n", BelegpostDb.Ms(DateTimeOffset.Now)));
             id = (long)BelegpostDb.Scalar(c, "SELECT last_insert_rowid()")!;
             tx.Commit();
@@ -312,6 +319,10 @@ public sealed class ErpFeedbackService : BackgroundService
         var v = external ? ExternalVorgang?.Invoke(job.VorgangId) : _store.Get(job.VorgangId);
         if (v is null) { Finish(job.Id, ErpJobStatus.Discarded, external ? "Protokolleintrag nicht mehr vorhanden." : "Vorgang gelöscht.", null); return; }
         var o = OptionsFor(v);
+        // festhalten, mit welchem Mandanten und welcher SecuredApp tatsächlich zurückgemeldet wird
+        using (var c = _db.Open())
+            BelegpostDb.Exec(c, "UPDATE erp_auftrag SET mandant=@m, secure_app=@a WHERE id=@id",
+                ("@m", MandantKey(v.Mandant) is { Length: > 0 } mk ? mk : null), ("@a", string.IsNullOrWhiteSpace(o.SecureAppId) ? null : o.SecureAppId.Trim()), ("@id", job.Id));
         if (!o.Enabled) { Finish(job.Id, ErpJobStatus.Discarded, $"ERP-Rückmeldung für Mandant {v.Mandant} ist aus.", null); return; }
         try
         {
@@ -446,6 +457,26 @@ public sealed class ErpFeedbackService : BackgroundService
         return ReadJobs(c, (w.Count > 0 ? "WHERE " + string.Join(" AND ", w) : "") + " ORDER BY id DESC LIMIT @l", p.ToArray());
     }
 
+    /// <summary>Eine Seite der Warteschlange (neueste zuerst) mit Gesamtzahl. mandant: null = alle, "-" = allgemeine Verbindung.</summary>
+    public (List<ErpJob> Items, long Total) JobsPage(string? status, string? text, string? mandant, int offset, int limit)
+    {
+        var w = new List<string>();
+        var p = new List<(string, object?)>();
+        if (!string.IsNullOrEmpty(status)) { w.Add("status=@s"); p.Add(("@s", status)); }
+        if (mandant == "-") w.Add("IFNULL(mandant,'')=''");
+        else if (!string.IsNullOrWhiteSpace(mandant)) { w.Add("mandant=@md"); p.Add(("@md", MandantKey(mandant) is { Length: > 0 } k ? k : mandant.Trim())); }
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            w.Add("(belndx LIKE @q OR vorgang_id LIKE @q OR code LIKE @q OR IFNULL(meldung,'') LIKE @q OR IFNULL(felder,'') LIKE @q OR IFNULL(secure_app,'') LIKE @q)");
+            p.Add(("@q", "%" + text.Trim().Replace("[", "").Replace("%", "").Replace("_", "") + "%"));
+        }
+        var where = w.Count > 0 ? "WHERE " + string.Join(" AND ", w) : "";
+        using var c = _db.Open();
+        var total = BelegpostDb.Scalar(c, "SELECT COUNT(*) FROM erp_auftrag " + where, p.ToArray()) is long n ? n : 0;
+        p.Add(("@l", Math.Clamp(limit, 1, 500))); p.Add(("@o", Math.Max(0, offset)));
+        return (ReadJobs(c, where + " ORDER BY id DESC LIMIT @l OFFSET @o", p.ToArray()), total);
+    }
+
     public Dictionary<string, long> Counts()
     {
         using var c = _db.Open();
@@ -488,13 +519,14 @@ public sealed class ErpFeedbackService : BackgroundService
 
     private static List<ErpJob> ReadJobs(Microsoft.Data.Sqlite.SqliteConnection c, string tail, params (string, object?)[] p)
     {
-        using var cmd = BelegpostDb.Cmd(c, "SELECT id, belndx, vorgang_id, code, ereignis_zeit, status, versuche, naechster_versuch, erstellt, erledigt, meldung, felder FROM erp_auftrag " + tail, p);
+        using var cmd = BelegpostDb.Cmd(c, "SELECT id, belndx, vorgang_id, code, ereignis_zeit, status, versuche, naechster_versuch, erstellt, erledigt, meldung, felder, mandant, secure_app FROM erp_auftrag " + tail, p);
         using var r = cmd.ExecuteReader();
         var list = new List<ErpJob>();
         while (r.Read())
             list.Add(new ErpJob(r.GetInt64(0), r.GetString(1), r.GetString(2), r.GetString(3), BelegpostDb.At(r.GetInt64(4)), r.GetString(5), r.GetInt32(6),
                 BelegpostDb.At(r.GetInt64(7)), BelegpostDb.At(r.GetInt64(8)), r.IsDBNull(9) ? null : BelegpostDb.At(r.GetInt64(9)),
-                r.IsDBNull(10) ? null : r.GetString(10), r.IsDBNull(11) ? null : r.GetString(11)));
+                r.IsDBNull(10) ? null : r.GetString(10), r.IsDBNull(11) ? null : r.GetString(11),
+                r.IsDBNull(12) ? null : r.GetString(12), r.IsDBNull(13) ? null : r.GetString(13)));
         return list;
     }
 }

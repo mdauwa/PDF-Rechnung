@@ -54,6 +54,39 @@ public sealed class MandantTests : IDisposable
     }
 
     [Fact]
+    public void Ohne_Mandant_im_Beleg_gilt_der_Mandant_des_Benutzers()
+    {
+        Directory.CreateDirectory(_dir);
+        var settings = new SettingsStore(_dir);
+        var s = DefaultSettings.Create();
+        var store = new DocumentStore(settings, NullLogger<DocumentStore>.Instance);
+        var users = new UserStore(_dir);
+        users.Replace(new List<PortalUser> { new() { Id = "u1", Name = "Max", Email = "max@firma.at", PrintNames = { "m.mustermann" }, Mandanten = { "4" } } });
+        var md = new MandantOptions { Items = { new Mandant { Number = "000004", Name = "Graz", OwnErp = true, ErpSecureAppId = "5" }, new Mandant { Number = "10000" } } };
+        var proc = new DocumentProcessor(store, new StaticOptions<MailOptions>(s.Mail), new StaticOptions<InvoiceOptions>(s.Invoice),
+            NullLogger<DocumentProcessor>.Instance, settings: settings, users: users, mandanten: new StaticOptions<MandantOptions>(md));
+
+        // kein @@pm@@, kein /M:, kein Drucker-Mandant → Mandant des Benutzers
+        var a = proc.Process(TestData.Pdf(new[] { "@@toa@kunde.at@@" }), "Drucker", "a.pdf", user: "m.mustermann");
+        Assert.Equal("000004", a.Mandant);
+        Assert.StartsWith("Mandant des Benutzers Max", a.MandantReason);
+        Assert.Equal("000004", proc.Recheck(a.Id, "Test")!.Mandant);
+
+        // nicht eingerichteter Mandant aus dem Prozess → ebenfalls der des Benutzers
+        var b = proc.Process(TestData.Pdf(new[] { "@@toa@kunde.at@@" }), "Drucker", "b.pdf", user: "m.mustermann", originMandant: "777", originMandantReason: "Prozess");
+        Assert.Equal("000004", b.Mandant);
+
+        // eingerichteter Mandant aus dem Prozess geht vor; Herkunft bleibt nach „Neu prüfen“ erhalten
+        var c = proc.Process(TestData.Pdf(new[] { "@@toa@kunde.at@@" }), "Drucker", "c.pdf", user: "m.mustermann", originMandant: "10000", originMandantReason: "Prozess");
+        Assert.Equal("10000", c.Mandant);
+        Assert.Equal("Prozess", proc.Recheck(c.Id, "Test")!.MandantReason);
+
+        // Benutzer ohne Mandant → allgemeine Verbindung
+        var d = proc.Process(TestData.Pdf(new[] { "@@toa@kunde.at@@" }), "Drucker", "d.pdf", user: "jemand.anderer");
+        Assert.Null(d.Mandant);
+    }
+
+    [Fact]
     public void ERP_Verbindung_je_Mandant_mit_Rueckfall_auf_allgemein()
     {
         var global = new ErpOptions { Enabled = true, Endpoint = "https://erp/WWSVC/", Vendor = "v", Application = "a", SecureAppId = "1", Username = "u", Password = "enc:x",
@@ -64,6 +97,8 @@ public sealed class MandantTests : IDisposable
         Assert.Equal("u", eigen.Username);
         Assert.Equal("enc:x", eigen.Password);
         Assert.Same(global.Fields, eigen.Fields);
+        // eigene SecuredApp → eigener Servicepass (Bindung und Pass-Datei hängen an der SecuredApp-ID)
+        Assert.NotEqual(PdfRechnung.Erp.WwsSettings.From(global, "pw").Binding(), PdfRechnung.Erp.WwsSettings.From(eigen, "pw").Binding());
         Assert.False(new Mandant { Number = "3", ErpOff = true }.ErpFor(global).Enabled);
         Assert.Same(global, new Mandant { Number = "4" }.ErpFor(global));
     }

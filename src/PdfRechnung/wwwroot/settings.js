@@ -25,6 +25,7 @@ const TABS = [
   ["kunden", "Kommunikationspartner"],
   ["connect", "ERP Suite Connect"],
   ["erp", "ERP-Rückmeldung"],
+  ["erpqueue", "ERP-Warteschlange"],
   ["mapi", "MAPI-Mails"],
   ["statuslink", "Status-Link"],
   ["benutzer", "Benutzer"],
@@ -41,7 +42,7 @@ const ST_GROUPS = [
   ["belege", "Drucker & Belege", "doc", ["eingang", "gotomaxx", "briefpapier", "erechnung", "ablage"]],
   ["email", "E-Mail", "send", ["mail", "mailvorlagen", "regeln", "bilder", "mapi", "statuslink"]],
   ["versand", "Versand & Partner", "upload", ["versandwege", "kunden", "filialverbund", "connect"]],
-  ["erp", "ERP & Mandanten", "inbox", ["erp", "mandanten"]]
+  ["erp", "ERP & Mandanten", "inbox", ["erp", "erpqueue", "mandanten"]]
 ];
 const stGroupOf = tab => ST_GROUPS.find(g => g[3].includes(tab)) || ST_GROUPS[0];
 const stGroupTabs = () => TABS.filter(([k]) => stGroupOf(k)[0] === ST.group);
@@ -115,12 +116,13 @@ function drawTab() {
   const body = $("#stBody");
   if (!ST.s) return;
   const fn = { dienst: tabService, server: tabServer, eingang: tabInbox, gotomaxx: tabGotomaxx, briefpapier: tabStationery, mail: tabMail, mailvorlagen: tabTemplates, erechnung: tabInvoice, ablage: tabStorage, benutzer: tabUsers, anmeldung: tabAuth,
-    erp: tabErp, mapi: tabMapi, statuslink: tabStatusLink, regeln: tabRules, bilder: tabImages, mandanten: tabMandanten, versandwege: tabDelivery, kunden: tabCustomers, connect: tabConnect,
+    erp: tabErp, erpqueue: tabErpQueue, mapi: tabMapi, statuslink: tabStatusLink, regeln: tabRules, bilder: tabImages, mandanten: tabMandanten, versandwege: tabDelivery, kunden: tabCustomers, connect: tabConnect,
     benachrichtigung: tabAlerts, api: tabApi, filialverbund: tabFilialverbund }[ST.tab] || tabService;
   body.innerHTML = fn();
   if (ST.tab === "benutzer" && !ST.users) loadUsers();
   if (ST.tab === "benutzer" && !ST.devices) loadDevices();
   if (ST.tab === "erp") loadErpStatus();
+  if (ST.tab === "erpqueue") loadErpQueue();
   if (ST.tab === "mapi") loadMapiStatus();
   if (ST.tab === "eingang") loadPrinterStatus();
   if (ST.tab === "versandwege") loadDeliveryRuns();
@@ -161,6 +163,7 @@ function onInput(e) {
   if (deliveryInput(el, e)) return;
   if (monitorInput(el, e)) return;
   if (imagesInput(el, e)) return;
+  if (erpQueueInput(el, e)) return;
   if (el.dataset?.mdErp !== undefined) {
     const m = ST.s.mandanten.items[+el.dataset.mdErp];
     m.ownErp = el.value === "eigen"; m.erpOff = el.value === "aus";
@@ -343,9 +346,12 @@ async function onAction(e) {
         if (await confirmDialog("Registrierung zurücksetzen", "Bitte vorher im ERP prüfen, ob für Belegpost bereits ein Servicepass angelegt wurde (ggf. dort entfernen). Danach registriert Belegpost beim nächsten Zugriff neu.", "Zurücksetzen", true))
           await erpCall("api/admin/erp/registrierung-bestaetigen", "…");
         break;
-      case "erp-retry-all": await api("POST", "api/admin/erp/wiederholen"); loadErpStatus(); break;
-      case "erp-job-retry": await api("POST", `api/admin/erp/auftraege/${btn.dataset.id}/wiederholen`); loadErpStatus(); break;
-      case "erp-job-discard": await api("POST", `api/admin/erp/auftraege/${btn.dataset.id}/verwerfen`); loadErpStatus(); break;
+      case "erp-retry-all": await api("POST", "api/admin/erp/wiederholen"); loadErpQueue(); break;
+      case "erp-job-retry": await api("POST", `api/admin/erp/auftraege/${btn.dataset.id}/wiederholen`); loadErpQueue(); break;
+      case "erp-job-discard": await api("POST", `api/admin/erp/auftraege/${btn.dataset.id}/verwerfen`); loadErpQueue(); break;
+      case "eq-page": EQ.offset = Math.max(0, EQ.offset + (+btn.dataset.dir) * EQ.limit); loadErpQueue(); break;
+      case "eq-reload": loadErpQueue(); break;
+      case "eq-goto": stGoto("erpqueue"); break;
       case "erp-preview": {
         const r = await api("POST", "api/admin/erp/vorschau", { vorgangId: $("#erpPvId").value.trim() || null, code: $("#erpPvCode").value || null, erp: ST.s.erp });
         ST.erpPreview = r; drawTab(); break;
@@ -1562,8 +1568,7 @@ function tabErp() {
        <div class="actions"><button class="btn ghost" data-st="erp-preview">Vorschau</button><button class="btn ghost" data-st="erp-test">Testschreiben …</button></div>
        ${pv ? `<p class="meta">${esc(pv.beleg)} · ${esc(pv.code)} ${esc(pv.codeText)}${pv.write ? "" : " · <b>dieser Status wird nicht geschrieben</b>"}</p>
          <div class="erp-preview">BELEG.PUT\n${Object.entries(pv.parameters).map(([k, v]) => `${esc(k)} = ${esc(v)}`).join("\n")}</div>
-         ${[...(pv.errors || []), ...(pv.warnings || [])].map(x => `<p class="help bad">${esc(x)}</p>`).join("")}` : ""}`) +
-    section("Warteschlange", `<div id="erpQueue"><p class="meta">Lade …</p></div>`, `<button class="btn ghost" data-st="erp-retry-all">Offene jetzt versuchen</button>`);
+         ${[...(pv.errors || []), ...(pv.warnings || [])].map(x => `<p class="help bad">${esc(x)}</p>`).join("")}` : ""}`);
 }
 
 async function erpCall(url) {
@@ -1574,26 +1579,94 @@ async function erpCall(url) {
 
 async function loadErpStatus() {
   try {
-    const [st, q] = await Promise.all([api("GET", "api/admin/erp/status"), api("GET", "api/admin/erp/auftraege")]);
+    const st = await api("GET", "api/admin/erp/status");
     const box = $("#erpStatus"); if (!box) return;
     const c = st.counts || {};
     box.innerHTML = `<div class="plain-field"><span class="lbl">Servicepass</span>
       <p class="meta">${esc(st.configured ? st.passText : "Noch nicht vollständig eingerichtet.")}${st.lastValidated ? ` · zuletzt geprüft ${fmtDT(st.lastValidated)}` : ""}
         ${st.lastError ? `<br><span class="bad">Letzter Fehler: ${esc(st.lastError)}</span>` : ""}${st.lastSuccess ? `<br>Zuletzt erfolgreich ${fmtDT(st.lastSuccess)}` : ""}
         ${st.problem ? `<br><span class="bad">${esc(st.problem)}</span>` : ""}</p>
-      <p class="meta">Warteschlange: ${c.offen || 0} offen · ${c.fehler || 0} Fehler · ${c.erledigt || 0} erledigt</p>
+      <p class="meta">Warteschlange: ${c.offen || 0} offen · ${c.fehler || 0} Fehler · ${c.erledigt || 0} erledigt ·
+        <button type="button" class="btn ghost small" data-st="eq-goto">Warteschlange anzeigen</button></p>
       <div class="actions"><button class="btn ghost" data-st="erp-check" ${st.configured ? "" : "disabled"}>Verbindung prüfen</button>
         ${st.pass === "RegistrationOutcomeUnknown" ? `<button class="btn danger-ghost" data-st="erp-confirm-reg">Registrierung zurücksetzen …</button>` : ""}</div></div>`;
-    const qb = $("#erpQueue"); if (!qb) return;
-    const label = { offen: ["partial", "offen"], erledigt: ["ok", "erledigt"], fehler: ["missing", "Fehler"], ersetzt: ["free", "ersetzt"], verworfen: ["free", "verworfen"] };
-    qb.innerHTML = q.items.length ? `<div class="table-wrap"><table class="list mini"><thead><tr><th>Zeit</th><th>Belegindex</th><th>Code</th><th>Status</th><th>Meldung / Felder</th><th></th></tr></thead><tbody>
-      ${q.items.map(j => `<tr><td class="nowrap">${fmtDT(j.done || j.created)}</td><td><a href="#/vorgang?id=${encodeURIComponent(j.vorgangId)}">${esc(j.erpIndex)}</a></td>
-        <td><span class="badge code">${esc(j.code)}</span></td><td><span class="badge ${label[j.status]?.[0] || ""}">${label[j.status]?.[1] || esc(j.status)}</span>${j.status === "offen" && j.attempts ? `<small> Versuch ${j.attempts + 1} um ${fmtDT(j.nextAttempt)}</small>` : ""}</td>
-        <td>${esc(j.message || (j.fields ? Object.entries(j.fields).map(([k, v]) => k + "=" + v).join(", ") : ""))}</td>
+  } catch (e) { const box = $("#erpStatus"); if (box) box.innerHTML = `<p class="bad">${esc(e.message)}</p>`; }
+}
+
+/* ---------------- Tab: ERP-Warteschlange (seitenweise) ---------------- */
+
+const EQ = { status: "", q: "", mandant: "", offset: 0, limit: 50, data: null, error: "" };
+const EQ_LABEL = { offen: ["partial", "offen"], erledigt: ["ok", "erledigt"], fehler: ["missing", "Fehler"], ersetzt: ["free", "ersetzt"], verworfen: ["free", "verworfen"] };
+
+function tabErpQueue() {
+  const md = (ST.s.mandanten?.items || []).filter(m => m.number);
+  const opt = (v, t, cur) => `<option value="${esc(v)}" ${cur === v ? "selected" : ""}>${esc(t)}</option>`;
+  return section("ERP-Warteschlange", `
+    <p class="help">Alle Rückmeldungen ans ERP, neueste zuerst. Pro Belegindex und Mandant zählt der neueste Status – ältere offene werden „ersetzt“.
+      Spalte „Mandant · SecuredApp“ zeigt, über welche Verbindung zurückgemeldet wird bzw. wurde.</p>
+    <div class="eq-filter">
+      ${field("Suche", `<input type="search" data-eq="q" value="${esc(EQ.q)}" placeholder="Belegindex, Vorgang, Code, Meldung, Feldwert" spellcheck="false">`)}
+      ${field("Status", `<select data-eq="status">${opt("", "alle", EQ.status)}${Object.entries(EQ_LABEL).map(([k, v]) => opt(k, v[1], EQ.status)).join("")}</select>`)}
+      ${field("Mandant", `<select data-eq="mandant">${opt("", "alle", EQ.mandant)}${opt("-", "allgemeine Verbindung", EQ.mandant)}${md.map(m => opt(m.number, `${m.number}${m.name ? " – " + m.name : ""}`, EQ.mandant)).join("")}</select>`)}
+      ${field("Pro Seite", `<select data-eq="limit">${[25, 50, 100, 200].map(n => opt(String(n), String(n), String(EQ.limit))).join("")}</select>`)}
+    </div>
+    <div id="erpQueue"><p class="meta">Lade …</p></div>`,
+    `<button class="btn ghost" data-st="eq-reload">Aktualisieren</button><button class="btn ghost" data-st="erp-retry-all">Offene jetzt versuchen</button>`);
+}
+
+let eqTimer = null, eqSeq = 0;
+/** Eingaben im Filter der Warteschlange (nicht Teil der Einstellungen). true = behandelt. */
+function erpQueueInput(el, e) {
+  const k = el.dataset?.eq; if (!k) return false;
+  if (k === "q") {
+    if (e.type !== "input") return true;
+    EQ.q = el.value; EQ.offset = 0;
+    clearTimeout(eqTimer); eqTimer = setTimeout(loadErpQueue, 300);
+    return true;
+  }
+  if (e.type !== "change") return true;
+  EQ[k] = k === "limit" ? +el.value : el.value; EQ.offset = 0;
+  loadErpQueue();
+  return true;
+}
+
+async function loadErpQueue() {
+  const seq = ++eqSeq;
+  const qs = new URLSearchParams({ offset: EQ.offset, limit: EQ.limit });
+  if (EQ.status) qs.set("status", EQ.status);
+  if (EQ.mandant) qs.set("mandant", EQ.mandant);
+  if (EQ.q.trim()) qs.set("q", EQ.q.trim());
+  let q;
+  try { q = await api("GET", "api/admin/erp/auftraege?" + qs); }
+  catch (e) { const qb = $("#erpQueue"); if (qb) qb.innerHTML = `<p class="bad">${esc(e.message)}</p>`; return; }
+  if (seq !== eqSeq) return; // ältere Antwort
+  const qb = $("#erpQueue"); if (!qb) return;
+  const items = Array.isArray(q.items) ? q.items : [];
+  const total = q.total || 0, from = total ? EQ.offset + 1 : 0, to = EQ.offset + items.length;
+  const c = q.counts || {};
+  const pager = `<div class="eq-pager">
+      <span class="meta">${from}–${to} von ${total}${total !== (c.offen || 0) + (c.fehler || 0) + (c.erledigt || 0) + (c.ersetzt || 0) + (c.verworfen || 0) ? " (gefiltert)" : ""}
+        · gesamt ${c.offen || 0} offen · ${c.fehler || 0} Fehler · ${c.erledigt || 0} erledigt</span>
+      <span><button class="btn ghost small" data-st="eq-page" data-dir="-1" ${EQ.offset > 0 ? "" : "disabled"}>← Zurück</button>
+        <button class="btn ghost small" data-st="eq-page" data-dir="1" ${to < total ? "" : "disabled"}>Weiter →</button></span></div>`;
+  const link = j => j.vorgangId.startsWith("gx:")
+    ? `<span title="direkt gedruckt (gotomaxx-Protokoll)">${esc(j.erpIndex)}</span>`
+    : `<a href="#/vorgang?id=${encodeURIComponent(j.vorgangId)}">${esc(j.erpIndex)}</a>`;
+  qb.innerHTML = items.length ? `${pager}<div class="table-wrap"><table class="list mini eq-list"><thead><tr><th>Zeit</th><th>Belegindex</th><th>Mandant · SecuredApp</th><th>Code</th><th>Status</th><th>Meldung / Felder</th><th></th></tr></thead><tbody>
+      ${items.map(j => `<tr><td class="nowrap">${fmtDT(j.done || j.created)}</td><td class="mono nowrap">${link(j)}</td>
+        <td class="nowrap">${erpJobTarget(j)}</td>
+        <td><span class="badge code" title="${esc(j.codeText || "")}">${esc(j.code)}</span></td><td><span class="badge ${EQ_LABEL[j.status]?.[0] || ""}">${EQ_LABEL[j.status]?.[1] || esc(j.status)}</span>${j.status === "offen" && j.attempts ? `<small> Versuch ${j.attempts + 1} um ${fmtDT(j.nextAttempt)}</small>` : ""}</td>
+        <td class="eq-msg">${esc(j.message || (j.fields ? Object.entries(j.fields).map(([k, v]) => k + "=" + v).join(", ") : ""))}</td>
         <td class="nowrap">${["fehler", "offen", "verworfen"].includes(j.status) ? `<button class="btn ghost small" data-st="erp-job-retry" data-id="${j.id}">Erneut</button>` : ""}
           ${["fehler", "offen"].includes(j.status) ? `<button class="btn ghost small" data-st="erp-job-discard" data-id="${j.id}">Verwerfen</button>` : ""}</td></tr>`).join("")}
-      </tbody></table></div>` : `<p class="meta">Noch keine Aufträge.</p>`;
-  } catch (e) { const box = $("#erpStatus"); if (box) box.innerHTML = `<p class="bad">${esc(e.message)}</p>`; }
+      </tbody></table></div>${total > items.length ? pager : ""}`
+    : `<p class="meta">${total || EQ.q || EQ.status || EQ.mandant ? "Keine Aufträge für diesen Filter." : "Noch keine Aufträge."}</p>`;
+}
+
+/** Mandant und SecuredApp eines Rückmeldeauftrags (leer = allgemeine Verbindung). */
+function erpJobTarget(j) {
+  const md = j.mandant ? `Mandant ${esc(j.mandant)}` : `<span class="meta">allgemein</span>`;
+  return `${md}${j.secureApp ? `<small class="mono"> · ID ${esc(j.secureApp)}</small>` : ""}`;
 }
 
 /* ---------------- Tab: MAPI-Mails ---------------- */
@@ -1678,7 +1751,8 @@ function tabMandanten() {
   return section("Mandanten",
     `<p class="help">Belegpost erkennt den Mandanten am Beleg – in dieser Reihenfolge: Steuerzeichen <code>@@pm10000@@</code> im Druck
       (bei MAPI auch im Mailtext) → Parameter <code>/M:</code> des druckenden Programms (WebWARE <code>wwa.exe</code>, Prozesserkennung unter Drucker &amp; Eingang)
-      → eigener Eingangsordner des Mandanten. Je Mandant stellst du nur ein, was anders ist; alles andere (E-Mail, Versand, Benutzer, Regeln, Vorlagen, MAPI) gilt für alle.</p>
+      → Mandant des Druckers / eigener Eingangsordner des Mandanten → Mandant, dem der Besitzer des Belegs (Benutzer) zugewiesen ist.
+      Ist so kein eingerichteter Mandant bekannt, gilt die allgemeine ERP-Verbindung. Je Mandant stellst du nur ein, was anders ist; alles andere (E-Mail, Versand, Benutzer, Regeln, Vorlagen, MAPI) gilt für alle.</p>
      ${M.items.length ? `<div class="table-wrap"><table class="list users-compact"><thead><tr>
         <th>Nummer</th><th>Bezeichnung</th><th>ERP-Rückmeldung</th><th>Eingangsordner</th><th>gotomaxx-Drucker</th><th>Ablage</th><th></th></tr></thead><tbody>
       ${M.items.map((m, i) => `<tr class="clickable" data-st="md-open" data-i="${i}">

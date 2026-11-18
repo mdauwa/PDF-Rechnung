@@ -258,6 +258,32 @@ public sealed class DatabaseAndErpTests : IDisposable
         Assert.All(jobs.Where(j => j.Code != StatusCode.Versendet), j => Assert.Equal(ErpJobStatus.Superseded, j.Status));
     }
 
+    [Fact]
+    public void Warteschlange_trennt_Mandanten_und_zeigt_die_SecuredApp()
+    {
+        var (store, proc, _, settings) = Create();
+        var v = proc.Process(TestData.Pdf(new[] { "@@pi0NR00000777@@", "@@toa@kunde.at@@" }), "Eingang", "m.pdf");
+        var md = new MandantOptions { Items = { new Mandant { Number = "000004", OwnErp = true, ErpSecureAppId = "5" } } };
+        var erp = new ErpFeedbackService(store.Db, store, settings, new StaticOptions<ErpOptions>(new ErpOptions { SecureAppId = "1" }), new EmptyServices(),
+            NullLogger<ErpFeedbackService>.Instance, new StaticOptions<MandantOptions>(md));
+        var t0 = DateTimeOffset.Now;
+        erp.Enqueue("0NR00000777", v.Id, StatusCode.Versendet, t0, "4");
+        erp.Enqueue("0NR00000777", v.Id + "x", StatusCode.Versendet, t0.AddSeconds(5), null); // gleicher Index in der Hauptverbindung
+        var a = erp.Jobs(null, v.Id).Single();
+        var b = erp.Jobs(null, v.Id + "x").Single();
+        Assert.Equal(ErpJobStatus.Open, a.Status); // nicht durch den anderen Mandanten ersetzt
+        Assert.Equal(("000004", "5"), (a.Mandant, a.SecureApp));
+        Assert.Equal((null, "1"), (b.Mandant, b.SecureApp));
+
+        // seitenweise mit Filter
+        Assert.Equal(2, erp.JobsPage(null, null, null, 0, 1).Total);
+        Assert.Single(erp.JobsPage(null, null, null, 1, 1).Items);
+        Assert.Equal(v.Id, erp.JobsPage(null, null, "4", 0, 50).Items.Single().VorgangId);
+        Assert.Equal(v.Id + "x", erp.JobsPage(null, null, "-", 0, 50).Items.Single().VorgangId);
+        Assert.Equal(2, erp.JobsPage(ErpJobStatus.Open, "0NR00000777", null, 0, 50).Total);
+        Assert.Equal(0, erp.JobsPage(null, "gibtsnicht", null, 0, 50).Total);
+    }
+
     private sealed class EmptyServices : IServiceProvider { public object? GetService(Type t) => null; }
 
     [Fact]

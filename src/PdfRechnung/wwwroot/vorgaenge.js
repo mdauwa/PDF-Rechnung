@@ -480,7 +480,7 @@ async function loadTimeline(v) {
       ${!t.erpIndex ? `<p class="meta">Kein Belegindex (@@pi@@) im Beleg – es wird nichts ins ERP zurückgeschrieben.</p>`
         : erp.length ? `<ul class="erp-jobs">${erp.map(j => `<li><span class="badge code">${esc(j.code)}</span>
             <span class="badge ${erpState[j.status]?.[0] || ""}">${erpState[j.status]?.[1] || esc(j.status)}</span>
-            <span class="meta-inline">${fmtDT(j.done || j.created)}${j.status === "offen" && j.attempts ? ` · Versuch ${j.attempts + 1} um ${fmtDT(j.nextAttempt)}` : ""}</span>
+            <span class="meta-inline">${fmtDT(j.done || j.created)} · ${j.mandant ? `Mandant ${esc(j.mandant)}` : "allgemeine Verbindung"}${j.secureApp ? ` (SecuredApp ${esc(j.secureApp)})` : ""}${j.status === "offen" && j.attempts ? ` · Versuch ${j.attempts + 1} um ${fmtDT(j.nextAttempt)}` : ""}</span>
             <small>${esc(j.message || (j.fields ? Object.entries(j.fields).map(([k, x]) => k + "=" + x).join(", ") : ""))}</small></li>`).join("")}</ul>`
         : `<p class="meta">Noch nichts zurückgeschrieben.</p>`}
       ${portal.isAdmin && t.erpIndex ? `<div class="actions"><button class="btn ghost small" id="vdErpSend">Aktuellen Status jetzt ins ERP schreiben</button></div>` : ""}` : ""}`;

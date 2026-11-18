@@ -263,11 +263,33 @@ public sealed class DocumentProcessor
         return p;
     }
 
-    /// <summary>Mandant setzen: @@pm@@ im Beleg → Herkunft (Prozess /M:, Eingangsordner).</summary>
+    private const string OwnerMandantReason = "Mandant des Benutzers";
+
+    /// <summary>Mandant setzen: @@pm@@ im Beleg → Herkunft (Prozess /M:, Drucker, Eingangsordner).</summary>
     private void SetMandant(Vorgang v, ParsedCodes p)
     {
+        var originReason = v.OriginMandantReason
+            ?? (v.MandantReason is { } r && !r.StartsWith(OwnerMandantReason, StringComparison.Ordinal) ? r : null); // ältere Vorgänge
+        v.OriginMandantReason ??= v.OriginMandant is not null ? originReason : null;
         v.Mandant = p.Mandant ?? v.OriginMandant;
-        v.MandantReason = p.Mandant is not null ? "Steuerzeichen @@pm@@" : v.OriginMandant is not null ? v.MandantReason ?? "Herkunft" : null;
+        v.MandantReason = p.Mandant is not null ? "Steuerzeichen @@pm@@" : v.OriginMandant is not null ? originReason ?? "Herkunft" : null;
+    }
+
+    /// <summary>
+    /// Ist aus Beleg und Herkunft kein eingerichteter Mandant bekannt, gilt der Mandant, dem der Besitzer (Portal-Benutzer)
+    /// zugewiesen ist (bei mehreren der erste). Sonst bleibt es bei der allgemeinen ERP-Verbindung.
+    /// </summary>
+    private void ApplyOwnerMandant(Vorgang v)
+    {
+        var known = _mandanten?.CurrentValue;
+        if (known is null || known.Find(v.Mandant) is not null) return;
+        var owner = v.OwnerUserId is null ? null : _users?.FindById(v.OwnerUserId);
+        var own = (owner?.Mandanten ?? new()).Select(m => known.Find(m)).Where(m => m is not null).ToList();
+        if (own.Count == 0) return;
+        var was = v.Mandant;
+        v.Mandant = own[0]!.Number;
+        v.MandantReason = $"{OwnerMandantReason} {owner!.Name}" + (own.Count > 1 ? $" (erster von {own.Count})" : "")
+            + (was is not null ? $" – Mandant {was} aus dem Beleg ist nicht eingerichtet" : "");
     }
 
     /// <summary>Pfade aus den Steuerzeichen über die Pfadzuordnung (Einstellungen → Drucker &amp; Eingang) umsetzen.</summary>
@@ -304,7 +326,7 @@ public sealed class DocumentProcessor
         var now = DateTimeOffset.Now;
         var v = new Vorgang { Id = DocumentStore.NewId(now), CreatedAt = now, Source = source, OriginalFileName = fileName, PrintUser = user, PrintMachine = machine,
             ProcessOperator = processOperator, MapiSubject = string.IsNullOrWhiteSpace(mapiSubject) ? null : mapiSubject.Trim(), MapiTo = mapiTo ?? new(),
-            OriginMandant = MandantOptions.Normalize(originMandant), MandantReason = originMandantReason, PrinterId = printerId };
+            OriginMandant = MandantOptions.Normalize(originMandant), MandantReason = originMandantReason, OriginMandantReason = originMandantReason, PrinterId = printerId };
         string text;
         ParsedCodes p;
         try
@@ -324,6 +346,7 @@ public sealed class DocumentProcessor
 
         SetMandant(v, p);
         AssignOwner(v, p, ownerUserId);
+        ApplyOwnerMandant(v);
 
         Fill(v, p, overwriteMail: true);
         var sendPdf = v.Messages.Count == 0 ? Compose(v, pdf, p) : null;
@@ -480,6 +503,7 @@ public sealed class DocumentProcessor
             // Zuordnung neu (z. B. Bedienernummer inzwischen einem Benutzer zugewiesen); Upload-Besitzer bleibt als Rückfall
             SetMandant(v, p);
             AssignOwner(v, p, v.Source == "Upload" ? v.OwnerUserId : null);
+            ApplyOwnerMandant(v);
             Fill(v, p, overwriteMail: !v.Mail.Edited);
             _store.WriteFile(id, DocumentStore.SendFile, Compose(v, original, p));
             _store.WriteFile(id, DocumentStore.XmlFile, v.PendingEInvoice);

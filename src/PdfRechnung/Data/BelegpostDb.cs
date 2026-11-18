@@ -257,6 +257,11 @@ public sealed class BelegpostDb
         // 8: gotomaxx-Protokoll – Mandant, in dem gesucht und zurückgemeldet wurde
         """
         ALTER TABLE gotomaxx_protokoll ADD COLUMN mandant TEXT;
+        """,
+        // 9: ERP-Warteschlange – Mandant und SecuredApp, mit denen zurückgemeldet wird/wurde
+        """
+        ALTER TABLE erp_auftrag ADD COLUMN mandant TEXT;
+        ALTER TABLE erp_auftrag ADD COLUMN secure_app TEXT;
         """
     };
 

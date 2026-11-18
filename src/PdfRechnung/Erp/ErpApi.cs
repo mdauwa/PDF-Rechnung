@@ -68,8 +68,11 @@ public static class ErpApi
             catch (ErpException ex) { return Results.BadRequest(new { error = ex.Message }); }
         });
 
-        g.MapGet("/auftraege", (string? status, ErpFeedbackService erp) =>
-            Results.Ok(new { items = erp.Jobs(status, null, 300).Select(View) }));
+        g.MapGet("/auftraege", (string? status, string? q, string? mandant, int? offset, int? limit, ErpFeedbackService erp) =>
+        {
+            var (items, total) = erp.JobsPage(status, q, mandant, offset ?? 0, limit ?? 50);
+            return Results.Ok(new { items = items.Select(View), total, offset = offset ?? 0, limit = limit ?? 50, counts = erp.Counts() });
+        });
 
         g.MapPost("/auftraege/{id:long}/wiederholen", (long id, ErpFeedbackService erp) =>
             erp.Retry(id) ? Results.Ok(new { ok = true }) : Results.NotFound());
@@ -164,7 +167,7 @@ public static class ErpApi
             if (v is null || !a.CanSee(v)) return Results.NotFound();
             if (!a.IsAdmin) return Results.Json(new { error = "Nur Administratoren." }, statusCode: 403);
             if (!eo.CurrentValue.Enabled || v.ErpIndex is null) return Results.BadRequest(new { error = "ERP-Rückmeldung ist aus oder der Beleg hat keinen Belegindex (@@pi@@)." });
-            erp.Enqueue(v.ErpIndex, v.Id, v.StatusCode ?? StatusCode.Erfasst, DateTimeOffset.Now);
+            erp.Enqueue(v.ErpIndex, v.Id, v.StatusCode ?? StatusCode.Erfasst, DateTimeOffset.Now, v.Mandant);
             return Results.Ok(new { ok = true });
         });
     }
@@ -173,6 +176,7 @@ public static class ErpApi
     {
         j.Id, erpIndex = j.ErpIndex, vorgangId = j.VorgangId, j.Code, codeText = StatusCode.Text(j.Code), eventAt = j.EventAt, j.Status,
         attempts = j.Attempts, nextAttempt = j.NextAttempt, created = j.Created, done = j.Done, message = j.Message,
-        fields = j.Fields is null ? null : JsonSerializer.Deserialize<Dictionary<string, string>>(j.Fields)
+        fields = j.Fields is null ? null : JsonSerializer.Deserialize<Dictionary<string, string>>(j.Fields),
+        mandant = j.Mandant, secureApp = j.SecureApp
     };
 }

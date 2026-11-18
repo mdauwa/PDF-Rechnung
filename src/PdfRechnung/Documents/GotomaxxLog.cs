@@ -460,7 +460,7 @@ public sealed class GotomaxxLogService : BackgroundService
                     SetErp(e.Nr, GotomaxxErpStatus.Off, "Für diesen Status ist keine Rückmeldung eingestellt.", null, idx[0], null);
                     continue;
                 }
-                var job = _erp.Enqueue(idx[0], ErpFeedbackService.ExternalPrefix + e.Nr, code, e.At);
+                var job = _erp.Enqueue(idx[0], ErpFeedbackService.ExternalPrefix + e.Nr, code, e.At, mandant);
                 SetErp(e.Nr, GotomaxxErpStatus.Queued, null, null, idx[0], job);
             }
             catch (ErpException ex)

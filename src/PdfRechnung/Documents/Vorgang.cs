@@ -102,6 +102,8 @@ public sealed class Vorgang
     public string? OriginMandant { get; set; }
     /// <summary>Woher der Mandant stammt (Anzeige).</summary>
     public string? MandantReason { get; set; }
+    /// <summary>Woher der Herkunfts-Mandant stammt (Prozess /M:, Drucker, Eingangsordner).</summary>
+    public string? OriginMandantReason { get; set; }
     /// <summary>Druckender Prozess mit Befehlszeile (Anzeige).</summary>
     public string? PrintProcess { get; set; }
     /// <summary>Zusätzlicher Belegpost-Drucker, über den gedruckt wurde (Kennung); null = Hauptdrucker bzw. andere Quelle.</summary>

@@ -540,3 +540,9 @@ table.sender-table input { width: 100%; min-width: 160px; }
 .img-thumb img { max-width: 80px; max-height: 48px; display: block; background: repeating-conic-gradient(#eee 0 25%, #fff 0 50%) 0 0 / 10px 10px; }
 .img-var { font-size: 12px; }
 @media (max-width: 900px) { .img-upload { grid-template-columns: 1fr; } }
+
+/* Einstellungen → ERP-Warteschlange */
+.eq-filter { display: grid; grid-template-columns: minmax(220px, 1fr) 150px 220px 100px; gap: 12px; align-items: start; }
+.eq-pager { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 8px 0; flex-wrap: wrap; }
+.eq-list .eq-msg { word-break: break-word; min-width: 200px; }
+@media (max-width: 900px) { .eq-filter { grid-template-columns: 1fr 1fr; } }

@@ -273,7 +273,7 @@ public sealed class DatabaseAndErpTests : IDisposable
         var b = erp.Jobs(null, v.Id + "x").Single();
         Assert.Equal(ErpJobStatus.Open, a.Status); // nicht durch den anderen Mandanten ersetzt
         Assert.Equal(("000004", "5"), (a.Mandant, a.SecureApp));
-        Assert.Equal((null, "1"), (b.Mandant, b.SecureApp));
+        Assert.Equal(("", "1"), (b.Mandant, b.SecureApp));
 
         // seitenweise mit Filter
         Assert.Equal(2, erp.JobsPage(null, null, null, 0, 1).Total);
@@ -282,6 +282,16 @@ public sealed class DatabaseAndErpTests : IDisposable
         Assert.Equal(v.Id + "x", erp.JobsPage(null, null, "-", 0, 50).Items.Single().VorgangId);
         Assert.Equal(2, erp.JobsPage(ErpJobStatus.Open, "0NR00000777", null, 0, 50).Total);
         Assert.Equal(0, erp.JobsPage(null, "gibtsnicht", null, 0, 50).Total);
+
+        // an einen anderen Mandanten neu senden, Vorgang mit umstellen; „Neu prüfen“ lässt den Mandanten dann stehen
+        var neu = erp.Resend(b.Id, "4", applyToSource: false, "Admin")!;
+        Assert.Equal(("000004", "5", ErpJobStatus.Open), (neu.Mandant, neu.SecureApp, neu.Status));
+        Assert.Equal(ErpJobStatus.Discarded, erp.Jobs(null, v.Id + "x").Single(j => j.Id == b.Id).Status);
+        var again = erp.Resend(a.Id, "", applyToSource: true, "Admin")!;
+        Assert.Equal(("", "1"), (again.Mandant, again.SecureApp));
+        Assert.True(store.Get(v.Id)!.MandantManual);
+        Assert.Null(proc.Recheck(v.Id, "Test")!.Mandant);
+        Assert.Throws<ArgumentException>(() => erp.Resend(a.Id, "999", false, "Admin"));
     }
 
     private sealed class EmptyServices : IServiceProvider { public object? GetService(Type t) => null; }

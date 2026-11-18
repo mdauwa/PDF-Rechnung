@@ -275,7 +275,7 @@ public sealed class ErpFeedbackService : BackgroundService
             BelegpostDb.Exec(c, "UPDATE erp_auftrag SET status='ersetzt', erledigt=@now WHERE belndx=@b AND IFNULL(mandant,'')=@k AND status='offen' AND ereignis_zeit <= @z",
                 ("@b", belndx), ("@k", key), ("@z", BelegpostDb.Ms(at)), ("@now", BelegpostDb.Ms(DateTimeOffset.Now)));
             BelegpostDb.Exec(c, "INSERT INTO erp_auftrag(belndx, vorgang_id, code, ereignis_zeit, status, naechster_versuch, erstellt, mandant, secure_app) VALUES(@b,@v,@c,@z,@s,@n,@n,@md,@app)",
-                ("@md", key.Length == 0 ? null : key), ("@app", string.IsNullOrWhiteSpace(app) ? null : app.Trim()), ("@b", belndx), ("@v", vorgangId), ("@c", code), ("@z", BelegpostDb.Ms(at)),
+                ("@md", key), ("@app", string.IsNullOrWhiteSpace(app) ? null : app.Trim()), ("@b", belndx), ("@v", vorgangId), ("@c", code), ("@z", BelegpostDb.Ms(at)),
                 ("@s", newer ? ErpJobStatus.Superseded : ErpJobStatus.Open), ("@n", BelegpostDb.Ms(DateTimeOffset.Now)));
             id = (long)BelegpostDb.Scalar(c, "SELECT last_insert_rowid()")!;
             tx.Commit();
@@ -318,12 +318,14 @@ public sealed class ErpFeedbackService : BackgroundService
         var external = job.VorgangId.StartsWith(ExternalPrefix, StringComparison.Ordinal);
         var v = external ? ExternalVorgang?.Invoke(job.VorgangId) : _store.Get(job.VorgangId);
         if (v is null) { Finish(job.Id, ErpJobStatus.Discarded, external ? "Protokolleintrag nicht mehr vorhanden." : "Vorgang gelöscht.", null); return; }
-        var o = OptionsFor(v);
+        // Mandant des Auftrags („“ = allgemeine Verbindung); ältere Aufträge ohne Angabe: Mandant des Vorgangs
+        var jobMandant = job.Mandant is null ? v.Mandant : job.Mandant.Length == 0 ? null : job.Mandant;
+        var o = OptionsFor(jobMandant);
         // festhalten, mit welchem Mandanten und welcher SecuredApp tatsächlich zurückgemeldet wird
         using (var c = _db.Open())
             BelegpostDb.Exec(c, "UPDATE erp_auftrag SET mandant=@m, secure_app=@a WHERE id=@id",
-                ("@m", MandantKey(v.Mandant) is { Length: > 0 } mk ? mk : null), ("@a", string.IsNullOrWhiteSpace(o.SecureAppId) ? null : o.SecureAppId.Trim()), ("@id", job.Id));
-        if (!o.Enabled) { Finish(job.Id, ErpJobStatus.Discarded, $"ERP-Rückmeldung für Mandant {v.Mandant} ist aus.", null); return; }
+                ("@m", MandantKey(jobMandant)), ("@a", string.IsNullOrWhiteSpace(o.SecureAppId) ? null : o.SecureAppId.Trim()), ("@id", job.Id));
+        if (!o.Enabled) { Finish(job.Id, ErpJobStatus.Discarded, $"ERP-Rückmeldung für Mandant {jobMandant} ist aus.", null); return; }
         try
         {
             var manager = Manager(o);
@@ -485,6 +487,50 @@ public sealed class ErpFeedbackService : BackgroundService
         var d = new Dictionary<string, long>();
         while (r.Read()) d[r.GetString(0)] = r.GetInt64(1);
         return d;
+    }
+
+    /// <summary>
+    /// Auftrag (in jedem Status) noch einmal senden, wahlweise an einen anderen Mandanten. Ein noch offener oder fehlerhafter
+    /// Auftrag wird dabei verworfen. Mit <paramref name="applyToSource"/> wird der Mandant auch im Vorgang bzw. im
+    /// gotomaxx-Protokolleintrag umgestellt. Liefert den neuen Auftrag oder null (nicht gefunden).
+    /// </summary>
+    public ErpJob? Resend(long id, string? mandant, bool applyToSource, string by)
+    {
+        ErpJob? job;
+        using (var c = _db.Open()) job = ReadJobs(c, "WHERE id=@i", ("@i", id)).FirstOrDefault();
+        if (job is null) return null;
+        var key = MandantKey(mandant);
+        if (!string.IsNullOrWhiteSpace(mandant) && key.Length == 0) throw new ArgumentException($"Mandant {mandant} ist nicht eingerichtet.");
+        var label = key.Length == 0 ? "allgemeine Verbindung" : "Mandant " + key;
+        var external = job.VorgangId.StartsWith(ExternalPrefix, StringComparison.Ordinal);
+        if (applyToSource)
+        {
+            if (external)
+            {
+                using var c = _db.Open();
+                BelegpostDb.Exec(c, "UPDATE gotomaxx_protokoll SET mandant=@m WHERE nr=@n",
+                    ("@m", key.Length == 0 ? null : key), ("@n", long.TryParse(job.VorgangId[ExternalPrefix.Length..], out var nr) ? nr : -1));
+            }
+            else _store.Update(job.VorgangId, v =>
+            {
+                v.Mandant = key.Length == 0 ? null : key;
+                v.MandantManual = true;
+                v.MandantReason = $"von {by} manuell gesetzt";
+                v.History.Add(new HistoryEntry(DateTimeOffset.Now, by, "mandant", $"Mandant manuell auf {label} gesetzt"));
+                return true;
+            });
+        }
+        if (!external) _store.Update(job.VorgangId, v =>
+        {
+            v.History.Add(new HistoryEntry(DateTimeOffset.Now, by, "erp", $"ERP-Rückmeldung {job.Code} noch einmal gesendet ({label})"));
+            return true;
+        });
+        using (var c = _db.Open())
+            BelegpostDb.Exec(c, "UPDATE erp_auftrag SET status='verworfen', erledigt=@n, meldung=@m WHERE id=@id AND status IN ('offen','fehler')",
+                ("@n", BelegpostDb.Ms(DateTimeOffset.Now)), ("@m", $"Neu gesendet an {label} (von {by})"), ("@id", id));
+        var newId = Enqueue(job.ErpIndex, job.VorgangId, job.Code, job.EventAt, key.Length == 0 ? null : key);
+        _db.Audit(by, "ERP-Rückmeldung neu gesendet", job.ErpIndex, $"{job.Code} → {label}");
+        using (var c = _db.Open()) return ReadJobs(c, "WHERE id=@i", ("@i", newId)).FirstOrDefault();
     }
 
     public bool Retry(long id)

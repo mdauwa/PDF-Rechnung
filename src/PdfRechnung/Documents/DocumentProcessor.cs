@@ -268,6 +268,7 @@ public sealed class DocumentProcessor
     /// <summary>Mandant setzen: @@pm@@ im Beleg → Herkunft (Prozess /M:, Drucker, Eingangsordner).</summary>
     private void SetMandant(Vorgang v, ParsedCodes p)
     {
+        if (v.MandantManual) return;
         var originReason = v.OriginMandantReason
             ?? (v.MandantReason is { } r && !r.StartsWith(OwnerMandantReason, StringComparison.Ordinal) ? r : null); // ältere Vorgänge
         v.OriginMandantReason ??= v.OriginMandant is not null ? originReason : null;
@@ -281,6 +282,7 @@ public sealed class DocumentProcessor
     /// </summary>
     private void ApplyOwnerMandant(Vorgang v)
     {
+        if (v.MandantManual) return;
         var known = _mandanten?.CurrentValue;
         if (known is null || known.Find(v.Mandant) is not null) return;
         var owner = v.OwnerUserId is null ? null : _users?.FindById(v.OwnerUserId);

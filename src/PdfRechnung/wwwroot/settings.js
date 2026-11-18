@@ -352,6 +352,7 @@ async function onAction(e) {
       case "eq-page": EQ.offset = Math.max(0, EQ.offset + (+btn.dataset.dir) * EQ.limit); loadErpQueue(); break;
       case "eq-reload": loadErpQueue(); break;
       case "eq-goto": stGoto("erpqueue"); break;
+      case "eq-resend": await eqResend(+btn.dataset.id); break;
       case "erp-preview": {
         const r = await api("POST", "api/admin/erp/vorschau", { vorgangId: $("#erpPvId").value.trim() || null, code: $("#erpPvCode").value || null, erp: ST.s.erp });
         ST.erpPreview = r; drawTab(); break;
@@ -1630,6 +1631,47 @@ function erpQueueInput(el, e) {
   return true;
 }
 
+/** Dialog „Neu senden“: Mandant wählen, optional auch im Vorgang/Protokolleintrag umstellen. */
+function eqResendDialog(j) {
+  const md = (ST.s.mandanten?.items || []).filter(m => m.number);
+  const cur = j.mandant || "";
+  const gx = j.vorgangId.startsWith("gx:");
+  return new Promise(resolve => {
+    const d = document.createElement("div");
+    d.className = "modal-backdrop";
+    d.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-label="Noch einmal ans ERP senden">
+      <h3>Noch einmal ans ERP senden</h3>
+      <p class="meta">Belegindex <b class="mono">${esc(j.erpIndex)}</b> · Code ${esc(j.code)}${j.codeText ? " – " + esc(j.codeText) : ""}<br>
+        bisher: ${j.mandant ? "Mandant " + esc(j.mandant) : "allgemeine Verbindung"}${j.secureApp ? " (SecuredApp " + esc(j.secureApp) + ")" : ""}</p>
+      <label class="field"><span class="lbl">Senden an</span><select id="eqMd">
+        <option value="" ${cur === "" ? "selected" : ""}>allgemeine Verbindung</option>
+        ${md.map(m => `<option value="${esc(m.number)}" ${cur === m.number ? "selected" : ""}>Mandant ${esc(m.number)}${m.name ? " – " + esc(m.name) : ""}${m.ownErp ? ` (SecuredApp ${esc(m.erpSecureAppId || "")})` : ""}</option>`).join("")}
+      </select></label>
+      <label class="check"><input type="checkbox" id="eqApply" checked> Mandant auch ${gx ? "im gotomaxx-Protokolleintrag" : "im Vorgang"} umstellen</label>
+      <p class="help">Künftige Rückmeldungen dieses Belegs gehen dann ebenfalls an diesen Mandanten.${gx ? "" : " „Neu prüfen“ ändert den Mandanten danach nicht mehr."}</p>
+      <p class="help">Die Rückmeldung an den bisherigen Mandanten bleibt im ERP stehen – bei Bedarf dort korrigieren.</p>
+      <div class="modal-actions"><button class="btn ghost" data-m="cancel">Abbrechen</button><button class="btn" data-m="ok">Senden</button></div></div>`;
+    document.body.appendChild(d);
+    d.querySelector("#eqMd").focus();
+    const close = v => { d.remove(); resolve(v); };
+    d.addEventListener("click", e => {
+      if (e.target === d || e.target.closest('[data-m="cancel"]')) close(null);
+      else if (e.target.closest('[data-m="ok"]')) close({ mandant: d.querySelector("#eqMd").value, applyToSource: d.querySelector("#eqApply").checked });
+    });
+    d.addEventListener("keydown", e => { if (e.key === "Escape") close(null); });
+  });
+}
+
+async function eqResend(id) {
+  const j = (EQ.items || []).find(x => x.id === id); if (!j) return;
+  const r = await eqResendDialog(j); if (!r) return;
+  const n = await api("POST", `api/admin/erp/auftraege/${id}/neu-senden`, r);
+  msg(n.status === "ersetzt"
+    ? "Eingereiht, aber gleich ersetzt: für diesen Beleg gibt es in diesem Mandanten schon eine neuere Rückmeldung."
+    : `Rückmeldung eingereiht (${n.mandant ? "Mandant " + n.mandant : "allgemeine Verbindung"}${n.secureApp ? ", SecuredApp " + n.secureApp : ""}).`, n.status !== "ersetzt");
+  loadErpQueue();
+}
+
 async function loadErpQueue() {
   const seq = ++eqSeq;
   const qs = new URLSearchParams({ offset: EQ.offset, limit: EQ.limit });
@@ -1642,6 +1684,7 @@ async function loadErpQueue() {
   if (seq !== eqSeq) return; // ältere Antwort
   const qb = $("#erpQueue"); if (!qb) return;
   const items = Array.isArray(q.items) ? q.items : [];
+  EQ.items = items;
   const total = q.total || 0, from = total ? EQ.offset + 1 : 0, to = EQ.offset + items.length;
   const c = q.counts || {};
   const pager = `<div class="eq-pager">
@@ -1657,8 +1700,8 @@ async function loadErpQueue() {
         <td class="nowrap">${erpJobTarget(j)}</td>
         <td><span class="badge code" title="${esc(j.codeText || "")}">${esc(j.code)}</span></td><td><span class="badge ${EQ_LABEL[j.status]?.[0] || ""}">${EQ_LABEL[j.status]?.[1] || esc(j.status)}</span>${j.status === "offen" && j.attempts ? `<small> Versuch ${j.attempts + 1} um ${fmtDT(j.nextAttempt)}</small>` : ""}</td>
         <td class="eq-msg">${esc(j.message || (j.fields ? Object.entries(j.fields).map(([k, v]) => k + "=" + v).join(", ") : ""))}</td>
-        <td class="nowrap">${["fehler", "offen", "verworfen"].includes(j.status) ? `<button class="btn ghost small" data-st="erp-job-retry" data-id="${j.id}">Erneut</button>` : ""}
-          ${["fehler", "offen"].includes(j.status) ? `<button class="btn ghost small" data-st="erp-job-discard" data-id="${j.id}">Verwerfen</button>` : ""}</td></tr>`).join("")}
+        <td class="nowrap"><button class="btn ghost small" data-st="eq-resend" data-id="${j.id}" title="Noch einmal ans ERP senden – wahlweise an einen anderen Mandanten">Neu senden …</button>
+          ${["fehler", "offen"].includes(j.status) ? `<button class="btn ghost small" data-st="erp-job-discard" data-id="${j.id}" title="Verwerfen" aria-label="Verwerfen">✕</button>` : ""}</td></tr>`).join("")}
       </tbody></table></div>${total > items.length ? pager : ""}`
     : `<p class="meta">${total || EQ.q || EQ.status || EQ.mandant ? "Keine Aufträge für diesen Filter." : "Noch keine Aufträge."}</p>`;
 }

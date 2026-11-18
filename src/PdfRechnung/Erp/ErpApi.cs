@@ -74,6 +74,16 @@ public static class ErpApi
             return Results.Ok(new { items = items.Select(View), total, offset = offset ?? 0, limit = limit ?? 50, counts = erp.Counts() });
         });
 
+        g.MapPost("/auftraege/{id:long}/neu-senden", (long id, ResendRequest body, ErpFeedbackService erp, PortalAccess access, HttpContext ctx) =>
+        {
+            try
+            {
+                var j = erp.Resend(id, body.Mandant, body.ApplyToSource, access.For(ctx).Name);
+                return j is null ? Results.NotFound(new { error = "Auftrag nicht gefunden." }) : Results.Ok(View(j));
+            }
+            catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
+        });
+
         g.MapPost("/auftraege/{id:long}/wiederholen", (long id, ErpFeedbackService erp) =>
             erp.Retry(id) ? Results.Ok(new { ok = true }) : Results.NotFound());
 
@@ -172,11 +182,13 @@ public static class ErpApi
         });
     }
 
+    public sealed record ResendRequest(string? Mandant, bool ApplyToSource);
+
     private static object View(ErpJob j) => new
     {
         j.Id, erpIndex = j.ErpIndex, vorgangId = j.VorgangId, j.Code, codeText = StatusCode.Text(j.Code), eventAt = j.EventAt, j.Status,
         attempts = j.Attempts, nextAttempt = j.NextAttempt, created = j.Created, done = j.Done, message = j.Message,
         fields = j.Fields is null ? null : JsonSerializer.Deserialize<Dictionary<string, string>>(j.Fields),
-        mandant = j.Mandant, secureApp = j.SecureApp
+        mandant = string.IsNullOrEmpty(j.Mandant) ? null : j.Mandant, secureApp = j.SecureApp
     };
 }

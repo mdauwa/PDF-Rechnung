@@ -256,7 +256,7 @@ public static class MelderApi
             if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
             var v = store.Get(id);
             if (v is null || !PortalAccess.ForUser(f.User).CanSee(v)) return Results.NotFound(new { error = "Vorgang nicht gefunden." });
-            if (!f.User.SendViaOutlook && !v.Mail.Plain) return Results.Json(new { error = "Senden über Outlook ist für dich nicht freigeschaltet (Einstellungen → Benutzer)." }, statusCode: 403);
+            if (!MaySend(f.User) && !v.Mail.Plain) return Results.Json(new { error = "Du darfst diesen Beleg nicht versenden (Einstellungen → Benutzer → Versenden)." }, statusCode: 403);
             if (!v.Mail.Enabled) return Results.Json(new { error = "Für diesen Beleg ist kein E-Mail-Versand vorgesehen (@@ml0@@)." }, statusCode: 409);
             var (mail, err) = await send.BuildMail(v, ct);
             if (mail is null) return Results.Json(new { error = err }, statusCode: 409);
@@ -280,7 +280,7 @@ public static class MelderApi
             if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
             var v = store.Get(id);
             if (v is null || !PortalAccess.ForUser(f.User).CanSee(v)) return Results.NotFound(new { error = "Vorgang nicht gefunden." });
-            if (!f.User.SendViaOutlook && !v.Mail.Plain) return Results.Json(new { error = "Senden über Outlook ist für dich nicht freigeschaltet (Einstellungen → Benutzer)." }, statusCode: 403);
+            if (!MaySend(f.User) && !v.Mail.Plain) return Results.Json(new { error = "Du darfst diesen Beleg nicht versenden (Einstellungen → Benutzer → Versenden)." }, statusCode: 403);
             var (mail, err) = await send.BuildMail(v, ct);
             if (mail is null) return Results.Json(new { error = err }, statusCode: 409);
             var msg = MailSender.BuildMime(mailOpt.CurrentValue, mail, includeCopyTo: false);
@@ -296,7 +296,7 @@ public static class MelderApi
         {
             if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
             var v = store.Get(id);
-            if (v is null || !PortalAccess.ForUser(f.User).CanSee(v) || !(f.User.SendViaOutlook || v.Mail.Plain)) return Results.NotFound();
+            if (v is null || !PortalAccess.ForUser(f.User).CanSee(v) || !(MaySend(f.User) || v.Mail.Plain)) return Results.NotFound();
             send.MarkOutlook(id, $"{f.User.Name} (Outlook, {f.Device.Name})");
             return Results.Ok(new { ok = true });
         });
@@ -310,7 +310,8 @@ public static class MelderApi
             if (v is null || !a.CanSee(v)) return Results.NotFound();
             if (a.UserId is null) return Results.BadRequest(new { error = "Nur mit einem Portal-Benutzer möglich (Melder ist an den Benutzer gekoppelt)." });
             // normale E-Mails öffnen sich immer im eigenen Outlook (wie ein Mailclient) – dafür braucht es keine Outlook-Freigabe
-            if (!a.CanSend || (!a.Outlook && !v.Mail.Plain)) return Results.Json(new { error = "Senden über Outlook ist für dich nicht freigeschaltet – bitte an einen Administrator wenden." }, statusCode: 403);
+            // Senden über Outlook darf jeder, der versenden darf – „Über Outlook senden“ beim Benutzer macht Outlook nur zum Standardweg (ohne Autoversand)
+            if (!a.CanSend) return Results.Json(new { error = "Du darfst Belege nicht versenden – bitte an einen Administrator wenden." }, statusCode: 403);
             if (!v.Mail.Enabled) return Results.BadRequest(new { error = "Für diesen Beleg ist kein E-Mail-Versand vorgesehen." });
             if (v.Status == VorgangStatus.Error) return Results.BadRequest(new { error = "Der Vorgang hat Fehler – bitte zuerst beheben (z. B. Empfänger, Anlagen)." });
             // RDS mit Outlook am Server: Belege vom Belegpost-Drucker direkt in der Sitzung öffnen (kein Melder nötig)
@@ -384,6 +385,9 @@ public static class MelderApi
             .Replace("{Kunde}", Part(v.BuyerName)).Replace("{Kundennummer}", Part(v.BuyerId))
             .Replace("{Belegart}", Part(v.DocumentType)).Replace("{Mandant}", Part(v.Mandant));
     }
+
+    /// <summary>Darf der Benutzer versenden (dann auch über Outlook)?</summary>
+    private static bool MaySend(PortalUser u) => u.IsAdmin || u.CanSend || u.SendViaOutlook;
 
     public static string ExePath => Path.Combine(AppContext.BaseDirectory, ExeName);
     public static string MacZipPath => Path.Combine(AppContext.BaseDirectory, MacZipName);

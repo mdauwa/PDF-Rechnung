@@ -1359,7 +1359,7 @@ function userMask(i) {
        ${chk("active", "Aktiv", "abgewählt = keine Anmeldung")}`) +
     section("Rechte",
       `${chk("canSend", "Versenden", "darf Versanddaten ändern, senden und verwerfen; sonst nur ansehen")}
-       ${chk("sendViaOutlook", "Über Outlook senden", "„Freigeben & in Outlook senden“ öffnet die fertige Mail über den Melder; seine Belege werden nicht automatisch versendet")}
+       ${chk("sendViaOutlook", "Outlook als Standard", "Hauptknopf „Freigeben & in Outlook senden“, seine Belege werden nicht automatisch versendet. Ohne Haken gibt es „In Outlook senden“ als zweiten Knopf.")}
        ${chk("isAdmin", "Administrator", "zusätzlich Einstellungen; sieht alle Belege")}`) +
     section("Versand über den Server – Absender und Antwortadresse",
       `<div class="table-wrap"><table class="list sender-table"><thead><tr><th>ERP-Nr.</th><th>Absenderadresse</th><th>Absendername</th><th>Antwort an</th></tr></thead><tbody>

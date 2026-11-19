@@ -17,11 +17,14 @@ public sealed class SendService
     private readonly IOptionsMonitor<MandantOptions>? _mandanten;
     private readonly IServiceProvider? _sp;
 
+    private readonly PdfRechnung.Services.MelderTasks? _melderTasks;
+    private readonly UserStore? _users;
+
     public SendService(DocumentStore store, SettingsStore settings, IOptionsMonitor<MailOptions> mail, IOptionsMonitor<StorageOptions> storage,
         IOptionsMonitor<MailTemplateOptions> templates, ILogger<SendService> log, IOptionsMonitor<MandantOptions>? mandanten = null,
-        IServiceProvider? sp = null)
+        IServiceProvider? sp = null, PdfRechnung.Services.MelderTasks? melderTasks = null, UserStore? users = null)
     {
-        _mandanten = mandanten; _sp = sp;
+        _mandanten = mandanten; _sp = sp; _melderTasks = melderTasks; _users = users;
         _store = store; _settings = settings; _mail = mail; _storage = storage; _templates = templates; _log = log;
     }
 
@@ -102,6 +105,7 @@ public sealed class SendService
                 return true;
             });
             Export(id, v);
+            AfterSend(id);
             _log.LogInformation("Vorgang {Id} versendet an {To} durch {By}", id, string.Join(", ", v.Mail.To), by);
             return (true, $"Versendet an {string.Join(", ", v.Mail.To)}.");
         }
@@ -170,7 +174,7 @@ public sealed class SendService
             else { x.Status = VorgangStatus.SendError; x.SendError = string.Join("; ", v.Deliveries.Where(d => d.Status != "ok").Select(d => $"{d.Label}: {d.Message}")); }
             return true;
         });
-        if (allOk) Export(v.Id, v);
+        if (allOk) { Export(v.Id, v); AfterSend(v.Id); }
         return allOk ? (true, "Versendet – " + string.Join(", ", v.Deliveries.Select(d => d.Label)) + ".")
             : (false, "Nicht alle Versandwege erfolgreich: " + string.Join("; ", results));
     }
@@ -210,13 +214,43 @@ public sealed class SendService
     };
 
     /// <summary>Vom Melder in Outlook geöffnet: nicht mehr automatisch versenden.</summary>
-    public void MarkOutlook(string id, string by) => _store.Update(id, x =>
+    public void MarkOutlook(string id, string by)
     {
-        if (x.Status is VorgangStatus.Sent or VorgangStatus.Sending) return false;
-        x.Status = VorgangStatus.Outlook; x.SentBy = by; x.OutlookHandedAt = DateTimeOffset.Now;
-        x.History.Add(new HistoryEntry(DateTimeOffset.Now, by, "outlook", "Als E-Mail-Entwurf in Outlook geöffnet – Versand durch den Benutzer"));
-        return true;
-    });
+        var changed = false;
+        _store.Update(id, x =>
+        {
+            if (x.Status is VorgangStatus.Sent or VorgangStatus.Sending) return false;
+            x.Status = VorgangStatus.Outlook; x.SentBy = by; x.OutlookHandedAt = DateTimeOffset.Now;
+            x.History.Add(new HistoryEntry(DateTimeOffset.Now, by, "outlook", "Als E-Mail-Entwurf in Outlook geöffnet – Versand durch den Benutzer"));
+            changed = true;
+            return true;
+        });
+        if (changed) AfterSend(id); // Speicher-Dialog gleich nach dem Outlook-Entwurf
+    }
+
+    /// <summary>
+    /// @@pn@@: Nach dem Senden (Mail versendet oder Entwurf in Outlook geöffnet) den Speicher-Dialog im Melder öffnen –
+    /// einmal je Beleg, beim Melder auf dem Computer, an dem gedruckt wurde (sonst beim nächsten Melder des Benutzers).
+    /// </summary>
+    public void AfterSend(string id)
+    {
+        var tasks = _melderTasks ?? _sp?.GetService<PdfRechnung.Services.MelderTasks>();
+        var users = _users ?? _sp?.GetService<UserStore>();
+        if (tasks is null) return;
+        Vorgang? queued = null;
+        _store.Update(id, x =>
+        {
+            if (x.SaveAfterSendRequest is null || x.SaveAfterSendQueued || x.OwnerUserId is null) return false;
+            x.SaveAfterSendQueued = true;
+            x.History.Add(new HistoryEntry(DateTimeOffset.Now, "Melder", "melder", "Speichern nach dem Senden an den Melder übergeben"));
+            queued = x;
+            return true;
+        });
+        if (queued is null) return;
+        var title = string.Join(" ", new[] { queued.DocumentType, queued.VoucherId }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        tasks.Create(queued.OwnerUserId!, users?.DeviceOn(queued.OwnerUserId!, queued.PrintMachine)?.Id, PdfRechnung.Services.MelderTasks.KindSave, queued.Id,
+            title.Length > 0 ? title : queued.OriginalFileName ?? queued.Id, queued.SaveAfterSendRequest);
+    }
 
     /// <summary>Kopie in den Exportordner (Archiv/DMS), falls eingestellt.</summary>
     private void Export(string id, Vorgang v)

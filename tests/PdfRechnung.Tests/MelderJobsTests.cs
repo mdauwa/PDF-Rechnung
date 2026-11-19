@@ -105,4 +105,37 @@ public sealed class MelderJobsTests : IDisposable
         Assert.Equal("@@aakunde@firma.at@@", job.Codes[0].Text); // ersetzt wird erst beim Druck
         Assert.Equal("@@", GotomaxxCodes.Job(v, "P", new PdfRechnung.GotomaxxOptions { CommandDelimiter = " " }).Delimiter);
     }
+
+    [Fact]
+    public void Speichern_nach_dem_Senden_kommt_erst_mit_Outlook_bzw_Versand()
+    {
+        Directory.CreateDirectory(_dir);
+        var settings = new SettingsStore(_dir);
+        var users = new UserStore(_dir);
+        users.Replace(new List<PortalUser> { new() { Id = "martin", Name = "Martin", OperatorNumbers = { "007" }, SendViaOutlook = true } });
+        var s = DefaultSettings.Create();
+        var store = new DocumentStore(settings, NullLogger<DocumentStore>.Instance);
+        var hub = new EventHub();
+        var tasks = new MelderTasks(store.Db, hub);
+        var (rds, _) = users.AddDevice("martin", "RDS");
+        users.TouchDevice(rds.Id, "RDS01");
+        var proc = new DocumentProcessor(store, new StaticOptions<MailOptions>(s.Mail), new StaticOptions<InvoiceOptions>(s.Invoice),
+            NullLogger<DocumentProcessor>.Instance, settings: settings, users: users, events: hub, melderTasks: tasks);
+        var send = new SendService(store, settings, new StaticOptions<MailOptions>(s.Mail), new StaticOptions<StorageOptions>(s.Storage),
+            new StaticOptions<MailTemplateOptions>(s.MailTemplates), NullLogger<SendService>.Instance, melderTasks: tasks, users: users);
+
+        var v = proc.Process(TestData.Pdf(new[] { "@@pb7@@", "@@pnArchiv@@", "@@toa@kunde.at@@" }), "Drucker", "a.pdf", "FIRMA\\mmuster", "RDS01");
+        Assert.Equal("Archiv", v.SaveAfterSendRequest);
+        Assert.Empty(tasks.Pending("martin", rds.Id)); // noch nicht gesendet
+
+        send.MarkOutlook(v.Id, "Martin (Outlook)");
+        var t = Assert.Single(tasks.Pending("martin", rds.Id));
+        Assert.Equal(MelderTasks.KindSave, t.Kind);
+        Assert.Equal("Archiv", t.Data);
+        Assert.True(store.Get(v.Id)!.SaveAfterSendQueued);
+
+        send.AfterSend(v.Id); // nur einmal
+        Assert.Single(tasks.Pending("martin", rds.Id));
+        Assert.True(GotomaxxCodes.IsPortalOnly(new ControlCode(1, "pn", "")));
+    }
 }

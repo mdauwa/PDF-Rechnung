@@ -362,6 +362,7 @@ public sealed class DocumentProcessor
         ApplyOwnerMandant(v);
         v.SaveRequest = p.SaveFolder is null or "0" ? null : p.SaveFolder;
         v.PrintRequest = p.PrintPrinter is null or "0" ? null : p.PrintPrinter;
+        v.SaveAfterSendRequest = p.SaveAfterSend is null or "0" ? null : p.SaveAfterSend;
 
         Fill(v, p, overwriteMail: true);
         var sendPdf = v.Messages.Count == 0 ? Compose(v, pdf, p) : null;
@@ -414,17 +415,20 @@ public sealed class DocumentProcessor
     /// <summary>@@pa@@ / @@pp@@: Hinweise, wenn Speichern bzw. Drucken über den Melder nicht möglich ist.</summary>
     private void MelderJobsCheck(Vorgang v)
     {
-        if (v.SaveRequest is null && v.PrintRequest is null) return;
-        var what = v.SaveRequest is not null && v.PrintRequest is not null ? "Speichern und Drucken" : v.SaveRequest is not null ? "Speichern" : "Drucken";
+        if (v.SaveRequest is null && v.PrintRequest is null && v.SaveAfterSendRequest is null) return;
+        var what = v.PrintRequest is null ? "Speichern" : v.SaveRequest is null && v.SaveAfterSendRequest is null ? "Drucken" : "Speichern und Drucken";
         string? problem = v.OwnerUserId is null ? "der Beleg ist keinem Portal-Benutzer zugeordnet"
             : _users is not null && _users.Devices(v.OwnerUserId).Count == 0 ? $"für {v.OwnerName ?? "den Benutzer"} ist kein Belegpost Melder gekoppelt" : null;
         if (problem is not null)
-            v.Messages.Add(new CheckMessage(DocumentChecker.Info, $"{what} über den Melder (@@pa@@/@@pp@@) nicht möglich: {problem}.", "melder"));
+            v.Messages.Add(new CheckMessage(DocumentChecker.Info, $"{what} über den Melder (@@pa@@/@@pn@@/@@pp@@) nicht möglich: {problem}.", "melder"));
     }
 
     /// <summary>@@pa@@ / @@pp@@: Aufträge an den Melder – laufen zusätzlich zu Mail, Outlook oder gotomaxx.</summary>
     private void CreateMelderJobs(Vorgang v)
     {
+        if (v.SaveAfterSendRequest is not null && v.OwnerUserId is not null)
+            _store.Update(v.Id, x => { x.History.Add(new HistoryEntry(DateTimeOffset.Now, "Steuerzeichen", "melder",
+                "Speichern über den Melder nach dem Senden angefordert" + (x.SaveAfterSendRequest!.Length > 0 ? $" (Ordner „{x.SaveAfterSendRequest}“)" : ""))); return true; });
         if (_melderTasks is null || v.OwnerUserId is null || (v.SaveRequest is null && v.PrintRequest is null)) return;
         var device = _users?.DeviceOn(v.OwnerUserId, v.PrintMachine)?.Id;
         var title = TaskTitle(v);

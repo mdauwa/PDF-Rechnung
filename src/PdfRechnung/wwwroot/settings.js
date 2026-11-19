@@ -863,7 +863,7 @@ function gotomaxxSection() {
     <div class="help-box">
       <b>So funktioniert die Weiterleitung:</b> Der Beleg wird als echter Druckauftrag an den gotomaxx-Drucker geschickt.
       Die Steuerzeichen werden dafür auf derselben Seite neu als Text gedruckt –
-      <b>ohne</b> die Belegpost-eigenen <code>@@pb@@ @@pi@@ @@pu@@ @@pv@@ @@pt@@ @@pf@@ @@pg@@ @@pa@@ @@pp@@</code> und <code>@@xi ERP_VOUCHER_INDEX=…@@</code>,
+      <b>ohne</b> die Belegpost-eigenen <code>@@pb@@ @@pi@@ @@pu@@ @@pv@@ @@pt@@ @@pf@@ @@pg@@ @@pa@@ @@pn@@ @@pp@@</code> und <code>@@xi ERP_VOUCHER_INDEX=…@@</code>,
       alle anderen unverändert (Pfade wie <code>K:\…</code> ohne Pfadzuordnung). Briefpapier, Prüfung und Versand übernimmt dann gotomaxx.
       Status 140 = an gotomaxx übergeben, 840 = Übergabe fehlgeschlagen. Im Vorgang gibt es zusätzlich den Knopf „An gotomaxx übergeben“.
     </div>`;
@@ -1939,6 +1939,7 @@ function tabMapi() {
        <div class="help-box">
          <b>Steuerzeichen</b> (laufen zusätzlich zu Mail, Outlook oder gotomaxx):
          <code>@@pa@@</code> = im Ablageordner speichern, <code>@@paUnterordner@@</code> = darunter, <code>@@paK:\Pfad@@</code> bzw. <code>@@pa\\\\server\\…@@</code> = in diesem Ordner, <code>@@pa0@@</code> = nicht.
+         <code>@@pn@@</code> (Ordner wie bei <code>@@pa@@</code>) = erst <b>nach dem Senden</b> speichern: gleich nachdem Outlook den Entwurf geöffnet hat bzw. nachdem der Beleg versendet wurde (auch nach „Senden“ im Portal bei Freigabe).
          <code>@@pp@@</code> = auf dem Standarddrucker des PCs drucken, <code>@@ppDruckername@@</code> = auf diesem Drucker, <code>@@pp0@@</code> = nicht.
          Gespeichert und gedruckt wird das fertige PDF (mit Briefpapier und E-Rechnung). Ausgeführt wird es vom Melder des Benutzers auf dem Computer,
          an dem gedruckt wurde (sonst von seinem nächsten Melder). Ist kein Melder aktiv, wartet der Auftrag bis zur oben eingestellten Frist. Das Ergebnis steht im Verlauf des Vorgangs.

@@ -25,6 +25,7 @@ public static class GotomaxxCodes
         "pm", // Mandant
         "pw", // Versandweg
         "pa", // Speichern über den Melder
+        "pn", // Speichern über den Melder nach dem Senden
         "pp"  // Drucken über den Melder
     };
 

@@ -77,6 +77,8 @@ public sealed class ParsedCodes
     /// (bzw. in diesem Ordner, relativ zum Ablageordner oder absolut). null = nicht angegeben, "" = Ablageordner, "0" = nicht speichern.
     /// </summary>
     public string? SaveFolder { get; set; }
+    /// <summary>@@pn@@ / @@pnOrdner@@ / @@pn0@@ – wie @@pa@@, aber erst nach dem Senden (Mail versendet bzw. Entwurf in Outlook geöffnet).</summary>
+    public string? SaveAfterSend { get; set; }
     /// <summary>@@pp@@ / @@ppDrucker@@ / @@pp0@@ – zusätzlich über den Melder drucken. null = nicht angegeben, "" = Standarddrucker des PCs, "0" = nicht drucken.</summary>
     public string? PrintPrinter { get; set; }
 
@@ -223,6 +225,7 @@ public static partial class ControlCodeParser
                 break;
             case "pg": r.GotomaxxSet = true; r.GotomaxxPrinter = t.Length > 0 ? t : null; break;
             case "pa": r.SaveFolder = t; break;
+            case "pn": r.SaveAfterSend = t; break;
             case "pp": r.PrintPrinter = t; break;
 
             // ---------- Mail ----------

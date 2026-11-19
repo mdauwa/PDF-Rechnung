@@ -133,6 +133,10 @@ public sealed class Vorgang
     public string? GotomaxxPrinter { get; set; }
     /// <summary>@@pa@@: über den Melder speichern – null = nein, "" = Ablageordner, sonst Ordner (relativ zum Ablageordner oder absolut).</summary>
     public string? SaveRequest { get; set; }
+    /// <summary>@@pn@@: nach dem Senden (Mail versendet bzw. Outlook-Entwurf geöffnet) über den Melder speichern – Wert wie bei <see cref="SaveRequest"/>.</summary>
+    public string? SaveAfterSendRequest { get; set; }
+    /// <summary>Speichern nach dem Senden wurde schon beauftragt (nur einmal, auch bei erneutem Senden).</summary>
+    public bool SaveAfterSendQueued { get; set; }
     /// <summary>@@pp@@: über den Melder drucken – null = nein, "" = Standarddrucker des PCs, sonst Druckername.</summary>
     public string? PrintRequest { get; set; }
 

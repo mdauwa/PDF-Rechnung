@@ -227,11 +227,10 @@ function drawVorgang(view, data) {
     // Versandweg aus Regel bzw. @@pw@@ übersteuert die Einstellung des Mitarbeiters (Senden über Outlook)
     const route = v.mail.route || "";
     const routeWhy = route ? ` – Versandweg laut ${v.mail.routeReason || "Regel"}` : "";
-    // Outlook geht für jeden Portal-Benutzer mit Versandrecht (Melder bzw. Sitzung am Server – MAPI ist dafür nicht nötig).
-    // „Über Outlook senden“ beim Benutzer macht Outlook zum Standard (Hauptknopf), sonst steht es als zweiter Knopf da.
-    const outlookPossible = portal.userId && v.mail.enabled && !["verworfen", "inVersand", "fehler"].includes(v.status)
-      && (route === "" || route === "outlook") && !(v.deliveries || []).length;
-    const canOutlook = outlookPossible && (portal.sendViaOutlook || route === "outlook");
+    // Outlook nur mit dem Recht „Über Outlook senden“ (Melder bzw. Sitzung am Server – MAPI ist dafür nicht nötig).
+    // Auch bei Versandweg „nach Freigabe“, „wenn ok“ oder „direkt“: die Freigabe kann dann über Outlook erfolgen.
+    const canOutlook = portal.sendViaOutlook && portal.userId && v.mail.enabled && !["verworfen", "inVersand", "fehler"].includes(v.status)
+      && !["gotomaxx", "keine"].includes(route) && !(v.deliveries || []).length;
     const canServer = ["bereit", "warnung", "versandfehler", "outlook"].includes(v.status) && v.mail.enabled;
     if (route === "gotomaxx" && portal.gotomaxx && !["inVersand", "verworfen", "gotomaxx", "versendet"].includes(v.status))
       actions.push(`<button class="btn" data-a="gotomaxx" title="Druckt den Beleg auf den gotomaxx-PDFMAILER-Drucker${esc(routeWhy)}">${icon("send")} An gotomaxx übergeben</button>`);
@@ -239,8 +238,6 @@ function drawVorgang(view, data) {
       if (canOutlook) actions.push(`<button class="btn" data-a="outlook" title="Öffnet die fertige E-Mail mit Text und Anhängen in deinem Outlook (über den Belegpost Melder) – dort nur noch auf Senden klicken${esc(routeWhy)}">${icon("send")} Freigeben &amp; in Outlook senden</button>`);
       if (canServer && !(route === "outlook" && canOutlook))
         actions.push(`<button class="btn${canOutlook ? " ghost" : ""}" data-a="senden" title="Versand über den Belegpost-Server${esc(routeWhy)}">${canOutlook ? "Über Server senden" : `${icon("send")} Jetzt senden`}</button>`);
-      if (outlookPossible && !canOutlook)
-        actions.push(`<button class="btn ghost" data-a="outlook" title="Öffnet die fertige E-Mail mit Text und Anhängen in deinem Outlook (über den Belegpost Melder bzw. in der Sitzung am Server) – dort nur noch auf Senden klicken">In Outlook senden</button>`);
     }
     if (v.status === "fehler" && v.mail.enabled) actions.push(`<button class="btn danger-ghost" data-a="senden-force">Trotz Fehler senden …</button>`);
     if (v.status === "versendet") actions.push(`<button class="btn ghost" data-a="erneut">Erneut senden …</button>`);
@@ -339,7 +336,7 @@ function drawVorgang(view, data) {
             ${v.mail.noDocument ? `<p class="meta">Ohne Beleg als Anhang (@@md@@).</p>` : ""}
             <p class="meta">${v.mail.template ? `Mail-Vorlage <b>${esc(v.mail.template)}</b> (${esc(v.mail.templateReason || "")})` : "Ohne Mail-Vorlage (schlichte Mail)"}${v.mail.fromAddress ? ` · Absender ${esc(v.mail.fromName ? v.mail.fromName + " <" + v.mail.fromAddress + ">" : v.mail.fromAddress)}` : ""}
               · <a href="#" id="mPreviewBtn">So sieht die Mail aus</a>
-              ${portal.canSend && portal.userId && v.mail.enabled && v.status !== "fehler" && (!v.mail.route || v.mail.route === "outlook") ? ` · <a href="#" data-a="outlook">In Outlook öffnen</a>` : ""}</p>
+              ${portal.sendViaOutlook && portal.userId && v.mail.enabled && v.status !== "fehler" && !["gotomaxx", "keine"].includes(v.mail.route || "") ? ` · <a href="#" data-a="outlook">In Outlook öffnen</a>` : ""}</p>
             <div id="mPreview"></div>
             ${editable ? `<div class="actions"><button class="btn" data-a="mail-save" disabled>Versanddaten speichern</button><span class="meta-inline">Änderungen werden geprüft und bleiben bei „Neu prüfen“ erhalten.</span></div>` : ""}
           </div>

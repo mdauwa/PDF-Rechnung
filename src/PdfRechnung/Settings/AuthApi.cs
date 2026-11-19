@@ -70,13 +70,18 @@ public static class AuthApi
         });
 
         // Windows-Anmeldung: der Browser meldet das angemeldete Windows-Konto (Kerberos/NTLM). Administratoren nie automatisch.
-        app.MapGet("/auth/windows", async (string? ziel, HttpContext ctx, UserStore users, IOptionsMonitor<AuthOptions> auth, ILoggerFactory lf) =>
+        app.MapGet("/auth/windows", async (string? ziel, string? wdh, HttpContext ctx, UserStore users, IOptionsMonitor<AuthOptions> auth, ILoggerFactory lf) =>
         {
             var target = !string.IsNullOrEmpty(ziel) && ziel.StartsWith('/') && !ziel.StartsWith("//") ? ziel : "/";
             if (!WindowsConfiguredAtStartup) return Results.Redirect("/#/anmeldung?manuell=1&fehler=" + Uri.EscapeDataString("Die Windows-Anmeldung ist nicht eingerichtet."));
             var res = await ctx.AuthenticateAsync(PortalAccess.WindowsScheme);
             if (!res.Succeeded || res.Principal?.Identity?.Name is not { Length: > 0 } account)
             {
+                // Der Browser hat Anmeldedaten geschickt, der Abschluss klappte aber nicht (NTLM über eine neue Verbindung,
+                // z. B. Firefox nach der Kennwortabfrage): einmal still neu versuchen – der Browser sendet die Daten erneut.
+                if (string.IsNullOrEmpty(wdh) && ctx.Request.Headers.Authorization.ToString() is { Length: > 0 } h
+                    && (h.StartsWith("Negotiate", StringComparison.OrdinalIgnoreCase) || h.StartsWith("NTLM", StringComparison.OrdinalIgnoreCase)))
+                    return Results.Redirect("/auth/windows?wdh=1&ziel=" + Uri.EscapeDataString(target));
                 // Browser soll das Windows-Konto senden; klappt das nicht (kein Intranet/keine Domäne), sieht der Benutzer diese Seite
                 await ctx.ChallengeAsync(PortalAccess.WindowsScheme);
                 ctx.Response.ContentType = "text/html; charset=utf-8";

@@ -185,10 +185,11 @@ public static class AuthApi
             return Results.Challenge(new AuthenticationProperties { RedirectUri = target }, new[] { PortalAccess.EntraScheme });
         });
 
-        app.MapGet("/auth/logout", async (HttpContext ctx) =>
+        app.MapGet("/auth/logout", async (string? admin, HttpContext ctx) =>
         {
             await ctx.SignOutAsync(PortalAccess.Scheme);
-            return Results.Redirect("/#/anmeldung?abgemeldet=1");
+            // „Als Administrator anmelden“: abmelden und die Anmeldung mit Kennwort zeigen (keine automatische Windows-Anmeldung)
+            return Results.Redirect(admin == "1" ? "/#/anmeldung?manuell=1&admin=1" : "/#/anmeldung?abgemeldet=1");
         });
     }
 

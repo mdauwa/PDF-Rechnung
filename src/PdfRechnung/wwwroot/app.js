@@ -67,6 +67,7 @@ async function loadPortal() {
          <div class="user-pop-h">Darstellung</div>
          ${[["", "Wie das System"], ["hell", "Hell"], ["dunkel", "Dunkel"]].map(([k, t]) => `<button class="user-pop-i" data-theme-set="${k}">${themeCurrent() === k ? "✓ " : ""}${t}</button>`).join("")}
          <div class="user-pop-sep"></div>
+         ${portal.isAdmin ? "" : `<a class="user-pop-i" href="auth/logout?admin=1">Als Administrator anmelden</a>`}
          <a class="user-pop-i" href="auth/logout">Abmelden</a>
        </div>
        ${portal.setupMode ? `<div class="user-foot">Einrichtungsmodus</div>` : ""}`
@@ -283,6 +284,14 @@ function liveToast(ev, target) {
 
 /* ---------------- Anmeldung ---------------- */
 
+/** Nach erfolgreicher Anmeldung: erst den neuen Stand laden, dann wechseln (sonst sieht der Wechsel noch „abgemeldet“). */
+async function afterLogin(ziel) {
+  try { sessionStorage.removeItem("belegpost.ziel"); } catch { }
+  await loadPortal();
+  const target = ziel || "#/";
+  if (location.hash === target) route(); else location.hash = target;
+}
+
 async function renderLogin(view) {
   const q = new URLSearchParams(location.hash.split("?")[1] || "");
   let st = { isLocal: false, needsSetup: false, entraEnabled: false };
@@ -293,8 +302,14 @@ async function renderLogin(view) {
   // Direktlink von außen (z. B. nach dem Druck): gleich zur Microsoft-Anmeldung – meist ohne Eingabe (SSO)
   const embedded = document.body.classList.contains("embedded");
   if (ziel && st.entraEnabled && !st.isLocal && !embedded && !q.get("fehler") && !q.get("abgemeldet")) { location.href = loginUrl; return; }
-  // Windows-Anmeldung: ohne Rückfrage mit dem angemeldeten Windows-Konto (nicht nach Abmelden, Fehler oder „manuell“)
-  if (st.windowsEnabled && !embedded && !q.get("fehler") && !q.get("abgemeldet") && !q.get("manuell") && !q.get("admin")) {
+  // Windows-Anmeldung: ohne Rückfrage mit dem angemeldeten Windows-Konto – nicht nach Abmelden, Fehler oder „manuell“,
+  // nicht direkt am Server (localhost: dort meldet sich meist der Administrator an) und nicht, solange in diesem Tab
+  // bewusst von Hand angemeldet wird (sonst würde z. B. „Als Administrator anmelden“ sofort wieder überschrieben)
+  const manual = q.get("fehler") || q.get("abgemeldet") || q.get("manuell") || q.get("admin");
+  if (manual) try { sessionStorage.setItem("belegpost.manuell", "1"); } catch { }
+  let manualTab = false;
+  try { manualTab = sessionStorage.getItem("belegpost.manuell") === "1"; } catch { }
+  if (st.windowsEnabled && !embedded && !manual && !manualTab && !st.isLocal) {
     location.href = "auth/windows?ziel=" + encodeURIComponent("/" + (ziel || "")); return;
   }
   const err = q.get("fehler");
@@ -320,7 +335,7 @@ async function renderLogin(view) {
         <label class="field"><span class="lbl">Windows-Benutzer</span><input name="user" autocomplete="username" required value="${esc(q.get("konto") || "")}" placeholder="z. B. FIRMA\\max oder max@firma.at"></label>
         <label class="field"><span class="lbl">Kennwort</span><input type="password" name="pw" autocomplete="current-password" required></label>
         <button class="btn" type="submit">Anmelden</button>
-        ${st.windowsEnabled ? `<p class="meta"><a href="auth/windows?ziel=${encodeURIComponent("/" + (ziel || ""))}">Automatisch mit Windows anmelden</a></p>` : ""}
+        ${st.windowsEnabled ? `<p class="meta"><a href="auth/windows?ziel=${encodeURIComponent("/" + (ziel || ""))}" data-auto-login>Automatisch mit Windows anmelden</a></p>` : ""}
       </form>` : st.entraEnabled ? `${embedded ? `<p class="meta">Die Anmeldung ist abgelaufen – bitte Belegpost im Firmenportal neu öffnen.</p>` : ""}<a class="btn ms-btn" href="${esc(loginUrl)}" ${embedded ? 'target="_top"' : ""}><span class="ms-logo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Mit Microsoft anmelden</a>`
         : `<p class="meta">Die Anmeldung ist noch nicht eingerichtet${st.isLocal ? " (Einstellungen → Anmeldung)" : " – bitte an einen Administrator wenden"}.</p>`}
       ${st.isLocal ? `<div class="login-sep"><span>oder direkt am Server</span></div>
@@ -333,6 +348,8 @@ async function renderLogin(view) {
     <div class="login-brand"><span class="brand-mark"></span>${esc(portal.title || "Belegpost")}</div>
     ${errText ? `<div class="notice">${errText}</div>` : ""}${body}<div class="notice" id="loginMsg" hidden></div></div></div>`;
 
+  const auto = view.querySelector("[data-auto-login]");
+  if (auto) auto.onclick = () => { try { sessionStorage.removeItem("belegpost.manuell"); } catch { } };
   const adForm = view.querySelector("#adForm");
   if (adForm) adForm.onsubmit = async e => {
     e.preventDefault();
@@ -340,10 +357,7 @@ async function renderLogin(view) {
     m.hidden = true;
     try {
       await api("POST", "api/auth/ad", { user: adForm.user.value, password: adForm.pw.value });
-      location.hash = ziel || "#/";
-      try { sessionStorage.removeItem("belegpost.ziel"); } catch { }
-      await loadPortal();
-      route();
+      await afterLogin(ziel);
     } catch (ex) { m.textContent = ex.message; m.hidden = false; }
   };
   const form = view.querySelector("#loginForm");
@@ -359,10 +373,7 @@ async function renderLogin(view) {
       } else {
         await api("POST", "api/auth/local", { password: pw });
       }
-      location.hash = ziel || "#/";
-      try { sessionStorage.removeItem("belegpost.ziel"); } catch { }
-      await loadPortal();
-      route();
+      await afterLogin(ziel);
     } catch (ex) { m.textContent = ex.message; m.hidden = false; }
   };
 }

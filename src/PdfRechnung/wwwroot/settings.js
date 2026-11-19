@@ -730,7 +730,7 @@ async function loadGxDelimiters(apply) {
   try {
     if (apply && ST.dirty) throw new Error("Bitte zuerst speichern.");
     const r = await api(apply ? "POST" : "GET", "api/admin/gotomaxx-trennzeichen");
-    GXD = r.status || null;
+    GXD = r.status || {}; // nie wieder null – sonst lädt drawTab endlos neu
     if (ST.tab === "gotomaxx") drawTab();
     if (apply) msg("Trennzeichen angewendet.", true);
   } catch (e) { msg(e.message || String(e), false); }

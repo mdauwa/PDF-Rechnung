@@ -110,7 +110,28 @@ public static class PrinterSetup
     public static void Install(string name, bool share, string portName, Action<string> log)
     {
         if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Bitte einen Druckernamen angeben.");
-        var output = PowerShell($$"""
+        string output;
+        try { output = InstallScript(name, share, portName); }
+        catch (PowerShellException ex)
+        {
+            foreach (var line in ex.Done.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) log(line);
+            throw new InvalidOperationException(Explain(ex.Message));
+        }
+        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) log(line);
+    }
+
+    /// <summary>Häufige Spooler-Meldungen mit Hinweis ergänzen.</summary>
+    private static string Explain(string m) =>
+        m.Contains("0x00000704", StringComparison.OrdinalIgnoreCase) || m.Contains("unbekannt", StringComparison.OrdinalIgnoreCase) && m.Contains("Anschluss", StringComparison.OrdinalIgnoreCase)
+            || m.Contains("port is unknown", StringComparison.OrdinalIgnoreCase)
+            ? m + " – die Druckwarteschlange kennt den neuen Anschluss noch nicht. Dienst „Druckwarteschlange“ neu starten und „Drucker einrichten“ erneut ausführen."
+        : m.Contains("Zugriff verweigert", StringComparison.OrdinalIgnoreCase) || m.Contains("Access is denied", StringComparison.OrdinalIgnoreCase)
+            ? m + " – Belegpost muss als Dienst (bzw. als Administrator) laufen, um Drucker anzulegen."
+        : m;
+
+    private static string InstallScript(string name, bool share, string portName)
+    {
+        return PowerShell($$"""
             $ErrorActionPreference = 'Stop'
             if (-not (Get-PrinterDriver -Name '{{Driver}}' -ErrorAction SilentlyContinue)) {
               throw "Der Treiber '{{Driver}}' ist nicht installiert (Windows-Feature 'Microsoft Print to PDF' bzw. Serverrolle Druckdienste)."
@@ -120,12 +141,17 @@ public static class PrinterSetup
             if (Get-Printer -Name '{{Q(name)}}' -ErrorAction SilentlyContinue) {
               Set-Printer -Name '{{Q(name)}}' -DriverName '{{Driver}}' -PortName '{{Q(portName)}}'; 'Drucker {{Q(name)}} aktualisiert.'
             } else {
-              Add-Printer -Name '{{Q(name)}}' -DriverName '{{Driver}}' -PortName '{{Q(portName)}}'; 'Drucker {{Q(name)}} angelegt.'
+              # ein frisch angelegter Anschluss ist für die Warteschlange manchmal erst nach einem Moment sichtbar
+              $ok = $false
+              for ($i = 1; $i -le 3 -and -not $ok; $i++) {
+                try { Add-Printer -Name '{{Q(name)}}' -DriverName '{{Driver}}' -PortName '{{Q(portName)}}'; $ok = $true }
+                catch { if ($i -eq 3) { throw } ; Start-Sleep -Seconds 2 }
+              }
+              'Drucker {{Q(name)}} angelegt.'
             }
             if ({{(share ? "$true" : "$false")}}) { Set-Printer -Name '{{Q(name)}}' -Shared $true -ShareName '{{Q(name)}}'; 'Freigegeben als {{Q(name)}}.' }
             else { Set-Printer -Name '{{Q(name)}}' -Shared $false; 'Nicht freigegeben.' }
             """);
-        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) log(line);
     }
 
     /// <summary>Drucker und seinen Anschluss aus Windows entfernen.</summary>
@@ -142,9 +168,17 @@ public static class PrinterSetup
 
     private static string Q(string s) => s.Replace("'", "''");
 
+    /// <summary>Fehler aus dem Skript; <see cref="Done"/> = was bis dahin erledigt wurde.</summary>
+    public sealed class PowerShellException(string message, string done) : InvalidOperationException(message)
+    {
+        public string Done { get; } = done;
+    }
+
     private static string PowerShell(string script)
     {
-        script = "$ProgressPreference = 'SilentlyContinue'\n" + script;
+        // Fehler als lesbare Zeile auf die Standardausgabe (stderr kommt bei umgeleiteter Ausgabe oft nur als CLIXML)
+        script = "$ProgressPreference = 'SilentlyContinue'\ntry {\n" + script
+            + "\n} catch {\n  $m = $_.Exception.Message; if ($_.CategoryInfo.Activity) { $m = $_.CategoryInfo.Activity + ': ' + $m }\n  '##FEHLER## ' + $m\n  exit 1\n}";
         var psi = new ProcessStartInfo("powershell.exe", "-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand " + Convert.ToBase64String(Encoding.Unicode.GetBytes(script)))
         {
             RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true,
@@ -156,6 +190,13 @@ public static class PrinterSetup
         var stderr = p.StandardError.ReadToEndAsync();
         if (!p.WaitForExit(60_000)) { try { p.Kill(); } catch { } throw new InvalidOperationException("PowerShell antwortet nicht."); }
         var err = stderr.Result.Trim();
+        var marked = stdout.Result.Split('\n').Select(l => l.Trim()).FirstOrDefault(l => l.StartsWith("##FEHLER## ", StringComparison.Ordinal));
+        if (marked is not null)
+        {
+            // bis dahin Erledigtes trotzdem melden, dann den eigentlichen Fehler
+            var done = string.Join("\n", stdout.Result.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith("##FEHLER## ", StringComparison.Ordinal)));
+            throw new PowerShellException(marked["##FEHLER## ".Length..], done);
+        }
         if (p.ExitCode != 0)
             throw new InvalidOperationException(FirstLine(err.Length > 0 && !err.StartsWith("#< CLIXML", StringComparison.Ordinal) ? err : stdout.Result.Length > 0 ? stdout.Result : err));
         return stdout.Result.Trim();

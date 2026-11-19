@@ -82,7 +82,12 @@ public static class AuthApi
                 ctx.Response.ContentType = "text/html; charset=utf-8";
                 await ctx.Response.WriteAsync("<!doctype html><meta charset=utf-8><title>Anmeldung</title><body style=\"font-family:Segoe UI,sans-serif;margin:40px\">"
                     + "<h2>Windows-Anmeldung nicht möglich</h2><p>Der Browser hat kein Windows-Konto übermittelt.</p>"
-                    + "<p><a href=\"/#/anmeldung?manuell=1\">Mit Benutzername und Kennwort anmelden</a></p></body>");
+                    + "<p><a href=\"/#/anmeldung?manuell=1\">Mit Benutzername und Kennwort anmelden</a></p>"
+                    + (ctx.Request.Headers.UserAgent.ToString().Contains("Firefox", StringComparison.OrdinalIgnoreCase)
+                        ? "<p style=\"color:#555\">Firefox sendet das Windows-Konto nur an freigegebene Adressen. Der Administrator trägt <b>"
+                          + System.Net.WebUtility.HtmlEncode(ctx.Request.Host.Host) + "</b> per Richtlinie (Authentication → SPNEGO/NTLM, AllowNonFQDN) "
+                          + "oder unter about:config in <code>network.negotiate-auth.trusted-uris</code> ein.</p>" : "")
+                    + "</body>");
                 return Results.Empty;
             }
             var log = lf.CreateLogger("Anmeldung");

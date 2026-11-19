@@ -182,6 +182,9 @@ public static class AdminApi
         });
 
         // ---------- MAPI-Mailclient am Server ----------
+        g.MapGet("/gotomaxx-trennzeichen", (PdfRechnung.Printing.GotomaxxDelimiterService gx) => Results.Ok(new { status = gx.Last }));
+        g.MapPost("/gotomaxx-trennzeichen", (PdfRechnung.Printing.GotomaxxDelimiterService gx) => Results.Ok(new { status = gx.Apply() }));
+
         g.MapGet("/firefox", (FirefoxPolicy ff) => Results.Ok(new { status = ff.Last ?? ff.Apply() }));
         g.MapPost("/firefox", (FirefoxPolicy ff) => Results.Ok(new { status = ff.Apply() }));
 
@@ -597,6 +600,16 @@ public static class AdminApi
         if (s.Inbox.ProcessUserArgument is < 1 or > 20) e.Add("Die Position der Benutzernummer in der Befehlszeile muss zwischen 1 und 20 liegen.");
         if (s.Gotomaxx.Enabled && string.IsNullOrWhiteSpace(s.Gotomaxx.Printer)) e.Add("Bitte den gotomaxx-Drucker für die Weiterleitung wählen.");
         if (s.Gotomaxx.CodeFontSize is < 0.5 or > 24) e.Add("Die Schriftgröße der Steuerzeichen für gotomaxx muss zwischen 0,5 und 24 pt liegen.");
+        foreach (var pd in s.Gotomaxx.PrinterDelimiters)
+        {
+            var d = (pd.Delimiter ?? "").Trim();
+            if (d.Equals("auto", StringComparison.OrdinalIgnoreCase) || !PdfRechnung.Printing.GotomaxxProfile.IsValidSetting(d))
+                e.Add($"Trennzeichen für „{pd.Printer}“: 1–5 Zeichen ohne Leerzeichen (z. B. $$) oder leer für Standard.");
+            if (!string.IsNullOrWhiteSpace(pd.ProfileId) && !Guid.TryParse(pd.ProfileId.Trim(), out _))
+                e.Add($"Profil-ID für „{pd.Printer}“ ist keine gültige ID (Form xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).");
+        }
+        if (s.Gotomaxx.PrinterDelimiters.Where(x => !string.IsNullOrWhiteSpace(x.Printer)).GroupBy(x => x.Printer.Trim(), StringComparer.OrdinalIgnoreCase).Any(g => g.Count() > 1))
+            e.Add("Jeder gotomaxx-Drucker darf bei den Trennzeichen nur einmal vorkommen.");
         if (!PdfRechnung.Printing.GotomaxxProfile.IsValidSetting(s.Gotomaxx.CommandDelimiter)) e.Add("Das Trennzeichen für gotomaxx muss „auto“ oder 1–5 Zeichen ohne Leerzeichen sein (z. B. @@ oder $$).");
         if (s.Gotomaxx.TimeoutSeconds is < 10 or > 900) e.Add("Die Höchstdauer des gotomaxx-Drucks muss zwischen 10 und 900 Sekunden liegen.");
         if (s.Erp.Enabled)

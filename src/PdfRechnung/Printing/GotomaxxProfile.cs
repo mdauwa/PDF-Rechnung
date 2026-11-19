@@ -27,7 +27,10 @@ public static partial class GotomaxxProfile
     public static string? DelimiterFromConfig(string? cfg)
     {
         if (string.IsNullOrEmpty(cfg)) return null;
-        var m = DelimiterRegex().Match(cfg);
+        // nur im Abschnitt pdfmailer { … } (andere Abschnitte können ähnliche Einträge haben)
+        var block = GotomaxxProfileEditor.PdfmailerBlock(cfg);
+        if (block is null) return null;
+        var m = DelimiterRegex().Match(block);
         if (!m.Success) return null;
         var v = (m.Groups["q"].Success ? m.Groups["q"].Value : m.Groups["v"].Value).Trim();
         return v.Length == 0 ? null : v;
@@ -168,5 +171,137 @@ public static partial class GotomaxxProfile
         {
             try { using var k = key.OpenSubKey(sub); if (k is not null) Collect(k, found, depth + 1); } catch { }
         }
+    }
+}
+
+/// <summary>Bearbeitet den Eintrag <c>commandDelimiter</c> im Abschnitt <c>pdfmailer { … }</c> einer gotomaxx-Einstellungsdatei.</summary>
+public static class GotomaxxProfileEditor
+{
+    /// <summary>
+    /// Trennzeichen setzen (z. B. "$$") oder mit leerem Wert entfernen (= gotomaxx-Standard @@). Alle anderen Zeilen bleiben unverändert.
+    /// Gibt es keine Datei bzw. keinen pdfmailer-Abschnitt, wird er angelegt.
+    /// </summary>
+    /// <summary>Text des Abschnitts pdfmailer (nur die Zeilen der ersten Ebene), null = kein Abschnitt.</summary>
+    public static string? PdfmailerBlock(string cfg)
+    {
+        var lines = cfg.Replace("\r\n", "\n").Split('\n');
+        var (open, end) = Find(lines);
+        if (open < 0) return null;
+        var sb = new System.Text.StringBuilder();
+        var depth = 1;
+        for (var i = open + 1; i < end; i++)
+        {
+            var t = lines[i].Trim();
+            if (depth == 1) sb.Append(lines[i]).Append('\n');
+            depth += t.Count(c => c == '{') - t.Count(c => c == '}');
+        }
+        return sb.ToString();
+    }
+
+    private static (int Open, int End) Find(IReadOnlyList<string> lines)
+    {
+        var depth = 0;
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var t = lines[i].Trim();
+            if (depth == 0 && (t == "pdfmailer" || t == "pdfmailer {"))
+            {
+                var open = -1;
+                if (t.EndsWith('{')) open = i;
+                else
+                {
+                    var j = i + 1;
+                    while (j < lines.Count && lines[j].Trim().Length == 0) j++;
+                    if (j < lines.Count && lines[j].Trim() == "{") open = j;
+                }
+                if (open >= 0)
+                {
+                    var d = 1;
+                    for (var k = open + 1; k < lines.Count; k++)
+                    {
+                        var u = lines[k].Trim();
+                        d += u.Count(c => c == '{') - u.Count(c => c == '}');
+                        if (d <= 0) return (open, k);
+                    }
+                    return (open, lines.Count);
+                }
+            }
+            depth += t.Count(c => c == '{') - t.Count(c => c == '}');
+        }
+        return (-1, -1);
+    }
+
+    public static string SetDelimiter(string? cfg, string? delimiter, out bool changed)
+    {
+        var d = (delimiter ?? "").Trim();
+        if (d == GotomaxxProfile.Default) d = "";
+        var text = cfg ?? "";
+        var nl = text.Contains("\r\n") ? "\r\n" : text.Contains('\n') ? "\n" : "\r\n";
+        var lines = text.Length == 0 ? new List<string>() : text.Replace("\r\n", "\n").Split('\n').ToList();
+        var trailing = lines.Count > 0 && lines[^1].Length == 0;
+        if (trailing) lines.RemoveAt(lines.Count - 1);
+
+        // Abschnitt pdfmailer: Zeile "pdfmailer" (oberste Ebene), dann "{" – auch "pdfmailer {" in einer Zeile
+        int start = -1, open = -1;
+        var depth = 0;
+        for (var i = 0; i < lines.Count && start < 0; i++)
+        {
+            var t = lines[i].Trim();
+            if (depth == 0 && (t == "pdfmailer" || t == "pdfmailer {"))
+            {
+                if (t.EndsWith('{')) { start = i; open = i; break; }
+                var j = i + 1;
+                while (j < lines.Count && lines[j].Trim().Length == 0) j++;
+                if (j < lines.Count && lines[j].Trim() == "{") { start = i; open = j; break; }
+            }
+            depth += t.Count(c => c == '{') - t.Count(c => c == '}');
+        }
+
+        if (start < 0)
+        {
+            changed = d.Length > 0;
+            if (!changed) return cfg ?? "";
+            var block = new[] { "pdfmailer", "{", "  commandDelimiter " + d, "}" };
+            var at = lines.Count > 0 && lines[0].TrimStart().StartsWith("local_settings_filter", StringComparison.Ordinal) ? 1 : 0;
+            lines.InsertRange(at, block);
+            return string.Join(nl, lines) + nl;
+        }
+
+        // Ende des Abschnitts und vorhandene Zeile commandDelimiter (nur auf erster Ebene des Abschnitts)
+        int end = lines.Count, existing = -1;
+        depth = 1;
+        for (var i = open + 1; i < lines.Count; i++)
+        {
+            var t = lines[i].Trim();
+            if (depth == 1 && (t.StartsWith("commandDelimiter ", StringComparison.Ordinal) || t.StartsWith("commandDelimiter\t", StringComparison.Ordinal) || t == "commandDelimiter"))
+                existing = i;
+            depth += t.Count(c => c == '{') - t.Count(c => c == '}');
+            if (depth <= 0) { end = i; break; }
+        }
+
+        changed = false;
+        if (d.Length == 0)
+        {
+            if (existing >= 0) { lines.RemoveAt(existing); changed = true; }
+        }
+        else
+        {
+            if (existing >= 0)
+            {
+                var indent = lines[existing][..(lines[existing].Length - lines[existing].TrimStart().Length)];
+                var line = indent + "commandDelimiter " + d;
+                if (lines[existing] != line) { lines[existing] = line; changed = true; }
+            }
+            else
+            {
+                var indent = "  ";
+                for (var i = open + 1; i < end; i++)
+                    if (lines[i].Trim().Length > 0) { indent = lines[i][..(lines[i].Length - lines[i].TrimStart().Length)]; break; }
+                lines.Insert(open + 1, indent + "commandDelimiter " + d);
+                changed = true;
+            }
+        }
+        if (!changed) return cfg ?? "";
+        return string.Join(nl, lines) + (trailing || text.Length == 0 ? nl : "");
     }
 }

@@ -148,6 +148,8 @@ builder.Services.AddSingleton<SendService>();
 if (OperatingSystem.IsWindows()) builder.Services.AddSingleton<IGotomaxxPrinter, PdfRechnung.Printing.WindowsGotomaxxPrinter>();
 else builder.Services.AddSingleton<IGotomaxxPrinter, UnsupportedGotomaxxPrinter>();
 builder.Services.AddSingleton<FirefoxPolicy>();
+builder.Services.AddSingleton<PdfRechnung.Printing.GotomaxxDelimiterService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<PdfRechnung.Printing.GotomaxxDelimiterService>());
 builder.Services.AddSingleton<GotomaxxService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<GotomaxxService>());
 builder.Services.AddHostedService<InboxWatcher>();

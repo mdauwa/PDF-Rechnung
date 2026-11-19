@@ -130,6 +130,7 @@ function drawTab() {
   if (ST.tab === "dienst") loadDocStorage();
   if (ST.tab === "mapi") loadMapiStatus();
   if (ST.tab === "anmeldung") loadFirefoxStatus();
+  if (ST.tab === "gotomaxx" && GXD === null) { GXD = {}; loadGxDelimiters(false); }
   if (ST.tab === "eingang") loadPrinterStatus();
   if (ST.tab === "versandwege") loadDeliveryRuns();
   if (ST.tab === "dienst") loadService();
@@ -404,6 +405,13 @@ async function onAction(e) {
       }
       case "mapi-install": await mapiCall("installieren"); break;
       case "ff-apply": await loadFirefoxStatus(true); break;
+      case "gxd-add": ((ST.s.gotomaxx ||= {}).printerDelimiters ||= []).push({ printer: "", delimiter: "$$", profileId: "" }); markDirty(); drawTab(); break;
+      case "gxd-del": {
+        const x = ST.s.gotomaxx.printerDelimiters[+btn.dataset.i];
+        if (x.printer && x.delimiter && !await confirmDialog("Drucker aus der Liste löschen", `„${esc(x.printer)}“ aus der Liste löschen? Das eingetragene Trennzeichen <b>bleibt</b> in den gotomaxx-Profilen – vorher auf „Standard“ stellen und speichern, wenn gotomaxx wieder @@ verwenden soll.`, "Löschen", true)) break;
+        ST.s.gotomaxx.printerDelimiters.splice(+btn.dataset.i, 1); markDirty(); drawTab(); break;
+      }
+      case "gxd-apply": await loadGxDelimiters(true); break;
       case "mapi-default":
         if (await confirmDialog("Standard-Mailprogramm", "Belegpost für alle Benutzer dieses Servers als Standard-Mailprogramm setzen – für MAPI-Mails und als Windows-Standard-App „E-Mail“? Das bisherige wird gemerkt und kann wiederhergestellt werden.", "Als Standard setzen"))
           await mapiCall("standard");
@@ -680,7 +688,52 @@ function tabInbox() {
 /** Alles rund um gotomaxx PDFMAILER: Weiterleitung (mit Freigabe) und Protokoll-Anbindung. */
 function tabGotomaxx() {
   return section("Weiterleitung an gotomaxx PDFMAILER", gotomaxxSection()) +
+    section("Trennzeichen in gotomaxx-Druckern", gxDelimiterSection(), `<button class="btn ghost small" data-st="gxd-add">+ Drucker</button>`) +
     section("gotomaxx-Protokoll einlesen und ans ERP melden", gotomaxxLogSection());
+}
+
+let GXD = null;
+function gxDelimiterSection() {
+  const rows = (ST.s.gotomaxx ||= {}).printerDelimiters ||= [];
+  const printers = ST.data.printers || [];
+  const stat = {};
+  for (const p of (GXD?.printers || [])) stat[(p.printer || "").toLowerCase()] = p;
+  const body = rows.map((r, i) => {
+    const P = `gotomaxx.printerDelimiters.${i}`;
+    const pOpts = [["", "(bitte wählen)"], ...printers.map(p => [p, p])];
+    if (r.printer && !printers.includes(r.printer)) pOpts.push([r.printer, r.printer + " (nicht installiert)"]);
+    const dOpts = [["$$", "$$"], ["", "Standard (@@)"]];
+    if (r.delimiter && !dOpts.some(o => o[0] === r.delimiter)) dOpts.push([r.delimiter, r.delimiter]);
+    const s = stat[(r.printer || "").toLowerCase()];
+    const info = !r.printer ? "" : !s ? '<span class="meta-inline">noch nicht angewendet – speichern</span>'
+      : `${s.files ? `${s.files} Profil(e)${s.changed ? `, ${s.changed} geändert` : ""}` : ""}${s.note ? ` <span class="meta-inline">${esc(s.note)}</span>` : ""}${(s.errors || []).length ? ` <span class="bad">${esc(s.errors.join("; "))}</span>` : ""}
+         ${(s.profileIds || []).length ? `<div class="meta-inline">ID ${s.profileIds.map(esc).join(", ")}</div>` : ""}`;
+    return `<tr><td>${inSelect(`${P}.printer`, pOpts)}</td><td>${inSelect(`${P}.delimiter`, dOpts)}</td>
+      <td>${inText(`${P}.profileId`, "automatisch")}</td><td>${info}</td>
+      <td><button class="icon-btn" data-st="gxd-del" data-i="${i}" title="Aus der Liste löschen">✕</button></td></tr>`;
+  }).join("");
+  return `<p class="help">Belegpost trägt das Trennzeichen in die gotomaxx-Einstellungen dieser Drucker ein – bei <b>allen Benutzern</b> am Server
+      (<code>%APPDATA%\gotomaxx\pdfmailer6\profiles\&lt;ID&gt;.cfg</code>, Abschnitt <code>pdfmailer</code>, Eintrag <code>commandDelimiter</code>) und im Standardprofil für neue Benutzer.
+      Mit <code>$$</code> wertet gotomaxx die <code>@@</code>-Steuerzeichen nicht mehr selbst aus, z. B. für einen PDFMAILER-Drucker, der an Belegpost weiterleitet.
+      „Standard“ entfernt den Eintrag wieder – erst danach den Drucker aus der Liste löschen.</p>
+    ${rows.length ? `<table class="list"><thead><tr><th>gotomaxx-Drucker</th><th>Trennzeichen</th><th>Profil-ID</th><th>Stand</th><th></th></tr></thead><tbody>${body}</tbody></table>`
+      : `<p class="meta">Keine Drucker – gotomaxx verwendet überall <code>@@</code>.</p>`}
+    <p class="help">Die Profil-ID findet Belegpost über das gotomaxx-Protokoll (dafür einmal über den Drucker drucken) bzw. die Druckerdaten in der Registry.
+      Von Hand: Drucker öffnen, Strg+Alt halten und auf das gotomaxx-Logo klicken – der Dateiname der Einstellungsdatei ist die ID.
+      Angewendet wird nach dem Speichern und danach alle 10 Minuten (für Benutzer, die gotomaxx erst später verwenden). Ist gotomaxx bei einem Benutzer gerade offen,
+      gilt die Änderung nach dem nächsten Start von gotomaxx.</p>
+    ${GXD?.at ? `<p class="meta">Zuletzt angewendet: ${new Date(GXD.at).toLocaleString("de-AT")}${GXD.error ? ` – <span class="bad">${esc(GXD.error)}</span>` : ""}</p>` : ""}
+    <div class="actions"><button class="btn ghost" data-st="gxd-apply">Jetzt anwenden</button></div>`;
+}
+
+async function loadGxDelimiters(apply) {
+  try {
+    if (apply && ST.dirty) throw new Error("Bitte zuerst speichern.");
+    const r = await api(apply ? "POST" : "GET", "api/admin/gotomaxx-trennzeichen");
+    GXD = r.status || null;
+    if (ST.tab === "gotomaxx") drawTab();
+    if (apply) msg("Trennzeichen angewendet.", true);
+  } catch (e) { msg(e.message || String(e), false); }
 }
 
 let GXP = null, GXP_ERR = "";

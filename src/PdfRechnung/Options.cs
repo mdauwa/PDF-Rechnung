@@ -360,6 +360,18 @@ public sealed class GotomaxxOptions
     /// gotomaxx-Profil des Zieldruckers beim druckenden Benutzer (commandDelimiter; ohne Profil @@).
     /// </summary>
     public string CommandDelimiter { get; set; } = "@@";
+    /// <summary>Trennzeichen, die Belegpost in die gotomaxx-Profile dieser Drucker einträgt (alle Benutzer am Server).</summary>
+    public List<GotomaxxPrinterDelimiter> PrinterDelimiters { get; set; } = new();
+}
+
+/// <summary>Ein gotomaxx-Drucker, dessen Steuerzeichen-Trennzeichen Belegpost setzt.</summary>
+public sealed class GotomaxxPrinterDelimiter
+{
+    public string Printer { get; set; } = "";
+    /// <summary>z. B. "$$"; leer oder "@@" = gotomaxx-Standard (Eintrag wird entfernt).</summary>
+    public string Delimiter { get; set; } = "$$";
+    /// <summary>Profil-ID (GUID) von Hand; leer = aus dem gotomaxx-Protokoll bzw. der Registry ermitteln.</summary>
+    public string ProfileId { get; set; } = "";
 }
 
 public sealed class InboxOptions

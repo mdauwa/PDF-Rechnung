@@ -72,6 +72,29 @@ internal static class OutlookBridge
     }
 
     /// <summary>
+    /// Einmal-Modus: Entwurf aus einer vom Dienst vorbereiteten Datei (gleiches Format wie /melder/api/vorgang/{id}/mail).
+    /// Exitcodes: 0 ok, 2 kein klassisches Outlook, 3 Outlook-Fehler, 4 Datei nicht lesbar.
+    /// </summary>
+    public static int OpenDraftFromFile(string path)
+    {
+        JsonDocument doc;
+        try { doc = JsonDocument.Parse(File.ReadAllBytes(path)); }
+        catch { return 4; }
+        using (doc)
+        {
+            try { File.Delete(path); } catch { /* der Dienst räumt auf */ }
+            if (!ClassicOutlookAvailable()) return 2;
+            var m = doc.RootElement;
+            var id = Str(m, "id") ?? Guid.NewGuid().ToString("N");
+            var folder = Path.Combine(Path.GetTempPath(), "Belegpost", id);
+            Directory.CreateDirectory(folder);
+            try { CreateViaCom(m, folder, id); return 0; }
+            catch { return 3; }
+            finally { Cleanup(); }
+        }
+    }
+
+    /// <summary>
     /// Sucht in „Gesendete Elemente“ aller Postfächer nach Entwürfen mit Belegpost-Kennung. Nur wenn Outlook bereits läuft
     /// (es wird nie extra gestartet). Liefert Vorgang → Sendezeitpunkt.
     /// </summary>

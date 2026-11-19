@@ -271,7 +271,8 @@ public static class MelderApi
         });
 
         // Portal: „In Outlook öffnen“ → der eigene Melder öffnet den Entwurf
-        app.MapPost("/api/vorgaenge/{id}/outlook", (string id, PortalAccess access, HttpContext ctx, DocumentStore store, EventHub hub) =>
+        app.MapPost("/api/vorgaenge/{id}/outlook", async (string id, PortalAccess access, HttpContext ctx, DocumentStore store, EventHub hub,
+            SessionLauncher launcher, UserStore users, CancellationToken ct) =>
         {
             var a = access.For(ctx);
             var v = store.Get(id);
@@ -281,6 +282,12 @@ public static class MelderApi
             if (!a.CanSend || (!a.Outlook && !v.Mail.Plain)) return Results.Json(new { error = "Senden über Outlook ist für dich nicht freigeschaltet – bitte an einen Administrator wenden." }, statusCode: 403);
             if (!v.Mail.Enabled) return Results.BadRequest(new { error = "Für diesen Beleg ist kein E-Mail-Versand vorgesehen." });
             if (v.Status == VorgangStatus.Error) return Results.BadRequest(new { error = "Der Vorgang hat Fehler – bitte zuerst beheben (z. B. Empfänger, Anlagen)." });
+            // RDS mit Outlook am Server: Belege vom Belegpost-Drucker direkt in der Sitzung öffnen (kein Melder nötig)
+            if (!v.Mail.Plain && users.FindById(a.UserId) is { } me && launcher.UsesSession(me))
+            {
+                var r = await launcher.OpenOutlookAsync(v, me, a.Name, ct);
+                return r.Ok ? Results.Ok(new { message = r.Message }) : Results.BadRequest(new { error = r.Message });
+            }
             if (hub.Subscribers(a.UserId) == 0) return Results.BadRequest(new { error = "Kein Melder verbunden – bitte den Belegpost Melder auf diesem PC starten." });
             var title = string.Join(" ", new[] { v.DocumentType, v.VoucherId }.Where(x => !string.IsNullOrWhiteSpace(x)));
             hub.Publish(a.UserId, "outlook", v.Id, title.Length > 0 ? title : v.OriginalFileName ?? v.Id, v.Status, null, v.Mail.Enabled);

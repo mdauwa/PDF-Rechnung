@@ -168,6 +168,12 @@ public sealed class DocumentProcessor
     private readonly IOptionsMonitor<MailRuleOptions>? _rules;
     private readonly MailRuleStore? _ruleStore;
     private readonly Services.MelderTasks? _melderTasks;
+
+    /// <summary>
+    /// Öffnen in der Windows-Sitzung am Server statt über den Melder (RDS). (Vorgang, outlook) → true = übernommen.
+    /// Wird beim Start gesetzt (<see cref="Services.SessionLauncher"/>).
+    /// </summary>
+    public Func<Vorgang, bool, bool>? SessionOpen { get; set; }
     public MailTemplateOptions Templates => _templates?.CurrentValue ?? new();
     private readonly string _stationeryDir;
 
@@ -375,7 +381,8 @@ public sealed class DocumentProcessor
         var outlook = !forward && readOk && OutlookRoute(v);
         _store.Create(v, pdf, text, sendPdf);
         if (forward) _gotomaxx?.Enqueue(v.Id);
-        if (outlook && _melderTasks is not null)
+        if (outlook && v.Source == "Drucker" && SessionOpen?.Invoke(v, true) == true) { /* direkt in der Sitzung am Server */ }
+        else if (outlook && _melderTasks is not null)
         {
             var title = string.Join(" ", new[] { v.DocumentType, v.VoucherId }.Where(x => !string.IsNullOrWhiteSpace(x)));
             _melderTasks.Create(v.OwnerUserId!, null, Services.MelderTasks.KindOutlook, v.Id, title.Length > 0 ? title : v.OriginalFileName ?? v.Id);
@@ -388,6 +395,8 @@ public sealed class DocumentProcessor
             if (!string.IsNullOrWhiteSpace(v.BuyerName)) title += " – " + v.BuyerName;
             var first = v.Messages.FirstOrDefault(m => m.Level == DocumentChecker.Error)?.Text ?? v.Messages.FirstOrDefault(m => m.Level == DocumentChecker.Warning)?.Text;
             _events.Publish(v.OwnerUserId, "neu", v.Id, title, v.Status, first, v.Mail.MelderMayOpenOutlook);
+            // RDS ohne Melder: neuen Druck direkt im Browser der Sitzung zeigen (Belegpost-Drucker, nicht MAPI)
+            if (!outlook && v.Source == "Drucker") SessionOpen?.Invoke(v, false);
         }
         return v;
     }

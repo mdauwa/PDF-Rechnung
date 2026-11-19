@@ -178,6 +178,8 @@ function onInput(e) {
   if (ruleEditorInput(el, e)) return;
   if (el.dataset?.rte === "1" && el.dataset.path) { set(ST.s, el.dataset.path, fieldValue(el)); markDirty(); return; }
   if (ST.tab === "benutzer" && onUsersInput(el, e)) return;
+  if (el.dataset.path === "auth.mode" && e.type === "change") { ST.s.auth.mode = el.value; markDirty(); drawTab(); return; }
+  if (el.dataset.path === "mapi.outlookTarget" && e.type === "change") { ST.s.mapi.outlookTarget = el.value; markDirty(); drawTab(); return; }
   if (el.dataset.entrasecret !== undefined) { ST.entraSecret = el.value; markDirty(); return; }
   if (el.dataset.mailpw !== undefined) { ST.mailPassword = el.value; markDirty(); return; }
   if (el.dataset.graphsecret !== undefined) { ST.graphSecret = el.value; markDirty(); return; }
@@ -1323,6 +1325,10 @@ function userMask(i) {
       `${field("MAPI-Mails (Vorgabe)", `<select data-u="${i}|mapiMode">
           <option value="" ${!u.mapiMode ? "selected" : ""}>Standard (${esc(mapiText(ST.s.mapi?.defaultMode || "outlook"))})</option>
           ${(ST.data.mapiModes || []).map(m => `<option value="${m.key}" ${u.mapiMode === m.key ? "selected" : ""}>${esc(m.text)}</option>`).join("")}</select>`)}
+       ${field("Belegpost-Drucker: Outlook/Portal öffnen", `<select data-u="${i}|outlookTarget">
+          <option value="" ${!u.outlookTarget ? "selected" : ""}>Standard (${(ST.s.mapi?.outlookTarget || "melder") === "sitzung" ? "Sitzung am Server" : "Melder"})</option>
+          <option value="melder" ${u.outlookTarget === "melder" ? "selected" : ""}>über den Melder</option>
+          <option value="sitzung" ${u.outlookTarget === "sitzung" ? "selected" : ""}>direkt in der Sitzung am Server (RDS)</option></select>`)}
        <div class="user-devices">${userDevices(u, i)}</div>`) +
     section("Signaturen und Mail-Regeln", rulesHtml);
 }
@@ -1452,7 +1458,21 @@ function tabAuth() {
   const e = ST.s.auth.entra ||= { enabled: false, tenantId: "", clientId: "" };
   const uris = ST.data.entraRedirectUris || [];
   const secretPh = ST.data.hasEntraSecret && !ST.clearEntraSecret ? "•••••••• (gespeichert – leer lassen = unverändert)" : "Wert des geheimen Clientschlüssels";
-  return section("Microsoft Entra ID (Anmeldung der Benutzer)",
+  ST.s.auth.mode ||= "microsoft";
+  ST.s.auth.ad ||= { domain: "" };
+  const mode = ST.s.auth.mode;
+  return section("Anmeldeart",
+    `${field("Benutzer melden sich an mit", inSelect("auth.mode", [
+        ["microsoft", "Microsoft-Konto (Entra ID)"],
+        ["windows", "Windows-Konto automatisch (z. B. am RDS-Server) – Administratoren mit Kennwort"],
+        ["ad", "Windows-Benutzername und Kennwort (Active Directory)"]]),
+      "Gilt für alle Benutzer. Der lokale Server-Administrator (Kennwort am Server) und die Übergabe aus dem Firmenportal bleiben immer möglich. Änderung wirkt nach dem Neustart des Dienstes.")}
+     ${mode !== "microsoft" ? `${field("Active-Directory-Domäne", inText("auth.ad.domain", "leer = Domäne des Servers, z. B. FIRMA oder firma.local"),
+        "Für die Anmeldung mit Kennwort. Benutzer können auch FIRMA\\name oder name@firma.at eingeben. Der Server muss Mitglied der Domäne sein.")}` : ""}
+     ${mode === "windows" ? `<p class="help">Der Browser meldet das angemeldete Windows-Konto ohne Rückfrage – das klappt, wenn das Portal in der Zone „Lokales Intranet“ liegt
+        (Adresse ohne Punkt wie <code>https://server:5444</code> automatisch, sonst per Gruppenrichtlinie eintragen). Zuordnung über „Druck-Benutzer“ bzw. Anmeldenamen in der Benutzerverwaltung.
+        Administratoren werden nie automatisch angemeldet, sondern geben Benutzername und Kennwort ein. Das Portal antwortet dann nur noch über HTTP/1.1.</p>` : ""}`) +
+    (mode !== "microsoft" ? "" : section("Microsoft Entra ID (Anmeldung der Benutzer)",
     `${inCheck("auth.entra.enabled", "Anmeldung mit Microsoft-Konto aktivieren")}
      <div class="grid2">
        ${field("Verzeichnis-ID (Mandanten-ID)", inText("auth.entra.tenantId", "z. B. 0a1b2c3d-… oder firma.at"))}
@@ -1471,7 +1491,7 @@ function tabAuth() {
          <li><b>Zertifikate &amp; Geheimnisse</b> → Neuer geheimer Clientschlüssel → den <i>Wert</i> (nicht die ID) oben eintragen.</li>
          <li>Speichern und Dienst neu starten. Danach können sich alle unter „Benutzer“ angelegten Personen anmelden.</li>
        </ol>
-     </div>`) +
+     </div>`)) +
     tabFirmenportal() +
     section("Administrator direkt am Server",
       portal.isLocalAdmin
@@ -1820,7 +1840,16 @@ function tabMapi() {
       `<div class="grid2">${field("Standard für alle Benutzer", inSelect("mapi.defaultMode", (ST.data.mapiModes || []).map(m => [m.key, m.text])),
           "Pro Benutzer (Benutzer → MAPI-Mails) und pro PC (Melder) änderbar. Der Benutzer kann die Einstellung seines PCs im Melder selbst ändern; der Admin kann sie überrollen.")}
         ${field("Nicht abgeholte Outlook-Entwürfe nach (Stunden)", inNum("mapi.deliveryTimeoutHours", 1, 720), "Holt kein Melder den Entwurf ab, bleibt die Mail im Portal (Status 820).")}
-        ${field("Versandbestätigung aus Outlook erwarten (Stunden)", inNum("mapi.outlookConfirmHours", 1, 720), "Ohne Bestätigung Status 830 – eine spätere Bestätigung setzt 110.")}</div>`);
+        ${field("Versandbestätigung aus Outlook erwarten (Stunden)", inNum("mapi.outlookConfirmHours", 1, 720), "Ohne Bestätigung Status 830 – eine spätere Bestätigung setzt 110.")}</div>`) +
+    section("Belegpost-Drucker: Outlook und Portal öffnen",
+      `${field("Standard für alle Benutzer", inSelect("mapi.outlookTarget", [
+          ["melder", "über den Melder (PC des Benutzers)"],
+          ["sitzung", "direkt in der Windows-Sitzung am Server (RDS, Outlook am Server)"]]),
+        "Pro Benutzer änderbar (Benutzer → MAPI-Mails und Melder). Betrifft nur Belege vom Belegpost-Drucker – MAPI-Mails bleiben, wie oben eingestellt.")}
+       ${(ST.s.mapi.outlookTarget || "melder") === "sitzung" ? `<p class="help">Nach dem Druck öffnet Belegpost in der Sitzung des druckenden Benutzers am Server das Portal mit dem Beleg
+         bzw. – bei Versand über Outlook – gleich den fertigen Entwurf im klassischen Outlook. Dafür muss kein Melder laufen; der Dienst startet dazu kurz
+         <code>Belegpost-Melder.exe</code> aus dem Programmordner in der Sitzung. Der Benutzer muss am Server angemeldet sein (Druck-Benutzer in der Benutzerverwaltung).
+         Die Versandbestätigung aus Outlook (110) gibt es nur, wenn zusätzlich der Melder in der Sitzung läuft.</p>` : ""}`);
 }
 
 async function mapiCall(action) {

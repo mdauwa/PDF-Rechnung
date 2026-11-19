@@ -24,6 +24,7 @@ public sealed class PortalAccess
 {
     public const string Scheme = "portal";
     public const string EntraScheme = "entra";
+    public const string WindowsScheme = "windows";
     public const string ClaimUser = "uid", ClaimKind = "kind", ClaimLogin = "login";
 
     private readonly UserStore _users;
@@ -59,6 +60,8 @@ public sealed class PortalAccess
 
         var pu = _users.FindById(user.FindFirst(ClaimUser)?.Value);
         if (pu is null || !pu.Active) return AccessInfo.Anonymous;
+        // automatische Windows-Anmeldung gilt nie für Administratoren (z. B. nachträglich zum Admin gemacht → neu mit Kennwort anmelden)
+        if (kind == "windows" && pu.IsAdmin) return AccessInfo.Anonymous;
         var login = user.FindFirst(ClaimLogin)?.Value ?? pu.Email;
         return ForUser(pu, login);
     }

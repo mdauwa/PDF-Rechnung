@@ -13,6 +13,17 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        // Einmal-Modus (vom Belegpost-Dienst in der Sitzung am Server gestartet, RDS ohne laufenden Melder):
+        //   --entwurf <datei>  Outlook-Entwurf aus der vorbereiteten Mail-Datei anlegen
+        //   --oeffnen <url>    Portal im Standardbrowser öffnen
+        // Unabhängig von einem bereits laufenden Melder; Exitcode für den Dienst (0 = ok).
+        var oneShot = Array.FindIndex(args, a => a is "--entwurf" or "--oeffnen");
+        if (oneShot >= 0)
+        {
+            var value = oneShot + 1 < args.Length ? args[oneShot + 1] : "";
+            return args[oneShot] == "--entwurf" ? OutlookBridge.OpenDraftFromFile(value) : OpenUrlOnce(value);
+        }
+
         var arg = args.FirstOrDefault(a => a.StartsWith(UrlScheme + ":", StringComparison.OrdinalIgnoreCase));
 
         // Nur ein Melder je Windows-Sitzung. Ein zweiter Start (z. B. über den Link aus dem Portal) gibt den Link weiter.
@@ -37,6 +48,13 @@ internal static class Program
         if (arg is not null) ctx.HandleLink(arg);
         Application.Run(ctx);
         return 0;
+    }
+
+    private static int OpenUrlOnce(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var u) || u.Scheme is not ("https" or "http")) return 4;
+        try { Process.Start(new ProcessStartInfo(u.AbsoluteUri) { UseShellExecute = true }); return 0; }
+        catch { return 3; }
     }
 
     /// <summary>Link „belegpost-melder:…“ öffnet diesen Melder (nur für den aktuellen Benutzer, keine Adminrechte nötig).</summary>

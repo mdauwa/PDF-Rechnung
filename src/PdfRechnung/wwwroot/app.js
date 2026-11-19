@@ -293,6 +293,10 @@ async function renderLogin(view) {
   // Direktlink von außen (z. B. nach dem Druck): gleich zur Microsoft-Anmeldung – meist ohne Eingabe (SSO)
   const embedded = document.body.classList.contains("embedded");
   if (ziel && st.entraEnabled && !st.isLocal && !embedded && !q.get("fehler") && !q.get("abgemeldet")) { location.href = loginUrl; return; }
+  // Windows-Anmeldung: ohne Rückfrage mit dem angemeldeten Windows-Konto (nicht nach Abmelden, Fehler oder „manuell“)
+  if (st.windowsEnabled && !embedded && !q.get("fehler") && !q.get("abgemeldet") && !q.get("manuell") && !q.get("admin")) {
+    location.href = "auth/windows?ziel=" + encodeURIComponent("/" + (ziel || "")); return;
+  }
   const err = q.get("fehler");
   const errText = err === "nicht-freigeschaltet"
     ? `Das Konto <b>${esc(q.get("konto") || "")}</b> ist im Portal nicht freigeschaltet. Bitte an einen Administrator wenden.`
@@ -311,8 +315,14 @@ async function renderLogin(view) {
   } else {
     body = `<h2>Anmeldung</h2>
       ${q.get("abgemeldet") ? `<p class="meta">Du wurdest abgemeldet.</p>` : ""}
-      ${st.entraEnabled ? `${embedded ? `<p class="meta">Die Anmeldung ist abgelaufen – bitte Belegpost im Firmenportal neu öffnen.</p>` : ""}<a class="btn ms-btn" href="${esc(loginUrl)}" ${embedded ? 'target="_top"' : ""}><span class="ms-logo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Mit Microsoft anmelden</a>`
-        : `<p class="meta">Die Anmeldung mit Microsoft ist noch nicht eingerichtet${st.isLocal ? " (Einstellungen → Anmeldung)" : " – bitte an einen Administrator wenden"}.</p>`}
+      ${q.get("admin") ? `<p class="notice">Administratoren melden sich mit Benutzername und Kennwort an${q.get("konto") ? ` (<b>${esc(q.get("konto"))}</b>)` : ""}.</p>` : ""}
+      ${st.adEnabled ? `<form id="adForm" class="login-form">
+        <label class="field"><span class="lbl">Windows-Benutzer</span><input name="user" autocomplete="username" required value="${esc(q.get("konto") || "")}" placeholder="z. B. FIRMA\\max oder max@firma.at"></label>
+        <label class="field"><span class="lbl">Kennwort</span><input type="password" name="pw" autocomplete="current-password" required></label>
+        <button class="btn" type="submit">Anmelden</button>
+        ${st.windowsEnabled ? `<p class="meta"><a href="auth/windows?ziel=${encodeURIComponent("/" + (ziel || ""))}">Automatisch mit Windows anmelden</a></p>` : ""}
+      </form>` : st.entraEnabled ? `${embedded ? `<p class="meta">Die Anmeldung ist abgelaufen – bitte Belegpost im Firmenportal neu öffnen.</p>` : ""}<a class="btn ms-btn" href="${esc(loginUrl)}" ${embedded ? 'target="_top"' : ""}><span class="ms-logo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Mit Microsoft anmelden</a>`
+        : `<p class="meta">Die Anmeldung ist noch nicht eingerichtet${st.isLocal ? " (Einstellungen → Anmeldung)" : " – bitte an einen Administrator wenden"}.</p>`}
       ${st.isLocal ? `<div class="login-sep"><span>oder direkt am Server</span></div>
       <form id="loginForm" class="login-form">
         <label class="field"><span class="lbl">Administrator-Kennwort</span><input type="password" name="pw" autocomplete="current-password" required></label>
@@ -323,6 +333,19 @@ async function renderLogin(view) {
     <div class="login-brand"><span class="brand-mark"></span>${esc(portal.title || "Belegpost")}</div>
     ${errText ? `<div class="notice">${errText}</div>` : ""}${body}<div class="notice" id="loginMsg" hidden></div></div></div>`;
 
+  const adForm = view.querySelector("#adForm");
+  if (adForm) adForm.onsubmit = async e => {
+    e.preventDefault();
+    const m = view.querySelector("#loginMsg");
+    m.hidden = true;
+    try {
+      await api("POST", "api/auth/ad", { user: adForm.user.value, password: adForm.pw.value });
+      location.hash = ziel || "#/";
+      try { sessionStorage.removeItem("belegpost.ziel"); } catch { }
+      await loadPortal();
+      route();
+    } catch (ex) { m.textContent = ex.message; m.hidden = false; }
+  };
   const form = view.querySelector("#loginForm");
   if (form) form.onsubmit = async e => {
     e.preventDefault();

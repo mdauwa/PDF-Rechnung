@@ -48,6 +48,8 @@ public sealed class PortalUser
     public bool? SeeOutbound { get; set; }
     /// <summary>Vorgabe des Admins für MAPI-Mails dieses Benutzers ("" = globaler Standard).</summary>
     public string MapiMode { get; set; } = "";
+    /// <summary>Belegpost-Drucker: "" = Standard, "melder" = über den Melder, "sitzung" = direkt in der Sitzung am Server (RDS).</summary>
+    public string OutlookTarget { get; set; } = "";
     /// <summary>Darstellung im Portal: "" = wie das System, "hell", "dunkel". Stellt der Benutzer selbst ein.</summary>
     public string Theme { get; set; } = "";
 

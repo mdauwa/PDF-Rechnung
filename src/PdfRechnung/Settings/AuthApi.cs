@@ -19,6 +19,9 @@ public static class AuthApi
 
     /// <summary>Wird beim Start gesetzt: Entra ist nur aktiv, wenn es beim Start konfiguriert war (Änderung → Neustart).</summary>
     public static bool EntraConfiguredAtStartup { get; set; }
+    /// <summary>Windows-Anmeldung (Negotiate) beim Start eingerichtet (Anmeldeart „windows“, Änderung → Neustart).</summary>
+    public static bool WindowsConfiguredAtStartup { get; set; }
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int Count, DateTimeOffset Until)> _adFails = new(StringComparer.OrdinalIgnoreCase);
 
     public static void Map(WebApplication app)
     {
@@ -31,7 +34,10 @@ public static class AuthApi
                 user = a.Authenticated ? new { name = a.Name, login = a.Login, isAdmin = a.IsAdmin, isLocalAdmin = a.IsLocalAdmin, canSend = a.CanSend } : null,
                 isLocal = PortalAccess.IsLocalRequest(ctx),
                 needsSetup = !users.HasLocalAdminPassword,
-                entraEnabled = auth.CurrentValue.Entra.IsConfigured && EntraConfiguredAtStartup
+                entraEnabled = auth.CurrentValue.Mode == "microsoft" && auth.CurrentValue.Entra.IsConfigured && EntraConfiguredAtStartup,
+                mode = auth.CurrentValue.Mode,
+                windowsEnabled = auth.CurrentValue.Mode == "windows" && WindowsConfiguredAtStartup,
+                adEnabled = auth.CurrentValue.Mode is "windows" or "ad"
             });
         });
 
@@ -60,6 +66,75 @@ public static class AuthApi
             }
             Interlocked.Exchange(ref _failedLocal, 0);
             await ctx.SignInAsync(PortalAccess.Scheme, PortalAccess.Principal("local", "Administrator (Server)"));
+            return Results.Ok(new { ok = true });
+        });
+
+        // Windows-Anmeldung: der Browser meldet das angemeldete Windows-Konto (Kerberos/NTLM). Administratoren nie automatisch.
+        app.MapGet("/auth/windows", async (string? ziel, HttpContext ctx, UserStore users, ILoggerFactory lf) =>
+        {
+            var target = !string.IsNullOrEmpty(ziel) && ziel.StartsWith('/') && !ziel.StartsWith("//") ? ziel : "/";
+            if (!WindowsConfiguredAtStartup) return Results.Redirect("/#/anmeldung?manuell=1&fehler=" + Uri.EscapeDataString("Die Windows-Anmeldung ist nicht eingerichtet."));
+            var res = await ctx.AuthenticateAsync(PortalAccess.WindowsScheme);
+            if (!res.Succeeded || res.Principal?.Identity?.Name is not { Length: > 0 } account)
+            {
+                // Browser soll das Windows-Konto senden; klappt das nicht (kein Intranet/keine Domäne), sieht der Benutzer diese Seite
+                await ctx.ChallengeAsync(PortalAccess.WindowsScheme);
+                ctx.Response.ContentType = "text/html; charset=utf-8";
+                await ctx.Response.WriteAsync("<!doctype html><meta charset=utf-8><title>Anmeldung</title><body style=\"font-family:Segoe UI,sans-serif;margin:40px\">"
+                    + "<h2>Windows-Anmeldung nicht möglich</h2><p>Der Browser hat kein Windows-Konto übermittelt.</p>"
+                    + "<p><a href=\"/#/anmeldung?manuell=1\">Mit Benutzername und Kennwort anmelden</a></p></body>");
+                return Results.Empty;
+            }
+            var log = lf.CreateLogger("Anmeldung");
+            var user = users.FindByPrintName(account);
+            if (user is null || !user.Active)
+            {
+                log.LogWarning("Windows-Anmeldung ohne Freigabe: {Login}", account);
+                return Results.Redirect("/#/anmeldung?manuell=1&fehler=nicht-freigeschaltet&konto=" + Uri.EscapeDataString(account));
+            }
+            if (user.IsAdmin)
+                return Results.Redirect("/#/anmeldung?manuell=1&admin=1&konto=" + Uri.EscapeDataString(account));
+            await ctx.SignInAsync(PortalAccess.Scheme, PortalAccess.Principal("windows", user.Name, user.Id, account));
+            users.TouchLogin(user.Id);
+            log.LogInformation("Windows-Anmeldung: {Login} → {User}", account, user.Name);
+            return Results.Redirect(target);
+        });
+
+        // Anmeldung mit Windows-Benutzername und Kennwort, geprüft am Active Directory (auch für Administratoren)
+        app.MapPost("/api/auth/ad", async (AdLoginRequest req, HttpContext ctx, UserStore users, IOptionsMonitor<AuthOptions> auth, ILoggerFactory lf) =>
+        {
+            var o = auth.CurrentValue;
+            if (o.Mode is not ("windows" or "ad")) return Results.Json(new { error = "Die Anmeldung am Active Directory ist nicht eingeschaltet." }, statusCode: 403);
+            var name = (req.User ?? "").Trim();
+            if (name.Length == 0 || string.IsNullOrEmpty(req.Password)) return Results.BadRequest(new { error = "Bitte Benutzername und Kennwort eingeben." });
+            var key = AdLogin.Split(name, o.Ad.Domain).Account;
+            if (_adFails.TryGetValue(key, out var f) && f.Until > DateTimeOffset.Now)
+                return Results.Json(new { error = $"Zu viele Fehlversuche – bitte bis {f.Until:HH:mm:ss} warten." }, statusCode: 429);
+            var log = lf.CreateLogger("Anmeldung");
+            bool ok; string account;
+            try { ok = AdLogin.Validate(name, req.Password!, o.Ad.Domain, out account); }
+            catch (Exception ex)
+            {
+                log.LogWarning(ex, "AD-Anmeldung für {Login} nicht prüfbar", key);
+                return Results.Json(new { error = "Das Active Directory ist nicht erreichbar: " + ex.Message }, statusCode: 503);
+            }
+            if (!ok)
+            {
+                await Task.Delay(800);
+                var n = (_adFails.TryGetValue(key, out var old) && old.Until > DateTimeOffset.Now.AddMinutes(-10) ? old.Count : 0) + 1;
+                _adFails[key] = (n, n % 5 == 0 ? DateTimeOffset.Now.AddMinutes(1) : DateTimeOffset.Now);
+                log.LogWarning("Fehlgeschlagene AD-Anmeldung: {Login}", key);
+                return Results.Json(new { error = "Benutzername oder Kennwort falsch." }, statusCode: 401);
+            }
+            _adFails.TryRemove(key, out _);
+            var user = users.FindByPrintName(account);
+            if (user is null || !user.Active)
+            {
+                log.LogWarning("AD-Anmeldung ohne Freigabe: {Login}", account);
+                return Results.Json(new { error = $"Das Konto {account} ist im Portal nicht freigeschaltet. Bitte an einen Administrator wenden." }, statusCode: 403);
+            }
+            await ctx.SignInAsync(PortalAccess.Scheme, PortalAccess.Principal("ad", user.Name, user.Id, account));
+            users.TouchLogin(user.Id);
             return Results.Ok(new { ok = true });
         });
 
@@ -107,6 +182,8 @@ public static class AuthApi
         });
     }
 
+    public sealed record AdLoginRequest(string? User, string? Password);
+
     public static string? CheckPassword(string? pw) =>
         string.IsNullOrEmpty(pw) || pw.Length < MinPasswordLength ? $"Das Kennwort muss mindestens {MinPasswordLength} Zeichen lang sein." : null;
 
@@ -143,6 +220,7 @@ public static class AuthApi
                 u.Mandanten = (u.Mandanten ?? new()).Select(MandantOptions.Normalize).Where(m => m is not null).Select(m => m!)
                     .DistinctBy(MandantOptions.Key, StringComparer.OrdinalIgnoreCase).ToList();
                 u.Visibility = u.Visibility is "auswahl" or "alle" ? u.Visibility : "eigene";
+                u.OutlookTarget = u.OutlookTarget is "melder" or "sitzung" ? u.OutlookTarget : "";
                 u.AlsoSees = (u.AlsoSees ?? new()).Where(id => id != u.Id && list.Any(o => o.Id == id)).Distinct().ToList();
                 u.SendFromAddress = (u.SendFromAddress ?? "").Trim(); u.SendFromName = (u.SendFromName ?? "").Trim(); u.ReplyTo = (u.ReplyTo ?? "").Trim();
                 if (u.SendFromAddress.Length > 0 && !Documents.DocumentChecker.IsMail(u.SendFromAddress)) errors.Add($"„{u.Name}“: Absenderadresse „{u.SendFromAddress}“ ist keine gültige E-Mail-Adresse.");

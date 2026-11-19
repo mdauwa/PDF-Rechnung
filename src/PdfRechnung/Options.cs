@@ -167,6 +167,11 @@ public sealed class MapiOptions
     public int DeliveryTimeoutHours { get; set; } = 8;
     /// <summary>Ohne Versandbestätigung aus Outlook nach so vielen Stunden Status 830.</summary>
     public int OutlookConfirmHours { get; set; } = 24;
+    /// <summary>
+    /// Belege vom Belegpost-Drucker: Outlook bzw. Portal öffnen über den Melder ("melder", Standard) oder direkt in der
+    /// Windows-Sitzung des Benutzers am Server ("sitzung", für RDS mit Outlook am Server – ohne Melder). MAPI bleibt unberührt.
+    /// </summary>
+    public string OutlookTarget { get; set; } = "melder";
 }
 
 /// <summary>ERP-Rückmeldung über WEBWARE-Webservices (WWSVC): Status per BELEG.PUT in den Belegkopf.</summary>
@@ -233,6 +238,15 @@ public sealed class PortalOptions
 
 public sealed class AuthOptions
 {
+    /// <summary>
+    /// Anmeldeart für die Benutzer (global): "microsoft" = Microsoft-Konto (Entra), "windows" = automatisch mit dem
+    /// angemeldeten Windows-Konto (Kerberos/NTLM, z. B. am RDS-Server; Administratoren immer mit Kennwort),
+    /// "ad" = Windows-Benutzername und Kennwort, geprüft am Active Directory. Der lokale Server-Administrator bleibt immer möglich.
+    /// </summary>
+    public string Mode { get; set; } = "microsoft";
+    /// <summary>Active Directory für „windows“ (Kennwort-Anmeldung der Administratoren) und „ad“.</summary>
+    public AdOptions Ad { get; set; } = new();
+
     /// <summary>Anmeldung der Benutzer mit Microsoft Entra ID (Microsoft-365-Konto).</summary>
     public EntraOptions Entra { get; set; } = new();
     /// <summary>Anmeldung aus dem Firmenportal übernehmen und Einbettung dort erlauben.</summary>
@@ -252,6 +266,12 @@ public sealed class FirmenportalOptions
     public string? Secret { get; set; }
     /// <summary>Unbekannte, aber im Token bestätigte Benutzer automatisch anlegen (Sicht: nur eigene Belege).</summary>
     public bool CreateUsers { get; set; }
+}
+
+public sealed class AdOptions
+{
+    /// <summary>Domäne (NetBIOS oder DNS, z. B. FIRMA oder firma.local). Leer = Domäne des Servers.</summary>
+    public string Domain { get; set; } = "";
 }
 
 /// <summary>App-Registrierung in Microsoft Entra ID (Umleitungs-URI: https://SERVER:PORT/signin-oidc).</summary>

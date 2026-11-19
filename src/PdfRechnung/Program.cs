@@ -154,6 +154,7 @@ builder.Services.AddSingleton<AutoSendWorker>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<AutoSendWorker>());
 builder.Services.AddHostedService<RetentionWorker>();
 builder.Services.AddSingleton<MelderTasks>();
+builder.Services.AddSingleton<SessionLauncher>();
 builder.Services.AddHostedService<OutlookWatchWorker>();
 builder.Services.AddSingleton<MapiIntake>();
 if (OperatingSystem.IsWindows()) builder.Services.AddHostedService<MapiPipeServer>();
@@ -193,7 +194,12 @@ builder.WebHost.ConfigureKestrel(k =>
         if (binds is null) { if (isService) k.ListenAnyIP(port, cfg); else k.ListenLocalhost(port, cfg); return; }
         foreach (var ip in binds) k.Listen(ip, port, cfg);
     }
-    Listen(server.HttpsPort, o => o.UseHttps(certs.Current!));
+    Listen(server.HttpsPort, o =>
+    {
+        o.UseHttps(certs.Current!);
+        // Windows-Anmeldung (Negotiate) funktioniert nur über HTTP/1.1
+        if (settings.Auth.Mode == "windows") o.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http1;
+    });
     if (server.EnableHttp) Listen(server.HttpPort, _ => { });
 });
 if (server.EnableHttp && server.RedirectHttpToHttps)
@@ -218,6 +224,10 @@ var authBuilder = builder.Services.AddAuthentication(o =>
     o.Events.OnRedirectToLogin = c => { c.Response.StatusCode = 401; return Task.CompletedTask; };
     o.Events.OnRedirectToAccessDenied = c => { c.Response.StatusCode = 403; return Task.CompletedTask; };
 });
+// Windows-Anmeldung (Kerberos/NTLM) – nur unter Windows und nur, wenn als Anmeldeart gewählt (Änderung → Neustart)
+AuthApi.WindowsConfiguredAtStartup = settings.Auth.Mode == "windows" && OperatingSystem.IsWindows();
+if (AuthApi.WindowsConfiguredAtStartup)
+    authBuilder.AddNegotiate(PortalAccess.WindowsScheme, _ => { });
 if (entra.IsConfigured)
 {
     authBuilder.AddOpenIdConnect(PortalAccess.EntraScheme, o =>
@@ -267,6 +277,29 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 app.Services.GetRequiredService<PdfRechnung.Licensing.LicenseService>(); // Lizenzstand vor allen anderen Diensten laden
+{
+    // Belegpost-Drucker am RDS-Server: Outlook/Portal direkt in der Sitzung des Benutzers öffnen (statt Melder)
+    var launcher = app.Services.GetRequiredService<SessionLauncher>();
+    var procForSession = app.Services.GetRequiredService<DocumentProcessor>();
+    var usersForSession = app.Services.GetRequiredService<UserStore>();
+    var sessionLog = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Sitzung");
+    procForSession.SessionOpen = (v, outlook) =>
+    {
+        var owner = usersForSession.FindById(v.OwnerUserId);
+        if (!launcher.UsesSession(owner)) return false;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var r = outlook ? await launcher.OpenOutlookAsync(v, owner!, "Regeln", CancellationToken.None)
+                                : await launcher.OpenPortalAsync(v, owner!, CancellationToken.None);
+                if (!r.Ok) sessionLog.LogWarning("Öffnen in der Sitzung für {Vorgang}: {Msg}", v.Id, r.Message);
+            }
+            catch (Exception ex) { sessionLog.LogWarning(ex, "Öffnen in der Sitzung für {Vorgang} fehlgeschlagen", v.Id); }
+        });
+        return true;
+    };
+}
 store.Saved += () => ((IConfigurationRoot)app.Configuration).Reload();
 
 if (server.EnableHttp && server.RedirectHttpToHttps) app.UseHttpsRedirection();

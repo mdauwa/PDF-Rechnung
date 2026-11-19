@@ -129,6 +129,7 @@ function drawTab() {
   if (ST.tab === "lizenz") loadLicense();
   if (ST.tab === "dienst") loadDocStorage();
   if (ST.tab === "mapi") loadMapiStatus();
+  if (ST.tab === "anmeldung") loadFirefoxStatus();
   if (ST.tab === "eingang") loadPrinterStatus();
   if (ST.tab === "versandwege") loadDeliveryRuns();
   if (ST.tab === "dienst") loadService();
@@ -402,6 +403,7 @@ async function onAction(e) {
         msg((r.ok ? "" : (r.message || "Fehler") + "\n") + (r.log || []).join("\n"), r.ok); loadPrinterStatus(); break;
       }
       case "mapi-install": await mapiCall("installieren"); break;
+      case "ff-apply": await loadFirefoxStatus(true); break;
       case "mapi-default":
         if (await confirmDialog("Standard-Mailprogramm", "Belegpost für alle Benutzer dieses Servers als Standard-Mailprogramm setzen – für MAPI-Mails und als Windows-Standard-App „E-Mail“? Das bisherige wird gemerkt und kann wiederhergestellt werden.", "Als Standard setzen"))
           await mapiCall("standard");
@@ -1483,7 +1485,9 @@ function tabAuth() {
         "Für die Anmeldung mit Kennwort. Benutzer können auch FIRMA\\name oder name@firma.at eingeben. Der Server muss Mitglied der Domäne sein.")}` : ""}
      ${mode === "windows" ? `<p class="help">Der Browser meldet das angemeldete Windows-Konto ohne Rückfrage – das klappt, wenn das Portal in der Zone „Lokales Intranet“ liegt
         (Adresse ohne Punkt wie <code>https://server:5444</code> automatisch, sonst per Gruppenrichtlinie eintragen). Zuordnung über „Druck-Benutzer“ bzw. Anmeldenamen in der Benutzerverwaltung.
-        Administratoren werden nie automatisch angemeldet, sondern geben Benutzername und Kennwort ein. Das Portal antwortet dann nur noch über HTTP/1.1.</p>` : ""}`) +
+        Administratoren werden nie automatisch angemeldet, sondern geben Benutzername und Kennwort ein. Das Portal antwortet dann nur noch über HTTP/1.1.</p>
+        ${inCheck("auth.firefoxPolicy", "Firefox am Server automatisch einrichten (Portal-Adressen in die Firefox-Richtlinie „Authentication“ eintragen)")}
+        <div id="ffStatus"></div>` : ""}`) +
     (mode !== "microsoft" ? "" : section("Microsoft Entra ID (Anmeldung der Benutzer)",
     `${inCheck("auth.entra.enabled", "Anmeldung mit Microsoft-Konto aktivieren")}
      <div class="grid2">
@@ -1880,6 +1884,26 @@ async function mapiCall(action) {
   const r = await api("POST", "api/admin/mapi/" + action);
   msg((r.ok ? "" : (r.message || "Fehler") + "\n") + (r.log || []).join("\n"), r.ok);
   loadMapiStatus();
+}
+
+async function loadFirefoxStatus(apply) {
+  const box = $("#ffStatus"); if (!box) return;
+  box.innerHTML = `<p class="meta">${apply ? "Richte ein …" : "Lade Status …"}</p>`;
+  try {
+    const r = await api(apply ? "POST" : "GET", "api/admin/firefox");
+    const s = r.status || {};
+    const when = s.at ? new Date(s.at).toLocaleString("de-AT") : "–";
+    box.innerHTML = `<table class="kv">
+        <tr><th>Firefox gefunden</th><td>${(s.installs || []).length ? (s.installs || []).map(esc).join("<br>") : "nein"}</td></tr>
+        <tr><th>Eingetragen in</th><td>${(s.targets || []).length ? `${esc(s.mode)}: ` + (s.targets || []).map(esc).join("<br>") : "–"}</td></tr>
+        <tr><th>Adressen</th><td>${(s.origins || []).length ? (s.origins || []).map(o => `<code>${esc(o)}</code>`).join(" ") : "–"}</td></tr>
+        <tr><th>Zuletzt geprüft</th><td>${when}${s.changed ? " – geändert" : ""}</td></tr>
+        ${s.error ? `<tr><th>Hinweis</th><td><span class="bad">${esc(s.error)}</span></td></tr>` : ""}</table>
+      <div class="actions"><button class="btn ghost" data-st="ff-apply">Jetzt einrichten</button></div>
+      <p class="help">Beim Start des Dienstes und nach jedem Speichern trägt Belegpost die Adressen ein (Servername, voller Name, „Weitere DNS-Namen“, öffentliche Adresse).
+        Vorhandene Firefox-Richtlinien bleiben erhalten. Gibt es schon Firefox-Richtlinien per Gruppenrichtlinie (Registry), schreibt Belegpost dorthin, sonst in
+        <code>distribution\policies.json</code> im Firefox-Ordner. Firefox übernimmt das beim nächsten Start – kontrollieren mit <code>about:policies</code>.</p>`;
+  } catch (e) { box.innerHTML = `<p class="bad">${esc(e.message || String(e))}</p>`; }
 }
 
 async function loadMapiStatus() {

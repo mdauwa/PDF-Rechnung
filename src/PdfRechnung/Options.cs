@@ -257,6 +257,12 @@ public sealed class AuthOptions
     /// Active Directory bzw. der Anmeldung, sonst aus der lokalen Benutzerverwaltung. Neue Benutzer sehen nur eigene Belege, nie Admin.
     /// </summary>
     public bool CreateUsers { get; set; }
+    /// <summary>
+    /// Bei Anmeldeart „windows“: die Portal-Adressen in die Firefox-Richtlinie „Authentication“ eintragen (policies.json bzw.
+    /// Registry), damit Firefox ohne Rückfrage mit dem Windows-Konto anmeldet. Belegpost entfernt seine Einträge wieder,
+    /// wenn die Anmeldeart wechselt oder das abgeschaltet wird.
+    /// </summary>
+    public bool FirefoxPolicy { get; set; } = true;
 
     /// <summary>Anmeldung der Benutzer mit Microsoft Entra ID (Microsoft-365-Konto).</summary>
     public EntraOptions Entra { get; set; } = new();

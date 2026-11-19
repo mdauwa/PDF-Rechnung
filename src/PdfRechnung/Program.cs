@@ -147,6 +147,7 @@ builder.Services.AddSingleton<DocumentProcessor>();
 builder.Services.AddSingleton<SendService>();
 if (OperatingSystem.IsWindows()) builder.Services.AddSingleton<IGotomaxxPrinter, PdfRechnung.Printing.WindowsGotomaxxPrinter>();
 else builder.Services.AddSingleton<IGotomaxxPrinter, UnsupportedGotomaxxPrinter>();
+builder.Services.AddSingleton<FirefoxPolicy>();
 builder.Services.AddSingleton<GotomaxxService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<GotomaxxService>());
 builder.Services.AddHostedService<InboxWatcher>();
@@ -304,6 +305,12 @@ app.Services.GetRequiredService<PdfRechnung.Licensing.LicenseService>(); // Lize
     };
 }
 store.Saved += () => ((IConfigurationRoot)app.Configuration).Reload();
+{
+    // Windows-Anmeldung in Firefox: Portal-Adressen in die Firefox-Richtlinie eintragen (beim Start und nach dem Speichern)
+    var firefox = app.Services.GetRequiredService<FirefoxPolicy>();
+    firefox.ApplyInBackground();
+    store.Saved += () => _ = Task.Delay(TimeSpan.FromSeconds(2)).ContinueWith(_ => firefox.ApplyInBackground());
+}
 
 if (server.EnableHttp && server.RedirectHttpToHttps) app.UseHttpsRedirection();
 app.UseAuthentication();

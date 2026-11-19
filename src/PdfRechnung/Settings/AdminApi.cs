@@ -182,6 +182,9 @@ public static class AdminApi
         });
 
         // ---------- MAPI-Mailclient am Server ----------
+        g.MapGet("/firefox", (FirefoxPolicy ff) => Results.Ok(new { status = ff.Last ?? ff.Apply() }));
+        g.MapPost("/firefox", (FirefoxPolicy ff) => Results.Ok(new { status = ff.Apply() }));
+
         g.MapGet("/mapi", () => OperatingSystem.IsWindows()
             ? Results.Ok(new { status = MapiClient.Status(), perUserCommand = MapiClient.PerUserCommand, pipe = PdfRechnung.Services.MapiPipeServer.PipeName })
             : Results.Ok(new { status = (object?)null, perUserCommand = MapiClient.PerUserCommand, pipe = "belegpost-mapi" }));

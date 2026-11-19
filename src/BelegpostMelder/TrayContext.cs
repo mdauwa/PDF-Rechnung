@@ -165,21 +165,110 @@ public sealed class TrayContext : ApplicationContext
         _tasksRunning = true;
         try
         {
-            foreach (var t in await _client.PendingTasks())
+            // Weitere Aufträge können eintreffen, während einer läuft (z. B. Outlook + Speichern + Drucken zum selben Beleg)
+            for (var round = 0; round < 5; round++)
             {
-                if (!await _client.ClaimTask(t.Id)) continue; // ein anderer PC war schneller
-                if (t.Kind == "outlook" && t.VorgangId is { } id)
+                var pending = await _client.PendingTasks();
+                if (pending.Count == 0) break;
+                foreach (var t in pending)
                 {
-                    var ok = _cfg.OutlookAllowed && await OpenOutlook(id, "E-Mail aus dem ERP");
-                    if (ok) ToastWindow.Show("E-Mail aus dem ERP", "In Outlook geöffnet – bitte prüfen und senden.", ToastWindow.Kinds.Ok,
-                        () => OpenPath("/#/vorgang?id=" + Uri.EscapeDataString(id)), "Im Portal", 6);
-                    else if (!_cfg.OutlookAllowed) OpenPath("/#/vorgang?id=" + Uri.EscapeDataString(id));
+                    if (!await _client.ClaimTask(t.Id)) continue; // ein anderer PC war schneller
+                    if (t.Kind == "outlook" && t.VorgangId is { } id)
+                    {
+                        var ok = _cfg.OutlookAllowed && await OpenOutlook(id, "E-Mail aus dem ERP");
+                        if (ok) ToastWindow.Show("E-Mail aus dem ERP", "In Outlook geöffnet – bitte prüfen und senden.", ToastWindow.Kinds.Ok,
+                            () => OpenPath("/#/vorgang?id=" + Uri.EscapeDataString(id)), "Im Portal", 6);
+                        else if (!_cfg.OutlookAllowed) OpenPath("/#/vorgang?id=" + Uri.EscapeDataString(id));
+                    }
+                    else if (t.Kind == "speichern" && t.VorgangId is not null) await SaveTask(t);
+                    else if (t.Kind == "drucken" && t.VorgangId is not null) await PrintTask(t);
+                    await _client.CompleteTask(t.Id);
                 }
-                await _client.CompleteTask(t.Id);
             }
         }
         catch { /* beim nächsten Ereignis erneut */ }
         finally { _tasksRunning = false; }
+    }
+
+    /// <summary>@@pa@@: „Speichern unter“ im vorgegebenen Ordner mit dem fertigen PDF.</summary>
+    private async Task SaveTask(MelderClient.MelderTask t)
+    {
+        var id = t.VorgangId!;
+        var title = string.IsNullOrWhiteSpace(t.Title) ? "Beleg" : t.Title!;
+        var pdf = await _client.DownloadPdf(id);
+        if (pdf is null)
+        {
+            ToastWindow.Show(title, "Das PDF konnte nicht geladen werden – bitte im Portal speichern.", ToastWindow.Kinds.Bad,
+                () => OpenPath("/#/vorgang?id=" + Uri.EscapeDataString(id)), "Im Portal", 12);
+            await _client.ReportJob(id, t.Kind, false, "PDF nicht geladen");
+            return;
+        }
+        var folder = (t.Folder ?? "").Trim();
+        var folderOk = false;
+        if (folder.Length > 0)
+        {
+            // Unterordner aus Platzhaltern (z. B. Jahr/Kunde) anlegen, wenn der Ablageordner selbst erreichbar ist
+            try { Directory.CreateDirectory(folder); folderOk = Directory.Exists(folder); } catch { folderOk = false; }
+        }
+        using var owner = new Form { TopMost = true, ShowInTaskbar = false, FormBorderStyle = FormBorderStyle.None, Size = new Size(1, 1),
+            StartPosition = FormStartPosition.CenterScreen, Opacity = 0 };
+        owner.Show();
+        owner.Activate();
+        using var dlg = new SaveFileDialog
+        {
+            Title = $"{title} speichern",
+            Filter = "PDF-Datei (*.pdf)|*.pdf",
+            DefaultExt = "pdf", AddExtension = true, OverwritePrompt = true,
+            FileName = string.IsNullOrWhiteSpace(t.FileName) ? "Beleg.pdf" : t.FileName,
+            InitialDirectory = folderOk ? folder : "",
+            RestoreDirectory = true
+        };
+        var result = dlg.ShowDialog(owner);
+        owner.Close();
+        if (result != DialogResult.OK)
+        {
+            await _client.ReportJob(id, t.Kind, false, "im Melder abgebrochen");
+            return;
+        }
+        try
+        {
+            await File.WriteAllBytesAsync(dlg.FileName, pdf);
+            ToastWindow.Show(title, "Gespeichert: " + dlg.FileName, ToastWindow.Kinds.Ok, null, seconds: 5);
+            await _client.ReportJob(id, t.Kind, true, dlg.FileName + (folder.Length > 0 && !folderOk ? $" (Ablageordner „{folder}“ nicht erreichbar)" : ""));
+        }
+        catch (Exception ex)
+        {
+            ToastWindow.Show(title, "Speichern fehlgeschlagen: " + ex.Message, ToastWindow.Kinds.Bad, null, seconds: 12);
+            await _client.ReportJob(id, t.Kind, false, ex.Message);
+        }
+    }
+
+    /// <summary>@@pp@@: fertiges PDF auf dem Standarddrucker bzw. dem angegebenen Drucker dieses PCs drucken.</summary>
+    private async Task PrintTask(MelderClient.MelderTask t)
+    {
+        var id = t.VorgangId!;
+        var title = string.IsNullOrWhiteSpace(t.Title) ? "Beleg" : t.Title!;
+        var pdf = await _client.DownloadPdf(id);
+        if (pdf is null)
+        {
+            ToastWindow.Show(title, "Das PDF konnte nicht geladen werden – bitte im Portal drucken.", ToastWindow.Kinds.Bad,
+                () => OpenPath("/#/vorgang?id=" + Uri.EscapeDataString(id)), "Im Portal", 12);
+            await _client.ReportJob(id, t.Kind, false, "PDF nicht geladen");
+            return;
+        }
+        try
+        {
+            var name = string.IsNullOrWhiteSpace(t.FileName) ? title : Path.GetFileNameWithoutExtension(t.FileName);
+            var printer = await Task.Run(() => PdfPrint.Print(pdf, t.Printer, name));
+            ToastWindow.Show(title, $"Auf „{printer}“ gedruckt.", ToastWindow.Kinds.Ok, null, seconds: 5);
+            await _client.ReportJob(id, t.Kind, true, $"auf „{printer}“ ({Environment.MachineName})");
+        }
+        catch (Exception ex)
+        {
+            ToastWindow.Show(title, "Drucken fehlgeschlagen: " + ex.Message, ToastWindow.Kinds.Bad,
+                () => OpenPath("/#/vorgang?id=" + Uri.EscapeDataString(id)), "Im Portal", 12);
+            await _client.ReportJob(id, t.Kind, false, ex.Message);
+        }
     }
 
     /// <summary>Versand der geöffneten Entwürfe in Outlook erkennen und dem Portal melden (Status 110).</summary>

@@ -1,0 +1,108 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using PdfRechnung.Documents;
+using PdfRechnung.Printing;
+using PdfRechnung.Services;
+using PdfRechnung.Settings;
+using Xunit;
+
+namespace PdfRechnung.Tests;
+
+/// <summary>@@pa@@ / @@pp@@ (Speichern und Drucken über den Melder) und das Trennzeichen beim Weiterleiten an gotomaxx.</summary>
+public sealed class MelderJobsTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "pdfr-melder-" + Guid.NewGuid().ToString("N")[..8]);
+    public void Dispose() { try { Directory.Delete(_dir, true); } catch { } }
+
+    [Fact]
+    public void Steuerzeichen_pa_und_pp_werden_gelesen()
+    {
+        var p = ControlCodeParser.Parse("@@pa@@\n@@ppHP Buero@@");
+        Assert.Equal("", p.SaveFolder);
+        Assert.Equal("HP Buero", p.PrintPrinter);
+        var q = ControlCodeParser.Parse("@@pa2026\\Kunden@@\n@@pp0@@");
+        Assert.Equal("2026\\Kunden", q.SaveFolder);
+        Assert.Equal("0", q.PrintPrinter);
+        Assert.Null(ControlCodeParser.Parse("@@edBetreff@@").SaveFolder);
+        // gehören nur Belegpost – nicht an gotomaxx weitergeben
+        Assert.True(GotomaxxCodes.IsPortalOnly(new ControlCode(1, "pa", "")));
+        Assert.True(GotomaxxCodes.IsPortalOnly(new ControlCode(1, "pp", "")));
+    }
+
+    [Fact]
+    public void Ablageordner_wird_aus_Einstellung_und_Steuerzeichen_gebildet()
+    {
+        var v = new Vorgang { CreatedAt = new DateTimeOffset(2026, 11, 19, 10, 0, 0, TimeSpan.Zero), BuyerName = "Muster: GmbH", BuyerId = "4711" };
+        Assert.Equal(@"\\srv\Ablage", MelderApi.SaveFolderFor("", @"\\srv\Ablage", v));
+        Assert.Equal(@"\\srv\Ablage\Rechnungen", MelderApi.SaveFolderFor("Rechnungen", @"\\srv\Ablage\", v));
+        Assert.Equal(@"K:\Belege", MelderApi.SaveFolderFor(@"K:\Belege", @"\\srv\Ablage", v));
+        Assert.Equal(@"\\nas\x", MelderApi.SaveFolderFor(@"\\nas\x", @"\\srv\Ablage", v));
+        Assert.Equal(@"\\srv\Ablage\2026\11\Muster_ GmbH", MelderApi.SaveFolderFor(@"{Jahr}\{Monat}\{Kunde}", @"\\srv\Ablage", v));
+        Assert.Equal("", MelderApi.SaveFolderFor(null, "", v));
+    }
+
+    [Fact]
+    public void Druck_mit_pa_und_pp_legt_Auftraege_fuer_den_Melder_am_Druck_PC_an()
+    {
+        Directory.CreateDirectory(_dir);
+        var settings = new SettingsStore(_dir);
+        var users = new UserStore(_dir);
+        users.Replace(new List<PortalUser> { new() { Id = "martin", Name = "Martin", OperatorNumbers = { "007" } } });
+        var s = DefaultSettings.Create();
+        var store = new DocumentStore(settings, NullLogger<DocumentStore>.Instance);
+        var hub = new EventHub();
+        var tasks = new MelderTasks(store.Db, hub);
+        var (rds, _) = users.AddDevice("martin", "RDS");
+        users.TouchDevice(rds.Id, "RDS01");
+        var (pc, _) = users.AddDevice("martin", "Büro");
+        users.TouchDevice(pc.Id, "PC-BUERO");
+        var proc = new DocumentProcessor(store, new StaticOptions<MailOptions>(s.Mail), new StaticOptions<InvoiceOptions>(s.Invoice),
+            NullLogger<DocumentProcessor>.Instance, settings: settings, users: users, events: hub, melderTasks: tasks);
+
+        var v = proc.Process(TestData.Pdf(new[] { "@@pb7@@", "@@pa@@", "@@ppKyocera@@", "@@toa@kunde.at@@", "@@mfRechnung_4711@@" }), "Drucker", "a.pdf", "FIRMA\\mmuster", "RDS01");
+        Assert.Equal("", v.SaveRequest);
+        Assert.Equal("Kyocera", v.PrintRequest);
+        var mine = tasks.Pending("martin", rds.Id);
+        Assert.Equal(new[] { MelderTasks.KindSave, MelderTasks.KindPrint }, mine.Select(t => t.Kind));
+        Assert.Equal("", mine[0].Data);
+        Assert.Equal("Kyocera", mine[1].Data);
+        Assert.Empty(tasks.Pending("martin", pc.Id)); // nur der Melder am Computer, an dem gedruckt wurde
+        Assert.Contains(store.Get(v.Id)!.History, h => h.Text?.Contains("Speichern über den Melder") == true);
+        Assert.Equal("Rechnung_4711.pdf", MelderApi.PdfFileName(v));
+
+        // @@pa0@@ / @@pp0@@ = nichts
+        var w = proc.Process(TestData.Pdf(new[] { "@@pb7@@", "@@pa0@@", "@@pp0@@" }), "Drucker", "b.pdf", "FIRMA\\mmuster", "RDS01");
+        Assert.Null(w.SaveRequest);
+        Assert.Null(w.PrintRequest);
+        Assert.Equal(2, tasks.Pending("martin", rds.Id).Count);
+    }
+
+    [Fact]
+    public void Trennzeichen_aus_der_gotomaxx_Einstellungsdatei()
+    {
+        const string cfg = "local_settings_filter 0001\r\npdfmailer\r\n{\r\n  defaultFileName \"${dateiName}\"\r\n  commandDelimiter $$\r\n  openPreview true\r\n}\r\n";
+        Assert.Equal("$$", GotomaxxProfile.DelimiterFromConfig(cfg));
+        Assert.Equal("##", GotomaxxProfile.DelimiterFromConfig("pdfmailer\n{\n  commandDelimiter \"##\"\n}\n"));
+        Assert.Null(GotomaxxProfile.DelimiterFromConfig("pdfmailer\n{\n  openPreview true\n}\n"));
+        Assert.Null(GotomaxxProfile.DelimiterFromConfig(null));
+
+        Assert.Equal("$$aakunde@firma.at$$", GotomaxxProfile.WithDelimiter("@@aakunde@firma.at@@", "$$"));
+        Assert.Equal("@@aa@@", GotomaxxProfile.WithDelimiter("@@aa@@", "@@"));
+        Assert.Equal(("$$", "Trennzeichen $$"), GotomaxxProfile.Resolve("$$", "PDFMAILER", null));
+        Assert.Equal(("@@", ""), GotomaxxProfile.Resolve("", "PDFMAILER", null));
+        Assert.True(GotomaxxProfile.IsValidSetting("auto"));
+        Assert.True(GotomaxxProfile.IsValidSetting("$$"));
+        Assert.False(GotomaxxProfile.IsValidSetting("$ $"));
+        Assert.False(GotomaxxProfile.IsValidSetting("zu lang"));
+    }
+
+    [Fact]
+    public void Job_traegt_das_eingestellte_Trennzeichen()
+    {
+        var v = new Vorgang { Id = "x" };
+        v.Codes.Add(new ControlCode(1, "aa", "kunde@firma.at"));
+        var job = GotomaxxCodes.Job(v, "PDFMAILER", new PdfRechnung.GotomaxxOptions { CommandDelimiter = "$$" });
+        Assert.Equal("$$", job.Delimiter);
+        Assert.Equal("@@aakunde@firma.at@@", job.Codes[0].Text); // ersetzt wird erst beim Druck
+        Assert.Equal("@@", GotomaxxCodes.Job(v, "P", new PdfRechnung.GotomaxxOptions { CommandDelimiter = " " }).Delimiter);
+    }
+}

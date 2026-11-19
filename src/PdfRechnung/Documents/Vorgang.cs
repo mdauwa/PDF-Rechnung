@@ -131,6 +131,10 @@ public sealed class Vorgang
     public int Pages { get; set; }
     /// <summary>Weiterleitung an gotomaxx: null = nein, "" = Standarddrucker, sonst Druckername (aus @@pg@@ oder „immer“).</summary>
     public string? GotomaxxPrinter { get; set; }
+    /// <summary>@@pa@@: über den Melder speichern – null = nein, "" = Ablageordner, sonst Ordner (relativ zum Ablageordner oder absolut).</summary>
+    public string? SaveRequest { get; set; }
+    /// <summary>@@pp@@: über den Melder drucken – null = nein, "" = Standarddrucker des PCs, sonst Druckername.</summary>
+    public string? PrintRequest { get; set; }
 
     public string Status { get; set; } = VorgangStatus.Warning;
     public List<CheckMessage> Messages { get; set; } = new();

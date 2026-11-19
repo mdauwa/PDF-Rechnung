@@ -191,7 +191,8 @@ public sealed class MelderClient : IDisposable
         return true;
     }
 
-    public sealed record MelderTask(string Id, string Kind, string? VorgangId);
+    /// <summary>Auftrag vom Server; bei „speichern“/„drucken“ mit Startordner, Dateiname und Drucker.</summary>
+    public sealed record MelderTask(string Id, string Kind, string? VorgangId, string? Folder = null, string? FileName = null, string? Printer = null, string? Title = null);
 
     public async Task<List<MelderTask>> PendingTasks()
     {
@@ -199,9 +200,28 @@ public sealed class MelderClient : IDisposable
         var list = new List<MelderTask>();
         if (doc is null || !doc.RootElement.TryGetProperty("items", out var items)) return list;
         foreach (var t in items.EnumerateArray())
-            list.Add(new MelderTask(t.GetProperty("id").GetString()!, t.GetProperty("kind").GetString() ?? "",
-                t.TryGetProperty("vorgangId", out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null));
+        {
+            string? S(string n) => t.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+            list.Add(new MelderTask(S("id")!, S("kind") ?? "", S("vorgangId"), S("ordner"), S("datei"), S("drucker"), S("titel")));
+        }
         return list;
+    }
+
+    /// <summary>Fertiges PDF eines Vorgangs (für Speichern/Drucken); null bei Fehler.</summary>
+    public async Task<byte[]?> DownloadPdf(string vorgangId)
+    {
+        if (_cfg.Token is not { } token || _cfg.Server is null) return null;
+        using var http = CreateHttp(_cfg.Thumbprint, TimeSpan.FromSeconds(120));
+        using var req = new HttpRequestMessage(HttpMethod.Get, _cfg.Server.TrimEnd('/') + "/melder/api/vorgang/" + Uri.EscapeDataString(vorgangId) + "/pdf");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        using var res = await http.SendAsync(req);
+        return res.IsSuccessStatusCode ? await res.Content.ReadAsByteArrayAsync() : null;
+    }
+
+    /// <summary>Ergebnis von Speichern/Drucken dem Portal melden (steht im Verlauf des Vorgangs).</summary>
+    public async Task ReportJob(string vorgangId, string kind, bool ok, string message)
+    {
+        try { using var _ = await Call(HttpMethod.Post, "/melder/api/vorgang/" + Uri.EscapeDataString(vorgangId) + "/ergebnis", new { kind, ok, message }); } catch { }
     }
 
     /// <summary>Auftrag übernehmen – false, wenn ihn schon ein anderer PC übernommen hat.</summary>

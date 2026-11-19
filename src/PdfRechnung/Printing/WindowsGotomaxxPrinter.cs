@@ -34,8 +34,8 @@ public sealed class WindowsGotomaxxPrinter : IGotomaxxPrinter
                 catch (SessionStartException ex) when (o.ServiceFallback)
                 {
                     _log.LogWarning(ex, "gotomaxx: Druck in der Sitzung von {User} nicht möglich – drucke als Dienst", session.Account);
-                    await Task.Run(() => PdfPrinter.Print(job, pdf), ct);
-                    return $"vom Dienst gedruckt (Sitzung von {session.Account} nicht nutzbar: {ex.Message})";
+                    var i1 = await Task.Run(() => PdfPrinter.Print(job, pdf), ct);
+                    return $"vom Dienst gedruckt (Sitzung von {session.Account} nicht nutzbar: {ex.Message}){Suffix(i1)}";
                 }
             }
             if (!o.ServiceFallback)
@@ -43,9 +43,11 @@ public sealed class WindowsGotomaxxPrinter : IGotomaxxPrinter
                     ? "Unbekannt, wer gedruckt hat – kein Windows-Benutzer für den Druck in seiner Sitzung."
                     : $"{string.Join(" / ", windowsUsers)} ist am Server nicht angemeldet.");
         }
-        await Task.Run(() => PdfPrinter.Print(job, pdf), ct);
-        return o.UserSession ? "vom Dienst gedruckt (Benutzer nicht am Server angemeldet)" : "vom Dienst gedruckt";
+        var info = await Task.Run(() => PdfPrinter.Print(job, pdf), ct);
+        return (o.UserSession ? "vom Dienst gedruckt (Benutzer nicht am Server angemeldet)" : "vom Dienst gedruckt") + Suffix(info);
     }
+
+    private static string Suffix(string? info) => string.IsNullOrWhiteSpace(info) ? "" : " · " + info.Trim();
 
     private string RunInSession(UserSession s, GotomaxxJob job, byte[] pdf, GotomaxxOptions o, CancellationToken ct)
     {
@@ -71,7 +73,7 @@ public sealed class WindowsGotomaxxPrinter : IGotomaxxPrinter
             var result = Path.Combine(dir, "ergebnis.txt");
             var text = File.Exists(result) ? File.ReadAllText(result).Trim() : "";
             if (exit == 0 && text.StartsWith("OK", StringComparison.Ordinal))
-                return $"in der Sitzung von {s.Account}{(string.IsNullOrEmpty(s.ClientName) ? "" : $" ({s.ClientName})")}";
+                return $"in der Sitzung von {s.Account}{(string.IsNullOrEmpty(s.ClientName) ? "" : $" ({s.ClientName})")}{Suffix(text[2..])}";
             var msg = text.StartsWith("FEHLER", StringComparison.Ordinal) ? text[6..].Trim(' ', ':', '\r', '\n') : $"Druckprogramm in der Sitzung beendet mit Code {exit}.";
             throw new InvalidOperationException(msg);
         }
@@ -96,8 +98,8 @@ public sealed class WindowsGotomaxxPrinter : IGotomaxxPrinter
         {
             var job = JsonSerializer.Deserialize<GotomaxxJob>(File.ReadAllText(Path.Combine(dir, "auftrag.json")), GotomaxxJob.Json)
                 ?? throw new InvalidOperationException("Auftrag nicht lesbar.");
-            PdfPrinter.Print(job, File.ReadAllBytes(Path.Combine(dir, "druck.pdf")));
-            File.WriteAllText(result, "OK");
+            var info = PdfPrinter.Print(job, File.ReadAllBytes(Path.Combine(dir, "druck.pdf")));
+            File.WriteAllText(result, "OK " + info);
             return 0;
         }
         catch (Exception ex)

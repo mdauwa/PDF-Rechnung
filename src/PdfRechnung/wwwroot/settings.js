@@ -772,6 +772,9 @@ function gotomaxxSection() {
   const current = get(ST.s, "gotomaxx.printer") || "";
   const opts = [["", printers.length ? "(bitte wählen)" : "(keine Drucker gefunden)"], ...printers.map(p => [p, p])];
   if (current && !printers.includes(current)) opts.push([current, current + " (nicht installiert)"]);
+  const delim = get(ST.s, "gotomaxx.commandDelimiter") || "@@";
+  const dOpts = [["@@", "@@ (gotomaxx-Standard)"], ["$$", "$$"], ["auto", "automatisch aus dem gotomaxx-Profil des Druckers"]];
+  if (!dOpts.some(o => o[0] === delim)) dOpts.push([delim, delim]);
   return `${inCheck("gotomaxx.enabled", "Belege an einen gotomaxx-PDFMAILER-Drucker weiterleiten")}
     <div class="grid2">
       ${field("Standarddrucker", inSelect("gotomaxx.printer", opts), "Für <code>@@pg@@</code> und „jeden Beleg weiterleiten“. <code>@@pgDruckername@@</code> wählt je Beleg einen anderen gotomaxx-Drucker.")}
@@ -784,11 +787,16 @@ function gotomaxxSection() {
     <div class="grid2">
       ${field("Schriftgröße der Steuerzeichen (pt)", inNum("gotomaxx.codeFontSize", 0.5, 24, 0.1), "Wie im ERP-Formular, z. B. 2.")}
       <div>${inCheck("gotomaxx.codesVisible", "Steuerzeichen schwarz drucken (zum Testen, sonst weiß)")}</div>
+      ${field("Trennzeichen der Steuerzeichen", inSelect("gotomaxx.commandDelimiter", dOpts),
+        `So, wie der Zieldrucker sie erwartet (gotomaxx: <code>commandDelimiter</code> im Abschnitt <code>pdfmailer</code> der Druckereinstellungen).
+         „Automatisch“ liest beim Druck das gotomaxx-Profil des Druckers beim druckenden Benutzer
+         (<code>%APPDATA%\gotomaxx\pdfmailer6\profiles\&lt;ID&gt;.cfg</code>); ohne eigenes Profil gilt <code>@@</code>.
+         Welches Zeichen verwendet wurde, steht im Verlauf des Vorgangs.`)}
     </div>
     <div class="help-box">
       <b>So funktioniert die Weiterleitung:</b> Der Beleg wird als echter Druckauftrag an den gotomaxx-Drucker geschickt.
       Die Steuerzeichen werden dafür auf derselben Seite neu als Text gedruckt –
-      <b>ohne</b> die Belegpost-eigenen <code>@@pb@@ @@pi@@ @@pu@@ @@pv@@ @@pt@@ @@pf@@ @@pg@@</code> und <code>@@xi ERP_VOUCHER_INDEX=…@@</code>,
+      <b>ohne</b> die Belegpost-eigenen <code>@@pb@@ @@pi@@ @@pu@@ @@pv@@ @@pt@@ @@pf@@ @@pg@@ @@pa@@ @@pp@@</code> und <code>@@xi ERP_VOUCHER_INDEX=…@@</code>,
       alle anderen unverändert (Pfade wie <code>K:\…</code> ohne Pfadzuordnung). Briefpapier, Prüfung und Versand übernimmt dann gotomaxx.
       Status 140 = an gotomaxx übergeben, 840 = Übergabe fehlgeschlagen. Im Vorgang gibt es zusätzlich den Knopf „An gotomaxx übergeben“.
     </div>`;
@@ -1849,11 +1857,23 @@ function tabMapi() {
       `${field("Standard für alle Benutzer", inSelect("mapi.outlookTarget", [
           ["melder", "über den Melder (PC des Benutzers)"],
           ["sitzung", "direkt in der Windows-Sitzung am Server (RDS, Outlook am Server)"]]),
-        "Pro Benutzer änderbar (Benutzer → MAPI-Mails und Melder). Betrifft nur Belege vom Belegpost-Drucker – MAPI-Mails bleiben, wie oben eingestellt.")}
+        "Pro Benutzer änderbar (Benutzer → MAPI-Mails und Melder). Betrifft nur Belege vom Belegpost-Drucker – MAPI-Mails bleiben, wie oben eingestellt. "
+        + "Über den Melder öffnet sich Outlook auf dem Computer, an dem gedruckt wurde – am RDS-Server also in der Sitzung, wenn der Melder dort läuft. "
+        + "Dafür muss Belegpost nicht als Mailprogramm (MAPI) eingerichtet sein; es genügt Outlook mit Profil und die Freigabe „Senden über Outlook“ beim Benutzer.")}
        ${(ST.s.mapi.outlookTarget || "melder") === "sitzung" ? `<p class="help">Nach dem Druck öffnet Belegpost in der Sitzung des druckenden Benutzers am Server das Portal mit dem Beleg
          bzw. – bei Versand über Outlook – gleich den fertigen Entwurf im klassischen Outlook. Dafür muss kein Melder laufen; der Dienst startet dazu kurz
          <code>Belegpost-Melder.exe</code> aus dem Programmordner in der Sitzung. Der Benutzer muss am Server angemeldet sein (Druck-Benutzer in der Benutzerverwaltung).
-         Die Versandbestätigung aus Outlook (110) gibt es nur, wenn zusätzlich der Melder in der Sitzung läuft.</p>` : ""}`);
+         Die Versandbestätigung aus Outlook (110) gibt es nur, wenn zusätzlich der Melder in der Sitzung läuft.</p>` : ""}`) +
+    section("Speichern und Drucken über den Melder",
+      `<div class="grid2">${field("Ablageordner für <code>@@pa@@</code>", inText("mapi.saveFolder", "\\\\server\\Ablage\\Belege"),
+          "Hier öffnet sich im Melder „Speichern unter“ mit dem fertigen PDF – so, wie der PC bzw. die RDS-Sitzung den Ordner sieht. Platzhalter: {Jahr} {Monat} {Kunde} {Kundennummer} {Belegart} {Mandant}.")}</div>
+       <div class="help-box">
+         <b>Steuerzeichen</b> (laufen zusätzlich zu Mail, Outlook oder gotomaxx):
+         <code>@@pa@@</code> = im Ablageordner speichern, <code>@@paUnterordner@@</code> = darunter, <code>@@paK:\Pfad@@</code> bzw. <code>@@pa\\\\server\\…@@</code> = in diesem Ordner, <code>@@pa0@@</code> = nicht.
+         <code>@@pp@@</code> = auf dem Standarddrucker des PCs drucken, <code>@@ppDruckername@@</code> = auf diesem Drucker, <code>@@pp0@@</code> = nicht.
+         Gespeichert und gedruckt wird das fertige PDF (mit Briefpapier und E-Rechnung). Ausgeführt wird es vom Melder des Benutzers auf dem Computer,
+         an dem gedruckt wurde (sonst von seinem nächsten Melder). Ist kein Melder aktiv, wartet der Auftrag bis zur oben eingestellten Frist. Das Ergebnis steht im Verlauf des Vorgangs.
+       </div>`);
 }
 
 async function mapiCall(action) {

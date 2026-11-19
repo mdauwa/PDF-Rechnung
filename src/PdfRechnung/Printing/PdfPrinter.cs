@@ -19,8 +19,10 @@ public static class PdfPrinter
 
     public static IReadOnlyList<string> InstalledPrinters() => PrinterSettings.InstalledPrinters.Cast<string>().OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList();
 
-    public static void Print(GotomaxxJob job, byte[] pdf)
+    /// <summary>Druckt und liefert eine Beschreibung des verwendeten Trennzeichens (leer = Standard @@).</summary>
+    public static string Print(GotomaxxJob job, byte[] pdf)
     {
+        var (delimiter, info) = job.Codes.Count == 0 ? (GotomaxxProfile.Default, "") : GotomaxxProfile.Resolve(job.Delimiter, job.Printer, job.ProfileIds);
         var printer = InstalledPrinters().FirstOrDefault(p => p.Equals(job.Printer, StringComparison.OrdinalIgnoreCase))
             ?? throw new InvalidOperationException($"Der Drucker „{job.Printer}“ ist auf diesem Server nicht installiert.");
 
@@ -64,7 +66,7 @@ public static class PdfPrinter
                     try
                     {
                         var g = e.Graphics!;
-                        DrawCodes(g, job, index + 1);
+                        DrawCodes(g, job, index + 1, delimiter);
                         var hdc = g.GetHdc();
                         try
                         {
@@ -82,6 +84,7 @@ public static class PdfPrinter
                 };
                 pd.Print();
                 if (pageError is not null) throw new InvalidOperationException("Fehler beim Drucken: " + pageError.Message, pageError);
+                return info;
             }
             finally
             {
@@ -92,9 +95,9 @@ public static class PdfPrinter
     }
 
     /// <summary>Steuerzeichen der Seite als echten Text oben links (Einheit der Grafik: 1/100 Zoll ab Druckbereich).</summary>
-    private static void DrawCodes(Graphics g, GotomaxxJob job, int page)
+    private static void DrawCodes(Graphics g, GotomaxxJob job, int page, string delimiter)
     {
-        var lines = job.Codes.Where(c => c.Page == page).Select(c => c.Text).ToList();
+        var lines = job.Codes.Where(c => c.Page == page).Select(c => GotomaxxProfile.WithDelimiter(c.Text, delimiter)).ToList();
         if (lines.Count == 0) return;
         var size = (float)job.FontSize;
         using var font = new Font("Arial", size, GraphicsUnit.Point);

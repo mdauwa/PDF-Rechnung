@@ -32,4 +32,9 @@
     <EmbeddedResource Include="Melder.ico" LogicalName="Melder.ico" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- PDF drucken (@@pp@@): PDFium, BSD-3/Apache-2.0 – wie im Server -->
+    <PackageReference Include="bblanchon.PDFium.Win32" Version="159.0.8152" />
+  </ItemGroup>
+
 </Project>

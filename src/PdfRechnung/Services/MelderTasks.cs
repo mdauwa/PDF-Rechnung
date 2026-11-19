@@ -6,7 +6,8 @@ using PdfRechnung.Settings;
 namespace PdfRechnung.Services;
 
 /// <summary>Ein Auftrag an den Melder eines Benutzers (z. B. „diese MAPI-Mail in Outlook öffnen“).</summary>
-public sealed record MelderTask(string Id, string UserId, string? DeviceId, string Kind, string? VorgangId, DateTimeOffset Created, DateTimeOffset? Delivered, DateTimeOffset? Done);
+public sealed record MelderTask(string Id, string UserId, string? DeviceId, string Kind, string? VorgangId, DateTimeOffset Created, DateTimeOffset? Delivered, DateTimeOffset? Done,
+    string? Data = null);
 
 /// <summary>
 /// Persistente Aufträge an Melder (Tabelle melder_auftrag). Ist kein Melder online, wartet der Auftrag, bis sich
@@ -15,17 +16,21 @@ public sealed record MelderTask(string Id, string UserId, string? DeviceId, stri
 public sealed class MelderTasks
 {
     public const string KindOutlook = "outlook";
+    /// <summary>@@pa@@: PDF über „Speichern unter“ ablegen (Daten = Ordner aus dem Steuerzeichen, "" = Ablageordner).</summary>
+    public const string KindSave = "speichern";
+    /// <summary>@@pp@@: PDF drucken (Daten = Druckername, "" = Standarddrucker des PCs).</summary>
+    public const string KindPrint = "drucken";
     private readonly BelegpostDb _db;
     private readonly EventHub _hub;
 
     public MelderTasks(BelegpostDb db, EventHub hub) { _db = db; _hub = hub; }
 
-    public string Create(string userId, string? deviceId, string kind, string? vorgangId, string title)
+    public string Create(string userId, string? deviceId, string kind, string? vorgangId, string title, string? data = null)
     {
         var id = Guid.NewGuid().ToString("N")[..16];
         using (var c = _db.Open())
-            BelegpostDb.Exec(c, "INSERT INTO melder_auftrag(id, benutzer_id, geraet_id, art, vorgang_id, erstellt) VALUES(@i,@u,@g,@a,@v,@e)",
-                ("@i", id), ("@u", userId), ("@g", deviceId), ("@a", kind), ("@v", vorgangId), ("@e", BelegpostDb.Ms(DateTimeOffset.Now)));
+            BelegpostDb.Exec(c, "INSERT INTO melder_auftrag(id, benutzer_id, geraet_id, art, vorgang_id, erstellt, daten) VALUES(@i,@u,@g,@a,@v,@e,@d)",
+                ("@i", id), ("@u", userId), ("@g", deviceId), ("@a", kind), ("@v", vorgangId), ("@e", BelegpostDb.Ms(DateTimeOffset.Now)), ("@d", data));
         _hub.Publish(userId, "auftrag", vorgangId ?? "", title, kind, deviceId);
         return id;
     }
@@ -66,12 +71,12 @@ public sealed class MelderTasks
 
     private static List<MelderTask> Read(Microsoft.Data.Sqlite.SqliteConnection c, string tail, params (string, object?)[] p)
     {
-        using var cmd = BelegpostDb.Cmd(c, "SELECT id, benutzer_id, geraet_id, art, vorgang_id, erstellt, zugestellt, erledigt FROM melder_auftrag " + tail, p);
+        using var cmd = BelegpostDb.Cmd(c, "SELECT id, benutzer_id, geraet_id, art, vorgang_id, erstellt, zugestellt, erledigt, daten FROM melder_auftrag " + tail, p);
         using var r = cmd.ExecuteReader();
         var list = new List<MelderTask>();
         while (r.Read())
             list.Add(new MelderTask(r.GetString(0), r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2), r.GetString(3), r.IsDBNull(4) ? null : r.GetString(4),
-                BelegpostDb.At(r.GetInt64(5)), r.IsDBNull(6) ? null : BelegpostDb.At(r.GetInt64(6)), r.IsDBNull(7) ? null : BelegpostDb.At(r.GetInt64(7))));
+                BelegpostDb.At(r.GetInt64(5)), r.IsDBNull(6) ? null : BelegpostDb.At(r.GetInt64(6)), r.IsDBNull(7) ? null : BelegpostDb.At(r.GetInt64(7)), r.IsDBNull(8) ? null : r.GetString(8)));
         return list;
     }
 }
@@ -109,6 +114,12 @@ public sealed class OutlookWatchWorker : BackgroundService
         foreach (var t in _tasks.Expire(TimeSpan.FromHours(Math.Max(1, o.DeliveryTimeoutHours))))
         {
             if (t.VorgangId is null) continue;
+            if (t.Kind is MelderTasks.KindSave or MelderTasks.KindPrint)
+            {
+                var what = t.Kind == MelderTasks.KindSave ? "Speichern" : "Drucken";
+                _store.Update(t.VorgangId, x => { x.History.Add(new HistoryEntry(DateTimeOffset.Now, "Melder", "melder", $"{what} nicht ausgeführt: Kein Melder hat den Auftrag abgeholt.")); return true; });
+                continue;
+            }
             var v = _store.AddEvent(t.VorgangId, StatusCode.OutlookFehler, "Outlook", "Melder", "Kein Melder hat den Entwurf abgeholt – Beleg im Portal.");
             if (v is not null) _hub.Publish(t.UserId, "neu", v.Id, $"{v.DocumentType} {v.VoucherId}".Trim(), v.Status, "Outlook-Entwurf nicht zugestellt – bitte im Portal versenden.", v.Mail.Enabled);
         }

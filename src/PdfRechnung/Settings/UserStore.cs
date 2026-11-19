@@ -434,6 +434,19 @@ public sealed class UserStore
         return ok;
     }
 
+    /// <summary>
+    /// Melder auf genau diesem Computer (z. B. der RDS-Server, an dem gedruckt wurde, oder der PC des Druckauftrags); sonst null.
+    /// Bei mehreren der zuletzt aktive.
+    /// </summary>
+    public MelderDevice? DeviceOn(string userId, string? computer)
+    {
+        if (string.IsNullOrWhiteSpace(computer)) return null;
+        var c = computer.Trim().TrimStart('\\');
+        lock (_lock)
+            return _data.Devices.Where(d => d.UserId == userId && (string.Equals(d.ComputerName, c, StringComparison.OrdinalIgnoreCase) || SameComputer(d.ComputerName, c)))
+                .OrderByDescending(d => d.LastSeen ?? d.Created).FirstOrDefault();
+    }
+
     /// <summary>Gerät, an dem der Benutzer gerade sitzt: Computername = RDP-Client, sonst der zuletzt aktive Melder.</summary>
     public MelderDevice? TargetDevice(string userId, string? clientName)
     {

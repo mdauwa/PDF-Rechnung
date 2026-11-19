@@ -72,6 +72,14 @@ public sealed class ParsedCodes
     /// <summary>Druckername aus @@pg…@@; null = Standarddrucker, "0" = nicht weiterleiten.</summary>
     public string? GotomaxxPrinter { get; set; }
 
+    /// <summary>
+    /// @@pa@@ / @@paOrdner@@ / @@pa0@@ – Speichern über den Melder: Dialog „Speichern unter“ im eingestellten Ablageordner
+    /// (bzw. in diesem Ordner, relativ zum Ablageordner oder absolut). null = nicht angegeben, "" = Ablageordner, "0" = nicht speichern.
+    /// </summary>
+    public string? SaveFolder { get; set; }
+    /// <summary>@@pp@@ / @@ppDrucker@@ / @@pp0@@ – zusätzlich über den Melder drucken. null = nicht angegeben, "" = Standarddrucker des PCs, "0" = nicht drucken.</summary>
+    public string? PrintPrinter { get; set; }
+
     // ---- Bearbeiten / Allgemein ----
     public string? Stationery { get; set; }
     public bool StationerySet { get; set; }
@@ -214,6 +222,8 @@ public static partial class ControlCodeParser
                 else if (t.Length > 0) r.InvalidMandant = t;
                 break;
             case "pg": r.GotomaxxSet = true; r.GotomaxxPrinter = t.Length > 0 ? t : null; break;
+            case "pa": r.SaveFolder = t; break;
+            case "pp": r.PrintPrinter = t; break;
 
             // ---------- Mail ----------
             case "ml": r.MailEnabled = t != "0"; break;

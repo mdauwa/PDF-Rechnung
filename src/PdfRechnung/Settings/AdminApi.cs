@@ -594,6 +594,7 @@ public static class AdminApi
         if (s.Inbox.ProcessUserArgument is < 1 or > 20) e.Add("Die Position der Benutzernummer in der Befehlszeile muss zwischen 1 und 20 liegen.");
         if (s.Gotomaxx.Enabled && string.IsNullOrWhiteSpace(s.Gotomaxx.Printer)) e.Add("Bitte den gotomaxx-Drucker für die Weiterleitung wählen.");
         if (s.Gotomaxx.CodeFontSize is < 0.5 or > 24) e.Add("Die Schriftgröße der Steuerzeichen für gotomaxx muss zwischen 0,5 und 24 pt liegen.");
+        if (!PdfRechnung.Printing.GotomaxxProfile.IsValidSetting(s.Gotomaxx.CommandDelimiter)) e.Add("Das Trennzeichen für gotomaxx muss „auto“ oder 1–5 Zeichen ohne Leerzeichen sein (z. B. @@ oder $$).");
         if (s.Gotomaxx.TimeoutSeconds is < 10 or > 900) e.Add("Die Höchstdauer des gotomaxx-Drucks muss zwischen 10 und 900 Sekunden liegen.");
         if (s.Erp.Enabled)
         {

@@ -23,7 +23,9 @@ public static class GotomaxxCodes
         "pg", // Weiterleitung an gotomaxx (dieses Steuerzeichen)
         "ps", // Signatur
         "pm", // Mandant
-        "pw"  // Versandweg
+        "pw", // Versandweg
+        "pa", // Speichern über den Melder
+        "pp"  // Drucken über den Melder
     };
 
     /// <summary>Belegpost-Erweiterung in <c>@@xi@@</c>: <c>@@xi ERP_VOUCHER_INDEX=…@@</c>.</summary>
@@ -65,6 +67,7 @@ public static class GotomaxxCodes
         DocumentName = !string.IsNullOrWhiteSpace(v.Mail.FileName) ? v.Mail.FileName : v.OriginalFileName ?? v.Id,
         FontSize = o.CodeFontSize is > 0 and <= 24 ? o.CodeFontSize : 2,
         Visible = o.CodesVisible,
+        Delimiter = string.IsNullOrWhiteSpace(o.CommandDelimiter) ? PdfRechnung.Printing.GotomaxxProfile.Default : o.CommandDelimiter.Trim(),
         Codes = Forward(v.Codes).Select(c => new GotomaxxJobCode(Math.Max(1, c.Page), Line(c))).ToList()
     };
 }
@@ -80,6 +83,10 @@ public sealed class GotomaxxJob
     public double FontSize { get; set; } = 2;
     /// <summary>Steuerzeichen schwarz statt weiß drucken (zum Testen).</summary>
     public bool Visible { get; set; }
+    /// <summary>Trennzeichen ("@@", "$$" …) oder "auto" = aus dem gotomaxx-Profil des Druckers in der druckenden Sitzung.</summary>
+    public string Delimiter { get; set; } = "@@";
+    /// <summary>Bei "auto": Profil-IDs des Druckers aus den gotomaxx-Protokollen (vom Dienst ermittelt).</summary>
+    public List<string> ProfileIds { get; set; } = new();
     public List<GotomaxxJobCode> Codes { get; set; } = new();
 
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
@@ -118,9 +125,37 @@ public sealed class GotomaxxService : BackgroundService
     private readonly Channel<string> _queue = System.Threading.Channels.Channel.CreateUnbounded<string>();
     private readonly SemaphoreSlim _gate = new(1, 1);
 
-    public GotomaxxService(DocumentStore store, IOptionsMonitor<GotomaxxOptions> opt, IGotomaxxPrinter printer, ILogger<GotomaxxService> log, Settings.UserStore? users = null)
+    private readonly IOptionsMonitor<GotomaxxLogOptions>? _logOpt;
+    private readonly Dictionary<string, (DateTime At, List<string> Ids)> _profileIds = new(StringComparer.OrdinalIgnoreCase);
+
+    public GotomaxxService(DocumentStore store, IOptionsMonitor<GotomaxxOptions> opt, IGotomaxxPrinter printer, ILogger<GotomaxxService> log, Settings.UserStore? users = null,
+        IOptionsMonitor<GotomaxxLogOptions>? logOpt = null)
     {
-        _store = store; _opt = opt; _printer = printer; _log = log; _users = users;
+        _store = store; _opt = opt; _printer = printer; _log = log; _users = users; _logOpt = logOpt;
+    }
+
+    /// <summary>Auftrag für gotomaxx; bei Trennzeichen „auto“ mit den Profil-IDs des Druckers (10 Minuten zwischengespeichert).</summary>
+    private GotomaxxJob BuildJob(Vorgang v, string printer, GotomaxxOptions o)
+    {
+        var job = GotomaxxCodes.Job(v, printer, o);
+        if (!job.Delimiter.Equals(PdfRechnung.Printing.GotomaxxProfile.Auto, StringComparison.OrdinalIgnoreCase)) return job;
+        lock (_profileIds)
+        {
+            if (!_profileIds.TryGetValue(printer, out var hit) || DateTime.UtcNow - hit.At > TimeSpan.FromMinutes(10))
+            {
+                List<string> ids;
+                try
+                {
+                    var folder = _logOpt?.CurrentValue.FolderOrDefault ?? new GotomaxxLogOptions().FolderOrDefault;
+                    ids = PdfRechnung.Printing.GotomaxxProfile.IdsFromUsage(folder, printer, Path.Combine(Path.GetTempPath(), "belegpost-gotomaxx"));
+                }
+                catch (Exception ex) { _log.LogInformation(ex, "gotomaxx-Profil zu {Printer} nicht ermittelt", printer); ids = new(); }
+                hit = (DateTime.UtcNow, ids);
+                _profileIds[printer] = hit;
+            }
+            job.ProfileIds = hit.Ids.ToList();
+        }
+        return job;
     }
 
     public GotomaxxOptions Options => _opt.CurrentValue;
@@ -194,7 +229,7 @@ public sealed class GotomaxxService : BackgroundService
                 {
                     var path = _store.FilePath(id, DocumentStore.PdfFile) ?? throw new FileNotFoundException("Das Original-PDF fehlt.");
                     var pdf = PdfComposer.StripCodes(await File.ReadAllBytesAsync(path, ct));
-                    var job = GotomaxxCodes.Job(v, printer, o);
+                    var job = BuildJob(v, printer, o);
                     how = await _printer.PrintAsync(job, pdf, WindowsUsers(v), v.PrintMachine, o, ct);
                 }
                 catch (Exception ex) when (!ct.IsCancellationRequested)
@@ -237,7 +272,7 @@ public sealed class GotomaxxService : BackgroundService
         {
             var path = _store.FilePath(v.Id, DocumentStore.PdfFile) ?? throw new FileNotFoundException("Das Original-PDF fehlt.");
             var pdf = PdfComposer.StripCodes(await File.ReadAllBytesAsync(path, ct));
-            var how = await _printer.PrintAsync(GotomaxxCodes.Job(v, target, o), pdf, WindowsUsers(v), v.PrintMachine, o, ct);
+            var how = await _printer.PrintAsync(BuildJob(v, target, o), pdf, WindowsUsers(v), v.PrintMachine, o, ct);
             return $"gotomaxx-Drucker „{target}“ ({how})";
         }
         finally { _gate.Release(); }

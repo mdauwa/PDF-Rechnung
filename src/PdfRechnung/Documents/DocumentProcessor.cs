@@ -360,6 +360,8 @@ public sealed class DocumentProcessor
         SetMandant(v, p);
         AssignOwner(v, p, ownerUserId);
         ApplyOwnerMandant(v);
+        v.SaveRequest = p.SaveFolder is null or "0" ? null : p.SaveFolder;
+        v.PrintRequest = p.PrintPrinter is null or "0" ? null : p.PrintPrinter;
 
         Fill(v, p, overwriteMail: true);
         var sendPdf = v.Messages.Count == 0 ? Compose(v, pdf, p) : null;
@@ -377,6 +379,7 @@ public sealed class DocumentProcessor
             if (!v.Mail.Plain && readOk) v.Messages = DocumentChecker.Check(v, p, CurrentSettings()).Concat(v.Messages.Where(m => m.Field == "mapi")).ToList();
             v.UpdateStatus();
         }
+        MelderJobsCheck(v);
         var forward = readOk && !v.Mail.Plain && Forward(v, p, user ?? source);
         var outlook = !forward && readOk && OutlookRoute(v);
         _store.Create(v, pdf, text, sendPdf);
@@ -384,9 +387,10 @@ public sealed class DocumentProcessor
         if (outlook && v.Source == "Drucker" && SessionOpen?.Invoke(v, true) == true) { /* direkt in der Sitzung am Server */ }
         else if (outlook && _melderTasks is not null)
         {
-            var title = string.Join(" ", new[] { v.DocumentType, v.VoucherId }.Where(x => !string.IsNullOrWhiteSpace(x)));
-            _melderTasks.Create(v.OwnerUserId!, null, Services.MelderTasks.KindOutlook, v.Id, title.Length > 0 ? title : v.OriginalFileName ?? v.Id);
+            // Melder am PC bzw. in der RDS-Sitzung, an dem gedruckt wurde (sonst irgendein Melder des Benutzers)
+            _melderTasks.Create(v.OwnerUserId!, _users?.DeviceOn(v.OwnerUserId!, v.PrintMachine)?.Id, Services.MelderTasks.KindOutlook, v.Id, TaskTitle(v));
         }
+        CreateMelderJobs(v);
         _log.LogInformation("Vorgang {Id} angelegt: {Type} {No} → {Status}", v.Id, v.DocumentType, v.VoucherId, v.Status);
         if (publish && v.OwnerUserId is not null && _events is not null)
         {
@@ -399,6 +403,41 @@ public sealed class DocumentProcessor
             if (!outlook && v.Source == "Drucker") SessionOpen?.Invoke(v, false);
         }
         return v;
+    }
+
+    private static string TaskTitle(Vorgang v)
+    {
+        var title = string.Join(" ", new[] { v.DocumentType, v.VoucherId }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        return title.Length > 0 ? title : v.OriginalFileName ?? v.Id;
+    }
+
+    /// <summary>@@pa@@ / @@pp@@: Hinweise, wenn Speichern bzw. Drucken über den Melder nicht möglich ist.</summary>
+    private void MelderJobsCheck(Vorgang v)
+    {
+        if (v.SaveRequest is null && v.PrintRequest is null) return;
+        var what = v.SaveRequest is not null && v.PrintRequest is not null ? "Speichern und Drucken" : v.SaveRequest is not null ? "Speichern" : "Drucken";
+        string? problem = v.OwnerUserId is null ? "der Beleg ist keinem Portal-Benutzer zugeordnet"
+            : _users is not null && _users.Devices(v.OwnerUserId).Count == 0 ? $"für {v.OwnerName ?? "den Benutzer"} ist kein Belegpost Melder gekoppelt" : null;
+        if (problem is not null)
+            v.Messages.Add(new CheckMessage(DocumentChecker.Info, $"{what} über den Melder (@@pa@@/@@pp@@) nicht möglich: {problem}.", "melder"));
+    }
+
+    /// <summary>@@pa@@ / @@pp@@: Aufträge an den Melder – laufen zusätzlich zu Mail, Outlook oder gotomaxx.</summary>
+    private void CreateMelderJobs(Vorgang v)
+    {
+        if (_melderTasks is null || v.OwnerUserId is null || (v.SaveRequest is null && v.PrintRequest is null)) return;
+        var device = _users?.DeviceOn(v.OwnerUserId, v.PrintMachine)?.Id;
+        var title = TaskTitle(v);
+        if (v.SaveRequest is not null) _melderTasks.Create(v.OwnerUserId, device, Services.MelderTasks.KindSave, v.Id, title, v.SaveRequest);
+        if (v.PrintRequest is not null) _melderTasks.Create(v.OwnerUserId, device, Services.MelderTasks.KindPrint, v.Id, title, v.PrintRequest);
+        _store.Update(v.Id, x =>
+        {
+            if (x.SaveRequest is not null) x.History.Add(new HistoryEntry(DateTimeOffset.Now, "Steuerzeichen", "melder",
+                "Speichern über den Melder angefordert" + (x.SaveRequest.Length > 0 ? $" (Ordner „{x.SaveRequest}“)" : "")));
+            if (x.PrintRequest is not null) x.History.Add(new HistoryEntry(DateTimeOffset.Now, "Steuerzeichen", "melder",
+                "Drucken über den Melder angefordert" + (x.PrintRequest.Length > 0 ? $" (Drucker „{x.PrintRequest}“)" : " (Standarddrucker)")));
+            return true;
+        });
     }
 
     /// <summary>

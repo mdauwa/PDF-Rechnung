@@ -172,6 +172,12 @@ public sealed class MapiOptions
     /// Windows-Sitzung des Benutzers am Server ("sitzung", für RDS mit Outlook am Server – ohne Melder). MAPI bleibt unberührt.
     /// </summary>
     public string OutlookTarget { get; set; } = "melder";
+    /// <summary>
+    /// @@pa@@: Ablageordner, in dem sich „Speichern unter“ im Melder öffnet – so, wie ihn der PC bzw. die RDS-Sitzung sieht
+    /// (z. B. \\server\Ablage\Belege oder K:\Belege). @@paUnterordner@@ hängt einen Ordner an; Platzhalter {Jahr} {Monat}
+    /// {Kunde} {Kundennummer} {Belegart} {Mandant}.
+    /// </summary>
+    public string SaveFolder { get; set; } = "";
 }
 
 /// <summary>ERP-Rückmeldung über WEBWARE-Webservices (WWSVC): Status per BELEG.PUT in den Belegkopf.</summary>
@@ -343,6 +349,11 @@ public sealed class GotomaxxOptions
     public bool CodesVisible { get; set; }
     /// <summary>Höchstdauer eines Druckauftrags in Sekunden.</summary>
     public int TimeoutSeconds { get; set; } = 120;
+    /// <summary>
+    /// Trennzeichen der weitergegebenen Steuerzeichen: "@@" (gotomaxx-Standard), ein anderes wie "$$", oder "auto" = aus dem
+    /// gotomaxx-Profil des Zieldruckers beim druckenden Benutzer (commandDelimiter; ohne Profil @@).
+    /// </summary>
+    public string CommandDelimiter { get; set; } = "@@";
 }
 
 public sealed class InboxOptions

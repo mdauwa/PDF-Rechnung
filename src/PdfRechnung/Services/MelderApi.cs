@@ -12,6 +12,7 @@ public sealed record MelderSettingsRequest(bool? Outlook, string? MapiMode = nul
 public sealed record MapiModeRequest(string? Mode);
 public sealed record SentConfirmation(DateTimeOffset? At);
 public sealed record OutlookFailure(string? Message);
+public sealed record MelderJobResult(string? Kind, bool Ok, string? Message);
 
 /// <summary>
 /// „Belegpost Melder“: kleines Programm im Infobereich des Benutzer-PCs. Es wird im Portal gekoppelt
@@ -164,18 +165,48 @@ public static class MelderApi
         });
 
         // Aufträge an diesen Melder (z. B. MAPI-Mail in Outlook öffnen) – auch nach Offline-Zeit
-        app.MapGet("/melder/api/auftraege", (HttpContext ctx, UserStore users, MelderTasks tasks) =>
+        app.MapGet("/melder/api/auftraege", (HttpContext ctx, UserStore users, MelderTasks tasks, DocumentStore store, IOptionsMonitor<MapiOptions> mapi) =>
         {
             if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
-            return Results.Ok(new { items = tasks.Pending(f.User.Id, f.Device.Id).Select(t => new { t.Id, kind = t.Kind, vorgangId = t.VorgangId, created = t.Created }) });
+            return Results.Ok(new { items = tasks.Pending(f.User.Id, f.Device.Id).Select(t => TaskInfo(t, store, mapi.CurrentValue)) });
         });
 
-        app.MapPost("/melder/api/auftraege/{id}/uebernehmen", (string id, HttpContext ctx, UserStore users, MelderTasks tasks) =>
+        app.MapPost("/melder/api/auftraege/{id}/uebernehmen", (string id, HttpContext ctx, UserStore users, MelderTasks tasks, DocumentStore store,
+            IOptionsMonitor<MapiOptions> mapi) =>
         {
             if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
             return tasks.Claim(id, f.User.Id, f.Device.Id) is { } t
-                ? Results.Ok(new { t.Id, kind = t.Kind, vorgangId = t.VorgangId })
+                ? Results.Ok(TaskInfo(t, store, mapi.CurrentValue))
                 : Results.Conflict(new { error = "Auftrag wurde bereits übernommen." });
+        });
+
+        // PDF eines Vorgangs für @@pa@@/@@pp@@ (Versand-PDF mit Briefpapier/E-Rechnung, sonst das Original ohne Steuerzeichen)
+        app.MapGet("/melder/api/vorgang/{id}/pdf", async (string id, HttpContext ctx, UserStore users, DocumentStore store, CancellationToken ct) =>
+        {
+            if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
+            var v = store.Get(id);
+            if (v is null || !PortalAccess.ForUser(f.User).CanSee(v)) return Results.NotFound(new { error = "Vorgang nicht gefunden." });
+            var send = store.FilePath(id, DocumentStore.SendFile);
+            byte[] data;
+            if (send is not null) data = await File.ReadAllBytesAsync(send, ct);
+            else if (store.FilePath(id, DocumentStore.PdfFile) is { } orig) data = PdfComposer.StripCodes(await File.ReadAllBytesAsync(orig, ct));
+            else return Results.NotFound(new { error = "Das PDF fehlt." });
+            return Results.File(data, "application/pdf", PdfFileName(v));
+        });
+
+        // Ergebnis von Speichern/Drucken im Melder → Verlauf des Vorgangs
+        app.MapPost("/melder/api/vorgang/{id}/ergebnis", (string id, MelderJobResult req, HttpContext ctx, UserStore users, DocumentStore store) =>
+        {
+            if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
+            var v = store.Get(id);
+            if (v is null || !PortalAccess.ForUser(f.User).CanSee(v)) return Results.NotFound();
+            var what = req.Kind == MelderTasks.KindPrint ? "Gedruckt" : req.Kind == MelderTasks.KindSave ? "Gespeichert" : "Melder";
+            var msg = (req.Message ?? "").Trim();
+            if (msg.Length > 400) msg = msg[..400];
+            var text = req.Ok ? $"{what}{(msg.Length > 0 ? ": " + msg : "")}"
+                : $"{(req.Kind == MelderTasks.KindPrint ? "Drucken" : "Speichern")} nicht ausgeführt{(msg.Length > 0 ? ": " + msg : "")}";
+            store.Update(id, x => { x.History.Add(new HistoryEntry(DateTimeOffset.Now, $"{f.User.Name} ({f.Device.Name})", "melder", text)); return true; });
+            return Results.Ok(new { ok = true });
         });
 
         app.MapPost("/melder/api/auftraege/{id}/erledigt", (string id, HttpContext ctx, UserStore users, MelderTasks tasks) =>
@@ -315,6 +346,43 @@ public static class MelderApi
             outlookAllowed = u.SendViaOutlook,
             options = MapiMode.All.Select(m => new { key = m, text = MapiMode.Text(m) })
         };
+    }
+
+    /// <summary>Auftrag für den Melder; bei Speichern/Drucken mit Startordner, Dateiname und Drucker.</summary>
+    private static object TaskInfo(MelderTask t, DocumentStore store, MapiOptions mapi)
+    {
+        var v = t.VorgangId is null ? null : store.Get(t.VorgangId);
+        return new
+        {
+            t.Id, kind = t.Kind, vorgangId = t.VorgangId, created = t.Created,
+            ordner = t.Kind == MelderTasks.KindSave ? SaveFolderFor(t.Data, mapi.SaveFolder, v) : null,
+            datei = t.Kind is MelderTasks.KindSave or MelderTasks.KindPrint && v is not null ? PdfFileName(v) : null,
+            drucker = t.Kind == MelderTasks.KindPrint ? (t.Data ?? "") : null,
+            titel = v is null ? null : string.Join(" ", new[] { v.DocumentType, v.VoucherId }.Where(x => !string.IsNullOrWhiteSpace(x)))
+        };
+    }
+
+    /// <summary>Dateiname des PDFs wie der Mail-Anhang.</summary>
+    public static string PdfFileName(Vorgang v) => MailTemplate.SafeFileName(string.IsNullOrWhiteSpace(v.Mail.FileName) ? v.OriginalFileName ?? v.Id : v.Mail.FileName) + ".pdf";
+
+    /// <summary>
+    /// Startordner für „Speichern unter“: @@pa@@ = Ablageordner, @@paUnterordner@@ = darunter, @@paX:\Pfad@@ bzw. \\server\… = genau dieser.
+    /// Platzhalter {Jahr} {Monat} {Kunde} {Kundennummer} {Belegart} {Mandant}; unzulässige Zeichen in den Werten werden ersetzt.
+    /// </summary>
+    public static string SaveFolderFor(string? request, string? global, Vorgang? v)
+    {
+        var req = (request ?? "").Trim();
+        var root = (global ?? "").Trim();
+        string path;
+        if (req.Length == 0) path = root;
+        else if (req.StartsWith(@"\\", StringComparison.Ordinal) || (req.Length >= 3 && char.IsAsciiLetter(req[0]) && req[1] == ':' && req[2] == '\\')) path = req;
+        else path = root.Length == 0 ? req : root.TrimEnd('\\') + "\\" + req.TrimStart('\\');
+        if (v is null || !path.Contains('{')) return path;
+        static string Part(string? s) => string.IsNullOrWhiteSpace(s) ? "" : MailTemplate.SafeFileName(s.Trim());
+        var at = v.CreatedAt;
+        return path.Replace("{Jahr}", at.ToString("yyyy")).Replace("{Monat}", at.ToString("MM"))
+            .Replace("{Kunde}", Part(v.BuyerName)).Replace("{Kundennummer}", Part(v.BuyerId))
+            .Replace("{Belegart}", Part(v.DocumentType)).Replace("{Mandant}", Part(v.Mandant));
     }
 
     public static string ExePath => Path.Combine(AppContext.BaseDirectory, ExeName);

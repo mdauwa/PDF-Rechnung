@@ -830,23 +830,35 @@ function gotomaxxSection() {
   const delim = get(ST.s, "gotomaxx.commandDelimiter") || "@@";
   const dOpts = [["@@", "@@ (gotomaxx-Standard)"], ["$$", "$$"], ["auto", "automatisch aus dem gotomaxx-Profil des Druckers"]];
   if (!dOpts.some(o => o[0] === delim)) dOpts.push([delim, delim]);
-  return `${inCheck("gotomaxx.enabled", "Belege an einen gotomaxx-PDFMAILER-Drucker weiterleiten")}
+  return `<div class="check-list">${inCheck("gotomaxx.enabled", "Belege an einen gotomaxx-PDFMAILER-Drucker weiterleiten")}</div>
+
+    <h4>Ziel</h4>
     <div class="grid2">
-      ${field("Standarddrucker", inSelect("gotomaxx.printer", opts), "Für <code>@@pg@@</code> und „jeden Beleg weiterleiten“. <code>@@pgDruckername@@</code> wählt je Beleg einen anderen gotomaxx-Drucker.")}
-      ${field("Höchstdauer eines Drucks (Sekunden)", inNum("gotomaxx.timeoutSeconds", 10, 900))}
+      ${field("Standarddrucker", inSelect("gotomaxx.printer", opts), "Für <code>@@pg@@</code> und „jeden Beleg weiterleiten“. <code>@@pgDruckername@@</code> wählt je Beleg einen anderen.")}
+      ${field("Trennzeichen der Steuerzeichen", inSelect("gotomaxx.commandDelimiter", dOpts), "So, wie der Zieldrucker sie erwartet. Erklärung unten.")}
     </div>
-    ${inCheck("gotomaxx.always", "Jeden Beleg weiterleiten (außer mit <code>@@pg0@@</code>) – sonst nur Belege mit <code>@@pg@@</code>")}
-    ${inCheck("gotomaxx.approveFirst", "Erst nach Freigabe im Portal übergeben – der Beleg wird geprüft und wartet, bis jemand „An gotomaxx übergeben“ klickt")}
-    ${inCheck("gotomaxx.userSession", "In der Windows-Sitzung des Benutzers am Server drucken (empfohlen – gotomaxx verarbeitet den Auftrag dann wie einen Druck aus dem ERP)")}
-    ${inCheck("gotomaxx.serviceFallback", "Ist der Benutzer nicht angemeldet, druckt der Dienst selbst")}
+
+    <h4>Welche Belege</h4>
+    <div class="check-list">
+      ${inCheck("gotomaxx.always", "Jeden Beleg weiterleiten (außer mit <code>@@pg0@@</code>) – sonst nur Belege mit <code>@@pg@@</code>")}
+      ${inCheck("gotomaxx.approveFirst", "Erst nach Freigabe im Portal übergeben – der Beleg wird geprüft und wartet auf „An gotomaxx übergeben“")}
+    </div>
+
+    <h4>Drucken</h4>
+    <div class="check-list">
+      ${inCheck("gotomaxx.userSession", "In der Windows-Sitzung des Benutzers am Server drucken (empfohlen – wie ein Druck aus dem ERP)")}
+      ${inCheck("gotomaxx.serviceFallback", "Ist der Benutzer nicht angemeldet, druckt der Dienst selbst")}
+      ${inCheck("gotomaxx.codesVisible", "Steuerzeichen schwarz drucken (nur zum Testen, sonst weiß)")}
+    </div>
     <div class="grid2">
       ${field("Schriftgröße der Steuerzeichen (pt)", inNum("gotomaxx.codeFontSize", 0.5, 24, 0.1), "Wie im ERP-Formular, z. B. 2.")}
-      <div>${inCheck("gotomaxx.codesVisible", "Steuerzeichen schwarz drucken (zum Testen, sonst weiß)")}</div>
-      ${field("Trennzeichen der Steuerzeichen", inSelect("gotomaxx.commandDelimiter", dOpts),
-        `So, wie der Zieldrucker sie erwartet (gotomaxx: <code>commandDelimiter</code> im Abschnitt <code>pdfmailer</code> der Druckereinstellungen).
-         „Automatisch“ liest beim Druck das gotomaxx-Profil des Druckers beim druckenden Benutzer
-         (<code>%APPDATA%\gotomaxx\pdfmailer6\profiles\&lt;ID&gt;.cfg</code>); ohne eigenes Profil gilt <code>@@</code>.
-         Welches Zeichen verwendet wurde, steht im Verlauf des Vorgangs.`)}
+      ${field("Höchstdauer eines Drucks (Sekunden)", inNum("gotomaxx.timeoutSeconds", 10, 900))}
+    </div>
+
+    <div class="help-box">
+      <b>Trennzeichen:</b> <code>@@</code> ist der gotomaxx-Standard. „Automatisch“ liest beim Druck das gotomaxx-Profil des Zieldruckers beim druckenden Benutzer
+      (<code>commandDelimiter</code> in <code>%APPDATA%\gotomaxx\pdfmailer6\profiles\&lt;ID&gt;.cfg</code>); ohne eigenes Profil gilt <code>@@</code>.
+      Welches Zeichen verwendet wurde, steht im Verlauf des Vorgangs.
     </div>
     <div class="help-box">
       <b>So funktioniert die Weiterleitung:</b> Der Beleg wird als echter Druckauftrag an den gotomaxx-Drucker geschickt.

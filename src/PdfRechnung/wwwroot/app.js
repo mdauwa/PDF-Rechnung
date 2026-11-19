@@ -67,7 +67,7 @@ async function loadPortal() {
          <div class="user-pop-h">Darstellung</div>
          ${[["", "Wie das System"], ["hell", "Hell"], ["dunkel", "Dunkel"]].map(([k, t]) => `<button class="user-pop-i" data-theme-set="${k}">${themeCurrent() === k ? "✓ " : ""}${t}</button>`).join("")}
          <div class="user-pop-sep"></div>
-         ${portal.isAdmin ? "" : `<a class="user-pop-i" href="auth/logout?admin=1">Als Administrator anmelden</a>`}
+         ${portal.isAdmin ? "" : `<a class="user-pop-i" href="auth/logout?admin=1" title="Abmelden und als Administrator neu anmelden">Administration …</a>`}
          <a class="user-pop-i" href="auth/logout">Abmelden</a>
        </div>
        ${portal.setupMode ? `<div class="user-foot">Einrichtungsmodus</div>` : ""}`

@@ -111,15 +111,22 @@ public static partial class ControlCodeParser
     /// Belegindex (BELNDX) der WEBWARE: immer 11 Zeichen, z. B. <c>0NR41261010</c> =
     /// Zeitraum (0–9, A–Z, a–z) + Archiv (A = Archiv, N = Normal) + Belegart (z. B. R = WA-Rechnung) + 8-stellige Belegnummer.
     /// Groß-/Kleinschreibung zählt (der Zeitraum unterscheidet a und A); sonst null.
+    /// Die Belegnummer steht im Index rechtsbündig. Kürzere Nummern werden links mit Leerzeichen aufgefüllt
+    /// („0NR1234“, „0NR1234    “ oder „0NR 1234“ → „0NR    1234“); führende Nullen bleiben unverändert.
     /// </summary>
     public static string? NormalizeErpIndex(string? s)
     {
         var t = s?.Trim();
-        return t is not null && ErpIndexRegex().IsMatch(t) ? t : null;
+        if (t is null || t.Length < 4 || !ErpIndexPrefixRegex().IsMatch(t[..3])) return null;
+        var nr = t[3..].Trim();
+        return ErpIndexNumberRegex().IsMatch(nr) ? t[..3] + nr.PadLeft(8) : null;
     }
 
-    [GeneratedRegex(@"^[0-9A-Za-z][AN][0-9A-Za-z][0-9]{8}$", RegexOptions.CultureInvariant)]
-    private static partial Regex ErpIndexRegex();
+    [GeneratedRegex(@"^[0-9A-Za-z][AN][0-9A-Za-z]$", RegexOptions.CultureInvariant)]
+    private static partial Regex ErpIndexPrefixRegex();
+
+    [GeneratedRegex(@"^[0-9]{1,8}$", RegexOptions.CultureInvariant)]
+    private static partial Regex ErpIndexNumberRegex();
 
     [GeneratedRegex(@"@@(?<code>[A-Za-z<]{2})(?<value>.*?)@@", RegexOptions.CultureInvariant)]
     private static partial Regex CodeRegex();

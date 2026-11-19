@@ -572,7 +572,14 @@ public class ErpIndexFormatTests
     [InlineData("ZNL12345678", "ZNL12345678")]
     [InlineData("12345", null)]
     [InlineData("0XR41261010", null)]      // Archiv nur A oder N
-    [InlineData("0NR4126101", null)]       // zu kurz
+    [InlineData("0NR4126101", "0NR 4126101")]   // 7 Ziffern → rechtsbündig
+    [InlineData("0NR1234", "0NR    1234")]       // linksbündig ohne Leerzeichen
+    [InlineData("0NR1234    ", "0NR    1234")]   // linksbündig mit Leerzeichen
+    [InlineData("0NR  1234", "0NR    1234")]     // falsch eingerückt
+    [InlineData("0NR    1234", "0NR    1234")]   // schon richtig
+    [InlineData("0NR00001234", "0NR00001234")]   // Vornullen bleiben
+    [InlineData("0NR", null)]              // ohne Belegnummer
+    [InlineData("0NR12 34", null)]         // Leerzeichen in der Nummer
     [InlineData("0NR412610100", null)]     // zu lang
     [InlineData("0NR4126101A", null)]      // Belegnummer nur Ziffern
     [InlineData("0nR41261010", null)]      // Archiv groß

@@ -30,7 +30,7 @@ const listText = l => (l || []).join(", ");
 
 /* ---------------- Liste ---------------- */
 
-const VL = { timer: null, selected: new Set(), items: [], offset: 0, limit: 100, total: 0 };
+const VL = { timer: null, selected: new Set(), status: new Map(), items: [], offset: 0, limit: 100, total: 0, query: "" };
 try { VL.limit = +localStorage.getItem("vl.limit") || 100; } catch { }
 
 async function renderVorgaenge(view) {
@@ -39,7 +39,7 @@ async function renderVorgaenge(view) {
   const fkey = FILTERS[q.get("f")] ? q.get("f") : "offen";
   const f = FILTERS[fkey];
   $("#viewTitle").textContent = f.title;
-  VL.selected.clear();
+  VL.selected.clear(); VL.status.clear();
   VL.offset = 0;
   const search = store.get("vl.q", "");
 
@@ -58,6 +58,8 @@ async function renderVorgaenge(view) {
         ${portal.canSend ? `<button class="btn ghost" id="vlUpload">${icon("upload")} PDF hochladen</button>
           <input type="file" id="vlFile" accept="application/pdf,.pdf" multiple hidden>
           <button class="btn" id="vlSendSel" disabled>${icon("send")} Ausgewählte senden</button>` : ""}
+        ${portal.isAdmin ? `<button class="btn danger-ghost" id="vlDelSel" disabled title="Ausgewählte Vorgänge endgültig löschen (nur Administratoren)">Ausgewählte löschen</button>
+          <button class="btn danger-ghost" id="vlDelAll" title="Alle Vorgänge löschen, die zum aktuellen Filter passen – über alle Seiten">Alle Treffer löschen …</button>` : ""}
         <button class="btn ghost" id="vlReload">Aktualisieren</button>
       </div>
     </div>
@@ -78,6 +80,7 @@ async function renderVorgaenge(view) {
     const s = $("#vlSearch").value.trim(); if (s) p.set("q", s);
     if ($("#vlFrom").value) p.set("from", $("#vlFrom").value);
     if ($("#vlTo").value) p.set("to", $("#vlTo").value);
+    VL.query = p.toString();
     p.set("offset", VL.offset); p.set("limit", VL.limit);
     try {
       const r = await api("GET", "api/vorgaenge?" + p);
@@ -114,15 +117,44 @@ async function renderVorgaenge(view) {
       e.target.value = "";
     };
     $("#vlSendSel").onclick = async () => {
-      const ids = [...VL.selected];
+      const ids = [...VL.selected].filter(id => SENDABLE.includes(VL.status.get(id)));
       if (!ids.length) return;
       if (!await confirmDialog("Ausgewählte senden", `${ids.length} Vorgang/Vorgänge jetzt per E-Mail versenden? Vorgänge mit Fehlern werden übersprungen.`, "Senden")) return;
       try {
         const r = await api("POST", "api/vorgaenge/senden", { ids });
         const ok = r.results.filter(x => x.ok).length, bad = r.results.filter(x => !x.ok);
         showMsg(`${ok} versendet${bad.length ? `, ${bad.length} nicht versendet: ` + bad.map(b => b.message).join(" · ") : "."}`, bad.length === 0);
-        VL.selected.clear();
+        VL.selected.clear(); VL.status.clear();
         load();
+      } catch (ex) { showMsg(ex.message); }
+    };
+  }
+  if (portal.isAdmin) {
+    const del = async ids => {
+      let done = 0, skipped = 0;
+      for (let i = 0; i < ids.length; i += 500) {
+        showMsg(`Lösche … ${Math.min(i + 500, ids.length)} von ${ids.length}`, true);
+        const r = await api("POST", "api/vorgaenge/loeschen", { ids: ids.slice(i, i + 500) });
+        done += r.deleted; skipped += r.skipped;
+      }
+      showMsg(`${done} Vorgang/Vorgänge gelöscht${skipped ? `, ${skipped} in Versand übersprungen` : ""}.`, true);
+      VL.selected.clear(); VL.status.clear(); VL.offset = 0;
+      load();
+    };
+    $("#vlDelSel").onclick = async () => {
+      const ids = [...VL.selected];
+      if (!ids.length) return;
+      if (!await confirmDialog("Vorgänge löschen", `<b>${ids.length}</b> ausgewählte Vorgänge endgültig löschen? PDF, Verlauf und Ablageordner werden entfernt – das lässt sich nicht rückgängig machen.`, "Endgültig löschen", true)) return;
+      try { await del(ids); } catch (ex) { showMsg(ex.message); }
+    };
+    $("#vlDelAll").onclick = async () => {
+      try {
+        const r = await api("GET", "api/vorgaenge/ids?" + VL.query);
+        const ids = r.ids || [];
+        if (!ids.length) { showMsg("Keine Vorgänge für diesen Filter.", true); return; }
+        if (!await confirmDialog("Alle Treffer löschen", `Alle <b>${ids.length}</b> Vorgänge, die zum aktuellen Filter passen (über alle Seiten), endgültig löschen?
+            PDF, Verlauf und Ablageordner werden entfernt – das lässt sich nicht rückgängig machen. Vorgänge, die gerade versendet werden, bleiben.`, "Alle endgültig löschen", true)) return;
+        await del(ids);
       } catch (ex) { showMsg(ex.message); }
     };
   }
@@ -131,9 +163,13 @@ async function renderVorgaenge(view) {
     const cb = e.target.closest("input[type=checkbox]");
     if (cb) {
       if (cb.dataset.all !== undefined) {
-        VL.items.filter(selectable).forEach(v => cb.checked ? VL.selected.add(v.id) : VL.selected.delete(v.id));
+        VL.items.filter(selectable).forEach(v => { if (cb.checked) { VL.selected.add(v.id); VL.status.set(v.id, v.status); } else VL.selected.delete(v.id); });
         drawTable();
-      } else { cb.checked ? VL.selected.add(cb.dataset.id) : VL.selected.delete(cb.dataset.id); updateSel(); }
+      } else {
+        const v = VL.items.find(x => x.id === cb.dataset.id);
+        if (cb.checked) { VL.selected.add(cb.dataset.id); if (v) VL.status.set(v.id, v.status); } else VL.selected.delete(cb.dataset.id);
+        updateSel();
+      }
       return;
     }
     const tr = e.target.closest("tr[data-id]");
@@ -144,11 +180,17 @@ async function renderVorgaenge(view) {
   VL.timer = setInterval(() => { if (!document.hidden && document.contains(view)) load(); else if (!document.contains(view)) clearInterval(VL.timer); }, 20000);
 }
 
-const selectable = v => ["bereit", "warnung", "versandfehler"].includes(v.status) && v.mailEnabled && v.to?.length;
+const SENDABLE = ["bereit", "warnung", "versandfehler"];
+const sendable = v => SENDABLE.includes(v.status) && v.mailEnabled && v.to?.length;
+// Administratoren können alles auswählen (zum Löschen), außer was gerade versendet wird
+const selectable = v => portal.isAdmin ? v.status !== "inVersand" : sendable(v);
 
 function updateSel() {
   const b = $("#vlSendSel");
-  if (b) { b.disabled = VL.selected.size === 0; b.innerHTML = `${icon("send")} ${VL.selected.size ? VL.selected.size + " " : "Ausgewählte "}senden`; }
+  const nSend = [...VL.selected].filter(id => SENDABLE.includes(VL.status.get(id))).length;
+  if (b) { b.disabled = nSend === 0; b.innerHTML = `${icon("send")} ${nSend ? nSend + " " : "Ausgewählte "}senden`; }
+  const d = $("#vlDelSel");
+  if (d) { d.disabled = VL.selected.size === 0; d.textContent = VL.selected.size ? `${VL.selected.size} löschen` : "Ausgewählte löschen"; }
 }
 
 function drawKpis(r) {
@@ -164,12 +206,12 @@ function drawKpis(r) {
 
 function drawTable() {
   const rows = VL.items;
-  const canSel = portal.canSend;
+  const canSel = portal.canSend || portal.isAdmin;
   if (!rows.length) { $("#vlTable").innerHTML = `<tbody><tr><td class="empty">Keine Vorgänge.</td></tr></tbody>`; updateSel(); return; }
   const showMd = rows.some(v => v.mandant);
   const allSel = rows.filter(selectable).length > 0 && rows.filter(selectable).every(v => VL.selected.has(v.id));
   $("#vlTable").innerHTML = `<thead><tr>
-      ${canSel ? `<th class="cb"><input type="checkbox" data-all ${allSel ? "checked" : ""} title="Alle versendbaren auswählen"></th>` : ""}
+      ${canSel ? `<th class="cb"><input type="checkbox" data-all ${allSel ? "checked" : ""} title="${portal.isAdmin ? "Alle dieser Seite auswählen" : "Alle versendbaren auswählen"}"></th>` : ""}
       ${showMd ? "<th>Mandant</th>" : ""}<th>Mitarbeiter</th><th>Eingang</th><th>Beleg</th><th>Kunde</th><th class="num">Betrag</th><th>Empfänger</th><th>E-Rechnung</th><th>Status</th></tr></thead>
     <tbody>${rows.map(v => `<tr data-id="${esc(v.id)}" class="st-${esc(v.status)}">
       ${canSel ? `<td class="cb">${selectable(v) ? `<input type="checkbox" data-id="${esc(v.id)}" ${VL.selected.has(v.id) ? "checked" : ""}>` : ""}</td>` : ""}

@@ -91,6 +91,40 @@ public static class VorgangApi
             });
         });
 
+        // Admin: Kennungen aller Treffer des Filters (für „alle Treffer löschen“)
+        g.MapGet("/ids", (string? status, string? q, string? from, string? to, string? mine, DocumentStore store, PortalAccess access, HttpContext ctx) =>
+        {
+            var acc = access.For(ctx);
+            if (!acc.IsAdmin) return Results.Json(new { error = "Nur Administratoren." }, statusCode: 403);
+            var filter = Visibility(acc) with
+            {
+                Owner = mine is "1" or "true" ? acc.UserId ?? "-" : null,
+                Statuses = string.IsNullOrWhiteSpace(status) ? null
+                    : status.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
+                From = DateOnly.TryParse(from, out var f) ? new DateTimeOffset(f.ToDateTime(TimeOnly.MinValue)) : null,
+                Before = DateOnly.TryParse(to, out var t) ? new DateTimeOffset(t.AddDays(1).ToDateTime(TimeOnly.MinValue)) : null,
+                Text = string.IsNullOrWhiteSpace(q) ? null : q
+            };
+            return Results.Ok(new { ids = store.QueryIds(filter) });
+        });
+
+        // Admin: mehrere Vorgänge endgültig löschen (Datenbank und Ablageordner); „in Versand“ wird übersprungen
+        g.MapPost("/loeschen", (BulkSendRequest req, DocumentStore store, PortalAccess access, HttpContext ctx, PdfRechnung.Data.BelegpostDb db) =>
+        {
+            var a = access.For(ctx);
+            if (!a.IsAdmin) return Results.Json(new { error = "Nur Administratoren dürfen Vorgänge löschen." }, statusCode: 403);
+            int deleted = 0, skipped = 0;
+            foreach (var id in req.Ids.Distinct().Take(5000))
+            {
+                var v = store.Get(id);
+                if (v is null) continue;
+                if (v.Status == VorgangStatus.Sending) { skipped++; continue; }
+                if (store.Delete(id)) deleted++;
+            }
+            if (deleted > 0) db.Audit(a.Name, "Vorgänge gelöscht", null, $"{deleted} gelöscht{(skipped > 0 ? $", {skipped} in Versand übersprungen" : "")}");
+            return Results.Ok(new { deleted, skipped });
+        });
+
         g.MapGet("/{id}", (string id, DocumentStore store, IConfiguration cfg) =>
         {
             var v = store.Get(id);
@@ -383,6 +417,8 @@ public static class VorgangApi
             foreach (var id in req.Ids.Distinct())
             {
                 if (store.Get(id) is not { } vv || !a.CanSee(vv)) { results.Add(new { id, ok = false, message = "Nicht gefunden." }); continue; }
+                // Sammelversand nur für versendbare Vorgänge (die Auswahl kann beim Admin auch andere enthalten – z. B. zum Löschen)
+                if (vv.Status is not (VorgangStatus.Ready or VorgangStatus.Warning or VorgangStatus.SendError)) { results.Add(new { id, ok = false, message = $"{vv.VoucherId ?? id}: nicht versendbar ({vv.Status})." }); continue; }
                 var (ok, msg) = await send.SendAsync(id, a.Name, force: false, ct);
                 results.Add(new { id, ok, message = msg });
             }

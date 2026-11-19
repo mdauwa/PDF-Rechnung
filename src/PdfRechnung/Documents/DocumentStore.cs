@@ -153,6 +153,18 @@ public sealed class DocumentStore
     /// <summary>Alle Vorgänge (neueste zuerst). Für Listen besser <see cref="Query"/> verwenden.</summary>
     public List<Vorgang> All() => Query(new VorgangFilter { SeeAll = true, Limit = int.MaxValue });
 
+    /// <summary>Nur die Kennungen aller Treffer (z. B. „alle Treffer löschen“), neueste zuerst, höchstens <paramref name="max"/>.</summary>
+    public List<string> QueryIds(VorgangFilter f, int max = 100_000)
+    {
+        var (where, p) = Where(f);
+        using var c = Db.Open();
+        using var cmd = BelegpostDb.Cmd(c, $"SELECT id FROM vorgang {where} ORDER BY erstellt DESC LIMIT @lim", p.Append(("@lim", (object?)max)).ToArray());
+        using var r = cmd.ExecuteReader();
+        var list = new List<string>();
+        while (r.Read()) list.Add(r.GetString(0));
+        return list;
+    }
+
     public List<Vorgang> Query(VorgangFilter f)
     {
         var (where, p) = Where(f);

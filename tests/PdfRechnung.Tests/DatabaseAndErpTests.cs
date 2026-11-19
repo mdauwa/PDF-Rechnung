@@ -34,6 +34,19 @@ public sealed class DatabaseAndErpTests : IDisposable
     }
 
     [Fact]
+    public void Alle_Treffer_als_Kennungen_und_loeschen()
+    {
+        var (store, proc, _, _) = Create();
+        var a = proc.Process(TestData.Pdf(new[] { "@@pb7@@", "@@toa@kunde.at@@" }), "Eingang", "a.pdf");
+        var b = proc.Process(TestData.Pdf(new[] { "@@pb7@@", "@@toa@kunde.at@@" }), "Eingang", "b.pdf");
+        var ids = store.QueryIds(new VorgangFilter { SeeAll = true });
+        Assert.Equal(new[] { b.Id, a.Id }.OrderBy(x => x), ids.OrderBy(x => x));
+        Assert.True(store.Delete(a.Id));
+        Assert.Equal(new[] { b.Id }, store.QueryIds(new VorgangFilter { SeeAll = true }));
+        Assert.Null(store.Get(a.Id));
+    }
+
+    [Fact]
     public void Vorgang_liegt_in_der_Datenbank_mit_Belegindex_Zeitstrahl_und_Sichtbarkeit()
     {
         var (store, proc, _, _) = Create();

@@ -1467,6 +1467,10 @@ function tabAuth() {
         ["windows", "Windows-Konto automatisch (z. B. am RDS-Server) – Administratoren mit Kennwort"],
         ["ad", "Windows-Benutzername und Kennwort (Active Directory)"]]),
       "Gilt für alle Benutzer. Der lokale Server-Administrator (Kennwort am Server) und die Übergabe aus dem Firmenportal bleiben immer möglich. Änderung wirkt nach dem Neustart des Dienstes.")}
+     ${inCheck("auth.createUsers", "Unbekannte Benutzer bei der ersten Anmeldung automatisch anlegen")}
+     <p class="help">Name und E-Mail kommen ${mode === "microsoft" ? "aus der Microsoft-Anmeldung" : "aus dem Active Directory (Anzeigename, E-Mail, UPN), sonst aus der lokalen Benutzerverwaltung des Servers (vollständiger Name)"};
+       das Windows-Konto wird als Druck-Benutzer eingetragen. Gibt es schon einen Benutzer mit dieser E-Mail, wird nur das Konto bei ihm ergänzt.
+       Neue Benutzer dürfen senden, sehen nur eigene Belege und sind nie Administratoren – Rechte danach unter „Benutzer“ anpassen.</p>
      ${mode !== "microsoft" ? `${field("Active-Directory-Domäne", inText("auth.ad.domain", "leer = Domäne des Servers, z. B. FIRMA oder firma.local"),
         "Für die Anmeldung mit Kennwort. Benutzer können auch FIRMA\\name oder name@firma.at eingeben. Der Server muss Mitglied der Domäne sein.")}` : ""}
      ${mode === "windows" ? `<p class="help">Der Browser meldet das angemeldete Windows-Konto ohne Rückfrage – das klappt, wenn das Portal in der Zone „Lokales Intranet“ liegt

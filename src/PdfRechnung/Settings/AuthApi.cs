@@ -70,7 +70,7 @@ public static class AuthApi
         });
 
         // Windows-Anmeldung: der Browser meldet das angemeldete Windows-Konto (Kerberos/NTLM). Administratoren nie automatisch.
-        app.MapGet("/auth/windows", async (string? ziel, HttpContext ctx, UserStore users, ILoggerFactory lf) =>
+        app.MapGet("/auth/windows", async (string? ziel, HttpContext ctx, UserStore users, IOptionsMonitor<AuthOptions> auth, ILoggerFactory lf) =>
         {
             var target = !string.IsNullOrEmpty(ziel) && ziel.StartsWith('/') && !ziel.StartsWith("//") ? ziel : "/";
             if (!WindowsConfiguredAtStartup) return Results.Redirect("/#/anmeldung?manuell=1&fehler=" + Uri.EscapeDataString("Die Windows-Anmeldung ist nicht eingerichtet."));
@@ -86,7 +86,7 @@ public static class AuthApi
                 return Results.Empty;
             }
             var log = lf.CreateLogger("Anmeldung");
-            var user = users.FindByPrintName(account);
+            var user = users.FindByPrintName(account) ?? AutoCreate(account, users, auth.CurrentValue, log);
             if (user is null || !user.Active)
             {
                 log.LogWarning("Windows-Anmeldung ohne Freigabe: {Login}", account);
@@ -127,7 +127,7 @@ public static class AuthApi
                 return Results.Json(new { error = "Benutzername oder Kennwort falsch." }, statusCode: 401);
             }
             _adFails.TryRemove(key, out _);
-            var user = users.FindByPrintName(account);
+            var user = users.FindByPrintName(account) ?? AutoCreate(account, users, o, log);
             if (user is null || !user.Active)
             {
                 log.LogWarning("AD-Anmeldung ohne Freigabe: {Login}", account);
@@ -183,6 +183,29 @@ public static class AuthApi
     }
 
     public sealed record AdLoginRequest(string? User, string? Password);
+
+    /// <summary>Unbekanntes Windows-Konto anlegen, wenn eingeschaltet – Daten aus dem AD, sonst aus der lokalen Benutzerverwaltung.</summary>
+    private static PortalUser? AutoCreate(string account, UserStore users, AuthOptions o, ILogger log)
+    {
+        if (!o.CreateUsers) return null;
+        var info = UserDirectory.Lookup(account, o.Ad.Domain);
+        var (u, created) = users.Provision(account, info.Name, info.Email, new[] { info.Upn });
+        log.LogInformation(created ? "Benutzer {Name} ({Account}) bei der ersten Anmeldung angelegt – Daten aus {Source}"
+            : "Windows-Konto {Account} dem vorhandenen Benutzer {Name} zugeordnet ({Source})", u.Name, account, info.Source);
+        return u;
+    }
+
+    /// <summary>Für die Microsoft-Anmeldung: unbekannten Benutzer aus den Angaben der Anmeldung anlegen.</summary>
+    public static PortalUser? AutoCreateEntra(string? name, IEnumerable<string?> logins, UserStore users, AuthOptions o, ILogger log)
+    {
+        if (!o.CreateUsers) return null;
+        var list = logins.Where(l => !string.IsNullOrWhiteSpace(l)).Select(l => l!.Trim()).ToList();
+        var mail = list.FirstOrDefault(l => l.Contains('@'));
+        if (mail is null) return null;
+        var (u, created) = users.Provision(null, name ?? mail, mail, list);
+        if (created) log.LogInformation("Benutzer {Name} ({Mail}) bei der ersten Microsoft-Anmeldung angelegt", u.Name, mail);
+        return u;
+    }
 
     public static string? CheckPassword(string? pw) =>
         string.IsNullOrEmpty(pw) || pw.Length < MinPasswordLength ? $"Das Kennwort muss mindestens {MinPasswordLength} Zeichen lang sein." : null;

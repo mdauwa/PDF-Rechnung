@@ -246,6 +246,11 @@ public sealed class AuthOptions
     public string Mode { get; set; } = "microsoft";
     /// <summary>Active Directory für „windows“ (Kennwort-Anmeldung der Administratoren) und „ad“.</summary>
     public AdOptions Ad { get; set; } = new();
+    /// <summary>
+    /// Unbekannte Benutzer bei der ersten Anmeldung (Microsoft, Windows, AD) automatisch anlegen: Name/E-Mail aus dem
+    /// Active Directory bzw. der Anmeldung, sonst aus der lokalen Benutzerverwaltung. Neue Benutzer sehen nur eigene Belege, nie Admin.
+    /// </summary>
+    public bool CreateUsers { get; set; }
 
     /// <summary>Anmeldung der Benutzer mit Microsoft Entra ID (Microsoft-365-Konto).</summary>
     public EntraOptions Entra { get; set; } = new();

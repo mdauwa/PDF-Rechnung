@@ -185,6 +185,45 @@ public sealed class UserStore
         lock (_lock) return _data.Users.FirstOrDefault(u => u.Id == id);
     }
 
+    /// <summary>
+    /// Benutzer bei der ersten Anmeldung automatisch anlegen. Gibt es schon einen Benutzer mit dieser E-Mail/diesem
+    /// Anmeldenamen, wird nur das Windows-Konto bei ihm ergänzt (keine Dubletten). Neue Benutzer: eigene Belege, kein Admin.
+    /// </summary>
+    public (PortalUser User, bool Created) Provision(string? windowsAccount, string name, string? email, IEnumerable<string?> logins)
+    {
+        var all = logins.Append(email).Where(l => !string.IsNullOrWhiteSpace(l)).Select(l => l!.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        lock (_lock)
+        {
+            var existing = all.Count == 0 ? null : _data.Users.FirstOrDefault(u => u.AllLogins().Any(l => all.Contains(l, StringComparer.OrdinalIgnoreCase)));
+            if (existing is not null)
+            {
+                if (windowsAccount is not null && !existing.PrintNames.Contains(windowsAccount, StringComparer.OrdinalIgnoreCase))
+                {
+                    existing.PrintNames.Add(windowsAccount);
+                    Save(_data);
+                }
+                return (existing, false);
+            }
+            var mail = string.IsNullOrWhiteSpace(email) ? null : email.Trim();
+            var u = new PortalUser
+            {
+                Id = Guid.NewGuid().ToString("N")[..12],
+                Name = string.IsNullOrWhiteSpace(name) ? windowsAccount ?? all.FirstOrDefault() ?? "Neuer Benutzer" : name.Trim(),
+                Email = mail,
+                Logins = all.Where(l => !string.Equals(l, mail, StringComparison.OrdinalIgnoreCase)).ToList(),
+                CanSend = true, Visibility = "eigene", IsAdmin = false, Active = true
+            };
+            if (windowsAccount is not null)
+            {
+                u.PrintNames.Add(windowsAccount);
+                if (u.Email is null && u.Logins.Count == 0) u.Logins.Add(windowsAccount); // ohne E-Mail: Anmeldename = Windows-Konto
+            }
+            _data.Users.Add(u);
+            Save(_data);
+            return (u, true);
+        }
+    }
+
     /// <summary>Sucht den Benutzer zu einer Entra-Anmeldung (E-Mail/UPN, ohne Groß-/Kleinschreibung).</summary>
     public PortalUser? FindByLogin(IEnumerable<string?> names)
     {

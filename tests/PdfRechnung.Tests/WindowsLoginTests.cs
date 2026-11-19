@@ -30,4 +30,32 @@ public class WindowsLoginTests
         }
         finally { try { Directory.Delete(dir, true); } catch { } }
     }
+
+    [Fact]
+    public void Benutzer_wird_angelegt_oder_mit_vorhandenem_verknuepft()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "wp-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var users = new UserStore(dir);
+            users.Replace(new List<PortalUser> { new() { Id = "u1", Name = "Max", Email = "max@firma.at", IsAdmin = true } });
+            // vorhandene E-Mail → kein neuer Benutzer, nur Windows-Konto ergänzt
+            var (a, createdA) = users.Provision(@"FIRMA\mmax", "Max Muster", "max@firma.at", new[] { "max@firma.local" });
+            Assert.False(createdA);
+            Assert.Equal("u1", a.Id);
+            Assert.Contains(@"FIRMA\mmax", a.PrintNames);
+            // neu, ohne E-Mail (lokales Konto) → Anmeldename = Windows-Konto, nie Admin
+            var (b, createdB) = users.Provision(@"SERVER\lisa", "Lisa Lokal", null, Array.Empty<string?>());
+            Assert.True(createdB);
+            Assert.False(b.IsAdmin);
+            Assert.Equal("eigene", b.Visibility);
+            Assert.Contains(@"SERVER\lisa", b.Logins);
+            Assert.Equal(b.Id, users.FindByPrintName(@"SERVER\lisa")?.Id);
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
+    }
+
+    [Fact]
+    public void Ldap_Filter_wird_maskiert() => Assert.Equal(@"a\2a\28b\29\5c", UserDirectory.Escape(@"a*(b)\"));
 }

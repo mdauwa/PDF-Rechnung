@@ -252,7 +252,10 @@ if (entra.IsConfigured)
             var names = new[] { "preferred_username", "email", "upn", "unique_name" }.Select(t => p.FindFirst(t)?.Value).ToList();
             var login = names.FirstOrDefault(n => !string.IsNullOrWhiteSpace(n)) ?? "";
             var users = ctx.HttpContext.RequestServices.GetRequiredService<UserStore>();
-            var user = users.FindByLogin(names);
+            var user = users.FindByLogin(names)
+                ?? AuthApi.AutoCreateEntra(p.FindFirst("name")?.Value, names, users,
+                    ctx.HttpContext.RequestServices.GetRequiredService<IOptionsMonitor<AuthOptions>>().CurrentValue,
+                    ctx.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Anmeldung"));
             if (user is null || !user.Active)
             {
                 ctx.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Anmeldung")

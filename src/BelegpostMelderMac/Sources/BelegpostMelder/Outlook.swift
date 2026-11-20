@@ -22,6 +22,20 @@ enum OutlookBridge {
         let base = server + "/melder/api/vorgang/" + (documentId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? documentId)
         let s = MelderClient.session(thumbprint: cfg.thumbprint, timeout: 60)
 
+        // Outlook im Web: Belegpost legt den Entwurf über Microsoft 365 an, hier nur den Link im Browser öffnen
+        if cfg.mailClient == "outlookweb" {
+            do {
+                let (data, res) = try await s.data(for: MelderClient.request(base + "/webentwurf", token: token, method: "POST", json: [String: Any]()))
+                let code = (res as? HTTPURLResponse)?.statusCode ?? 0
+                guard code == 200, let o = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let link = o["url"] as? String, let url = URL(string: link) else {
+                    return Result(ok: false, message: MelderClient.errorText(data) ?? "Server meldet \(code).")
+                }
+                NSWorkspace.shared.open(url)
+                return Result(ok: true, message: "Entwurf in Outlook im Web geöffnet.")
+            } catch { return Result(ok: false, message: "Server nicht erreichbar: \(error.localizedDescription)") }
+        }
+
         let mail: [String: Any]
         do {
             let (data, res) = try await s.data(for: MelderClient.request(base + "/mail", token: token))
@@ -56,7 +70,18 @@ enum OutlookBridge {
         if html.isEmpty { html = htmlFromText(text) } // normale E-Mail (nur Text): Outlook für Mac erwartet HTML
 
         var result: Result
-        if NSWorkspace.shared.urlForApplication(withBundleIdentifier: outlookBundle) != nil {
+        if cfg.mailClient == "standard" {
+            // Standard-Mailprogramm des Macs (Systemeinstellung „Standard-E-Mail-Programm“) über den Teilen-Dienst
+            if let service = NSSharingService(named: .composeEmail) {
+                service.recipients = to + cc + bcc
+                service.subject = subject
+                let items: [Any] = [text] + files.map { $0 as Any }
+                if service.canPerform(withItems: items) {
+                    service.perform(withItems: items)
+                    result = Result(ok: true, message: "Im Mailprogramm geöffnet.")
+                } else { result = Result(ok: false, message: "Das Standard-Mailprogramm kann keinen Entwurf mit Anhängen öffnen.") }
+            } else { result = Result(ok: false, message: "Kein Standard-Mailprogramm eingerichtet.") }
+        } else if NSWorkspace.shared.urlForApplication(withBundleIdentifier: outlookBundle) != nil {
             if let err = runOutlookScript(subject: subject, html: html, to: to, cc: cc, bcc: bcc, files: files) {
                 // neues Outlook (kaum AppleScript) → .eml-Entwurf
                 result = await openEml(session: s, base: base, token: token, folder: folder, documentId: documentId,

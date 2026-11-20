@@ -418,7 +418,9 @@ public sealed class DocumentProcessor
         if (v.SaveRequest is null && v.PrintRequest is null && v.SaveAfterSendRequest is null) return;
         var what = v.PrintRequest is null ? "Speichern" : v.SaveRequest is null && v.SaveAfterSendRequest is null ? "Drucken" : "Speichern und Drucken";
         string? problem = v.OwnerUserId is null ? "der Beleg ist keinem Portal-Benutzer zugeordnet"
-            : _users is not null && _users.Devices(v.OwnerUserId).Count == 0 ? $"für {v.OwnerName ?? "den Benutzer"} ist kein Belegpost Melder gekoppelt" : null;
+            : _users is not null && _users.Devices(v.OwnerUserId).Count == 0 ? $"für {v.OwnerName ?? "den Benutzer"} ist kein Belegpost Melder gekoppelt"
+            : _users is not null && !_users.Devices(v.OwnerUserId).Any(d => Settings.UserStore.Can(d, v.PrintRequest is not null ? Services.MelderTasks.KindPrint : Services.MelderTasks.KindSave))
+                ? $"die Melder von {v.OwnerName ?? "dem Benutzer"} sind zu alt – bitte den aktuellen Belegpost Melder installieren" : null;
         if (problem is not null)
             v.Messages.Add(new CheckMessage(DocumentChecker.Info, $"{what} über den Melder (@@pa@@/@@pn@@/@@pp@@) nicht möglich: {problem}.", "melder"));
     }
@@ -430,10 +432,9 @@ public sealed class DocumentProcessor
             _store.Update(v.Id, x => { x.History.Add(new HistoryEntry(DateTimeOffset.Now, "Steuerzeichen", "melder",
                 "Speichern über den Melder nach dem Senden angefordert" + (x.SaveAfterSendRequest!.Length > 0 ? $" (Ordner „{x.SaveAfterSendRequest}“)" : ""))); return true; });
         if (_melderTasks is null || v.OwnerUserId is null || (v.SaveRequest is null && v.PrintRequest is null)) return;
-        var device = _users?.DeviceOn(v.OwnerUserId, v.PrintMachine)?.Id;
         var title = TaskTitle(v);
-        if (v.SaveRequest is not null) _melderTasks.Create(v.OwnerUserId, device, Services.MelderTasks.KindSave, v.Id, title, v.SaveRequest);
-        if (v.PrintRequest is not null) _melderTasks.Create(v.OwnerUserId, device, Services.MelderTasks.KindPrint, v.Id, title, v.PrintRequest);
+        if (v.SaveRequest is not null) _melderTasks.Create(v.OwnerUserId, _users?.DeviceOn(v.OwnerUserId, v.PrintMachine, Services.MelderTasks.KindSave)?.Id, Services.MelderTasks.KindSave, v.Id, title, v.SaveRequest);
+        if (v.PrintRequest is not null) _melderTasks.Create(v.OwnerUserId, _users?.DeviceOn(v.OwnerUserId, v.PrintMachine, Services.MelderTasks.KindPrint)?.Id, Services.MelderTasks.KindPrint, v.Id, title, v.PrintRequest);
         _store.Update(v.Id, x =>
         {
             if (x.SaveRequest is not null) x.History.Add(new HistoryEntry(DateTimeOffset.Now, "Steuerzeichen", "melder",

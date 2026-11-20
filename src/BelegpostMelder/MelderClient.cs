@@ -60,7 +60,7 @@ public sealed class MelderClient : IDisposable
             DefaultProxyCredentials = CredentialCache.DefaultCredentials
         };
         var http = new HttpClient(handler) { Timeout = timeout };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("Belegpost-Melder/" + Application.ProductVersion.Split('+')[0]);
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("Belegpost-Melder/" + MelderInfo.Version);
         return http;
     }
 
@@ -68,7 +68,7 @@ public sealed class MelderClient : IDisposable
     public static async Task<(string User, string Title, bool Outlook)> Hello(string server, string token, string? thumbprint)
     {
         using var http = CreateHttp(thumbprint, TimeSpan.FromSeconds(15));
-        using var req = new HttpRequestMessage(HttpMethod.Get, server.TrimEnd('/') + "/melder/api/hallo?pc=" + Uri.EscapeDataString(Environment.MachineName));
+        using var req = new HttpRequestMessage(HttpMethod.Get, server.TrimEnd('/') + HelloPath);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         HttpResponseMessage res;
         try { res = await http.SendAsync(req); }
@@ -83,6 +83,10 @@ public sealed class MelderClient : IDisposable
                 doc.RootElement.TryGetProperty("outlook", out var o) && o.ValueKind == JsonValueKind.True);
         }
     }
+
+    /// <summary>Anmeldung beim Server mit Computername, Betriebssystem und Fähigkeiten dieses Melders.</summary>
+    public static string HelloPath => "/melder/api/hallo?pc=" + Uri.EscapeDataString(Environment.MachineName)
+        + "&os=" + MelderInfo.Platform + "&f=" + string.Join(",", MelderInfo.Capabilities);
 
     private static string Inner(Exception ex)
     {
@@ -156,7 +160,7 @@ public sealed class MelderClient : IDisposable
     {
         try
         {
-            using var doc = await Call(HttpMethod.Get, "/melder/api/hallo?pc=" + Uri.EscapeDataString(Environment.MachineName));
+            using var doc = await Call(HttpMethod.Get, HelloPath);
             if (doc is null) return;
             ApplyInfo(doc.RootElement);
         }
@@ -170,6 +174,10 @@ public sealed class MelderClient : IDisposable
         {
             var allowed = o.ValueKind == JsonValueKind.True;
             if (allowed != _cfg.OutlookAllowed) { _cfg.OutlookAllowed = allowed; changed = true; }
+        }
+        if (r.TryGetProperty("mailClient", out var mc) && mc.ValueKind == JsonValueKind.String && mc.GetString() is { } client && client != _cfg.MailClient)
+        {
+            _cfg.MailClient = client; changed = true;
         }
         if (r.TryGetProperty("mapi", out var m) && m.ValueKind == JsonValueKind.Object)
         {

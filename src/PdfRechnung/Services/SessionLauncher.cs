@@ -30,10 +30,13 @@ public sealed class SessionLauncher
     private readonly ILogger<SessionLauncher> _log;
 
     public SessionLauncher(UserStore users, SendService send, DocumentStore store, SettingsStore settings,
-        IOptionsMonitor<MapiOptions> mapi, IOptionsMonitor<ServerOptions> server, IOptionsMonitor<PortalOptions> portal, ILogger<SessionLauncher> log)
+        IOptionsMonitor<MapiOptions> mapi, IOptionsMonitor<ServerOptions> server, IOptionsMonitor<PortalOptions> portal, ILogger<SessionLauncher> log,
+        OutlookWebService? web = null)
     {
-        _users = users; _send = send; _store = store; _settings = settings; _mapi = mapi; _server = server; _portal = portal; _log = log;
+        _users = users; _send = send; _store = store; _settings = settings; _mapi = mapi; _server = server; _portal = portal; _log = log; _web = web;
     }
+
+    private readonly OutlookWebService? _web;
 
     /// <summary>Öffnet Outlook/Portal für diesen Benutzer direkt in seiner Sitzung am Server (statt über den Melder)?</summary>
     public bool UsesSession(PortalUser? u)
@@ -53,12 +56,21 @@ public sealed class SessionLauncher
     {
         var account = Account(v, u);
         if (account is null) return (false, $"Für {u.Name} ist kein Windows-Benutzer hinterlegt (Einstellungen → Benutzer → Druck-Benutzer).");
+        var client = MailClients.Effective(u, _mapi.CurrentValue.MailClient);
+        if (client == MailClients.OutlookWeb && _web is not null)
+        {
+            // Outlook im Web: Entwurf über Microsoft 365 anlegen, den Link im Browser der Sitzung öffnen
+            var w = await _web.OpenAsync(v, u, $"{by} (Outlook im Web am Server)", ct);
+            if (!w.Ok) return (false, w.Message);
+            var (c, m) = await RunInSessionAsync(account, $"--oeffnen \"{w.Url}\"", null, TimeSpan.FromSeconds(30), ct);
+            return c == 0 ? (true, "Outlook im Web öffnet den Entwurf in der Sitzung am Server.") : (false, m ?? $"Browser konnte nicht geöffnet werden (Code {c}).");
+        }
         var (mail, err) = await _send.BuildMail(v, ct);
         if (mail is null) return (false, err ?? "Mail konnte nicht erstellt werden.");
 
         var payload = new
         {
-            id = v.Id, to = mail.To, cc = mail.Cc, bcc = mail.Bcc, subject = mail.Subject, html = mail.HtmlBody, text = mail.Body,
+            id = v.Id, client, to = mail.To, cc = mail.Cc, bcc = mail.Bcc, subject = mail.Subject, html = mail.HtmlBody, text = mail.Body,
             attachments = mail.Attachments.Select(a => new { name = a.Name, contentType = a.ContentType, data = Convert.ToBase64String(a.Data), contentId = (string?)null })
                 .Concat(mail.Images.Select(i => new { name = i.Name, contentType = i.ContentType, data = Convert.ToBase64String(i.Data), contentId = (string?)i.ContentId }))
         };
@@ -71,12 +83,12 @@ public sealed class SessionLauncher
             var (code, msg) = await RunInSessionAsync(account, $"--entwurf \"{file}\"", file, TimeSpan.FromMinutes(2), ct);
             if (code == 0)
             {
-                _send.MarkOutlook(v.Id, $"{by} (Outlook am Server)");
-                return (true, "Outlook öffnet den Entwurf in der Sitzung am Server.");
+                _send.MarkOutlook(v.Id, client == MailClients.Standard ? $"{by} (Mailprogramm am Server)" : $"{by} (Outlook am Server)");
+                return (true, client == MailClients.Standard ? "Das Mailprogramm öffnet den Entwurf in der Sitzung am Server." : "Outlook öffnet den Entwurf in der Sitzung am Server.");
             }
             var text = msg ?? code switch
             {
-                2 => "Am Server ist kein klassisches Outlook installiert.",
+                2 => client == MailClients.Standard ? "Am Server ist kein Standard-Mailprogramm (MAPI) eingerichtet." : "Am Server ist kein klassisches Outlook installiert.",
                 3 => "Outlook konnte den Entwurf nicht anlegen (Outlook-Profil eingerichtet?).",
                 4 => "Die Mail-Daten konnten in der Sitzung nicht gelesen werden.",
                 _ => $"Der Melder hat mit Code {code} beendet."

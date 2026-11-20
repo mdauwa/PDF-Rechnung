@@ -13,6 +13,7 @@ async function renderMelder(view) {
   const fmt = s => s ? new Date(s).toLocaleString("de-AT", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–";
   const notifyState = !window.Notification ? "nicht verfügbar" : Notification.permission === "granted" ? "erlaubt" : Notification.permission === "denied" ? "im Browser blockiert" : "noch nicht erlaubt";
   const isMac = /Mac/i.test(navigator.platform || navigator.userAgent);
+  const isLinux = !isMac && /Linux|X11/i.test(navigator.platform || navigator.userAgent) && !/Android/i.test(navigator.userAgent);
   const localhost = /^(https?:\/\/)?(localhost|127\.0\.0\.1|\[::1\])(:|$)/i.test(d.server.replace(/^https?:\/\//, ""));
 
   view.innerHTML = `
@@ -28,13 +29,18 @@ async function renderMelder(view) {
     ${!d.canPair ? `<div class="notice">Der Melder wird mit deinem eigenen Portal-Konto verbunden. Als Server-Administrator geht das nicht – bitte mit dem Microsoft-Konto anmelden.</div>` : `
     ${localhost ? `<div class="notice">Du bist über <b>localhost</b> angemeldet. Für einen anderen PC das Portal dort mit der Server-Adresse öffnen (z. B. https://server:${location.port || 443}/) und den Melder von dort verbinden.</div>` : ""}
     <ol class="steps">
-      <li>${isMac
+      <li>${isLinux
+        ? (d.downloadLinux ? `<a class="btn ghost" href="${esc(d.downloadLinux)}" download>Belegpost Melder für Linux herunterladen</a>, entpacken und <code>./installieren.sh</code> ausführen
+             (ohne Administratorrechte, startet künftig mit dem Desktop). Er erscheint als Symbol im Infobereich bzw. als Fenster. Benötigt <code>xdg-utils</code>, für Hinweise <code>libnotify</code>, zum Drucken CUPS.`
+          : `Den Belegpost Melder für Linux (<code>Belegpost-Melder-Linux.tar.gz</code>) vom Administrator holen – er liegt am Server noch nicht neben <code>Belegpost.exe</code>.`)
+        : isMac
         ? (d.downloadMac ? `<a class="btn ghost" href="${esc(d.downloadMac)}" download>Belegpost Melder für Mac herunterladen</a>, entpacken, in „Programme“ ziehen und starten (beim ersten Mal Rechtsklick → Öffnen). Er erscheint oben in der Menüleiste.`
           : `Den Belegpost Melder für Mac (<code>Belegpost-Melder-macOS.zip</code>) vom Administrator holen – er liegt am Server noch nicht neben <code>Belegpost.exe</code>.`)
         : (d.download ? `<a class="btn ghost" href="${esc(d.download)}" download>Belegpost Melder herunterladen</a> und starten (keine Administratorrechte nötig, startet künftig mit Windows).`
           : `Den Belegpost Melder (<code>Belegpost-Melder.exe</code>) vom Administrator holen und starten – er liegt am Server noch nicht neben <code>Belegpost.exe</code>.`)}
         ${!isMac && d.downloadMac ? `<br><span class="meta-inline">Für Mac: <a href="${esc(d.downloadMac)}" download>Belegpost Melder für macOS</a></span>` : ""}
-        ${isMac && d.download ? `<br><span class="meta-inline">Für Windows: <a href="${esc(d.download)}" download>Belegpost-Melder.exe</a></span>` : ""}</li>
+        ${isMac && d.download ? `<br><span class="meta-inline">Für Windows: <a href="${esc(d.download)}" download>Belegpost-Melder.exe</a></span>` : ""}
+        ${!isLinux && d.downloadLinux ? `<br><span class="meta-inline">Für Linux: <a href="${esc(d.downloadLinux)}" download>Belegpost Melder für Linux</a></span>` : ""}</li>
       <li><label class="field inline"><span class="lbl">Name dieses PCs</span><input id="mlName" value="${esc(store.get("melder.name", ""))}" placeholder="z. B. Büro Martin"></label>
         <button class="btn" id="mlPair">Melder verbinden</button></li>
     </ol>
@@ -43,7 +49,8 @@ async function renderMelder(view) {
 
   <div class="card"><div class="card-head"><h2>Verbundene Melder</h2></div><div class="card-body">
     ${d.devices.length ? `<table class="list mini"><thead><tr><th>PC</th><th>verbunden seit</th><th>zuletzt aktiv</th><th title="Was mit E-Mails passiert, die du im ERP am Terminalserver versendest (MAPI)">E-Mails aus dem ERP</th><th></th></tr></thead><tbody>
-      ${d.devices.map(x => `<tr><td>${esc(x.name)}${x.computerName ? ` <small class="meta-inline">${esc(x.computerName)}</small>` : ""}</td><td>${fmt(x.created)}</td><td>${fmt(x.lastSeen)}</td>
+      ${d.devices.map(x => `<tr><td>${esc(x.name)}${x.computerName ? ` <small class="meta-inline">${esc(x.computerName)}</small>` : ""}
+          ${x.platform ? ` <small class="meta-inline">${esc({ windows: "Windows", mac: "Mac", linux: "Linux" }[x.platform] || x.platform)}</small>` : ` <small class="meta-inline" title="Dieser Melder ist älter und kann nicht speichern oder drucken (@@pa@@/@@pn@@/@@pp@@) – bitte erneuern">alte Version</small>`}</td><td>${fmt(x.created)}</td><td>${fmt(x.lastSeen)}</td>
         <td><select data-mapi="${esc(x.id)}"><option value="" ${!x.mapiMode ? "selected" : ""}>Vorgabe (${esc(d.mapiDefaultText || "")})</option>
           ${(d.mapiModes || []).map(m => `<option value="${m.key}" ${x.mapiMode === m.key ? "selected" : ""}>${esc(m.text)}</option>`).join("")}</select>
           ${x.mapiSource === "admin" ? `<span class="mapi-src">vom Administrator gesetzt (${fmt(x.mapiChangedAt)})</span>` : ""}</td>

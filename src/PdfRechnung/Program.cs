@@ -150,6 +150,8 @@ else builder.Services.AddSingleton<IGotomaxxPrinter, UnsupportedGotomaxxPrinter>
 builder.Services.AddSingleton<FirefoxPolicy>();
 builder.Services.AddSingleton<PdfRechnung.Printing.GotomaxxDelimiterService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PdfRechnung.Printing.GotomaxxDelimiterService>());
+builder.Services.AddSingleton<OutlookWebService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<OutlookWebService>());
 builder.Services.AddSingleton<GotomaxxService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<GotomaxxService>());
 builder.Services.AddHostedService<InboxWatcher>();
@@ -386,6 +388,8 @@ app.MapGet("/api/portal", (IOptionsSnapshot<PortalOptions> portal, HttpContext c
         userId = a.UserId,
         theme = a.UserId is { } tid ? app.Services.GetRequiredService<UserStore>().FindById(tid)?.Theme ?? "" : "",
         sendViaOutlook = a.Outlook,
+        mailClient = a.UserId is { } mcid ? MailClients.Effective(app.Services.GetRequiredService<UserStore>().FindById(mcid),
+            app.Services.GetRequiredService<IOptionsMonitor<MapiOptions>>().CurrentValue.MailClient) : MailClients.Outlook,
         gotomaxx = a.Authenticated && gotomaxx.Value.Enabled,
         setupMode = rt.SetupMode,
         mailEnabled = a.Authenticated && mail.Value.Enabled,

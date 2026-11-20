@@ -181,6 +181,8 @@ async function renderVorgaenge(view) {
 }
 
 const SENDABLE = ["bereit", "warnung", "versandfehler"];
+/** Name des eingestellten Mailprogramms für Knöpfe („In Outlook senden“ usw.). */
+const mailClientName = () => portal.mailClient === "outlookweb" ? "Outlook im Web" : portal.mailClient === "standard" ? "Mailprogramm" : "Outlook";
 const sendable = v => SENDABLE.includes(v.status) && v.mailEnabled && v.to?.length;
 // Administratoren können alles auswählen (zum Löschen), außer was gerade versendet wird
 const selectable = v => portal.isAdmin ? v.status !== "inVersand" : sendable(v);
@@ -277,7 +279,7 @@ function drawVorgang(view, data) {
     if (route === "gotomaxx" && portal.gotomaxx && !["inVersand", "verworfen", "gotomaxx", "versendet"].includes(v.status))
       actions.push(`<button class="btn" data-a="gotomaxx" title="Druckt den Beleg auf den gotomaxx-PDFMAILER-Drucker${esc(routeWhy)}">${icon("send")} An gotomaxx übergeben</button>`);
     else {
-      if (canOutlook) actions.push(`<button class="btn" data-a="outlook" title="Öffnet die fertige E-Mail mit Text und Anhängen in deinem Outlook (über den Belegpost Melder) – dort nur noch auf Senden klicken${esc(routeWhy)}">${icon("send")} Freigeben &amp; in Outlook senden</button>`);
+      if (canOutlook) actions.push(`<button class="btn" data-a="outlook" title="Öffnet die fertige E-Mail mit Text und Anhängen in deinem Outlook (über den Belegpost Melder) – dort nur noch auf Senden klicken${esc(routeWhy)}">${icon("send")} Freigeben &amp; in ${mailClientName()} senden</button>`);
       if (canServer && !(route === "outlook" && canOutlook))
         actions.push(`<button class="btn${canOutlook ? " ghost" : ""}" data-a="senden" title="Versand über den Belegpost-Server${esc(routeWhy)}">${canOutlook ? "Über Server senden" : `${icon("send")} Jetzt senden`}</button>`);
     }
@@ -291,7 +293,7 @@ function drawVorgang(view, data) {
   if (plain) {
     actions.length = 0;
     if (portal.canSend && portal.userId && !["verworfen"].includes(v.status))
-      actions.push(`<button class="btn" data-a="outlook" title="Öffnet die E-Mail mit allen Anhängen als Entwurf in deinem Outlook (über den Belegpost Melder)">${icon("send")} In Outlook öffnen</button>`);
+      actions.push(`<button class="btn" data-a="outlook" title="Öffnet die E-Mail mit allen Anhängen als Entwurf in deinem Outlook (über den Belegpost Melder)">${icon("send")} In ${mailClientName()} öffnen</button>`);
     if (portal.canSend && !["versendet", "verworfen"].includes(v.status)) actions.push(`<button class="btn ghost" data-a="verwerfen">Verwerfen</button>`);
     if (portal.canSend && v.status === "verworfen") actions.push(`<button class="btn ghost" data-a="wiederherstellen">Wiederherstellen</button>`);
   }
@@ -378,7 +380,7 @@ function drawVorgang(view, data) {
             ${v.mail.noDocument ? `<p class="meta">Ohne Beleg als Anhang (@@md@@).</p>` : ""}
             <p class="meta">${v.mail.template ? `Mail-Vorlage <b>${esc(v.mail.template)}</b> (${esc(v.mail.templateReason || "")})` : "Ohne Mail-Vorlage (schlichte Mail)"}${v.mail.fromAddress ? ` · Absender ${esc(v.mail.fromName ? v.mail.fromName + " <" + v.mail.fromAddress + ">" : v.mail.fromAddress)}` : ""}
               · <a href="#" id="mPreviewBtn">So sieht die Mail aus</a>
-              ${portal.sendViaOutlook && portal.userId && v.mail.enabled && v.status !== "fehler" && !["gotomaxx", "keine"].includes(v.mail.route || "") ? ` · <a href="#" data-a="outlook">In Outlook öffnen</a>` : ""}</p>
+              ${portal.sendViaOutlook && portal.userId && v.mail.enabled && v.status !== "fehler" && !["gotomaxx", "keine"].includes(v.mail.route || "") ? ` · <a href="#" data-a="outlook">In ${mailClientName()} öffnen</a>` : ""}</p>
             <div id="mPreview"></div>
             ${editable ? `<div class="actions"><button class="btn" data-a="mail-save" disabled>Versanddaten speichern</button><span class="meta-inline">Änderungen werden geprüft und bleiben bei „Neu prüfen“ erhalten.</span></div>` : ""}
           </div>
@@ -463,6 +465,8 @@ function drawVorgang(view, data) {
     if (b.tagName === "A") e.preventDefault();
     const a = b.dataset.a;
     b.disabled = true;
+    // Outlook im Web: das Fenster jetzt (im Klick) öffnen, sonst blockiert der Browser das Pop-up; der Link kommt gleich
+    const webWin = a === "outlook" && portal.mailClient === "outlookweb" ? window.open("about:blank", "_blank") : null;
     try {
       let r;
       if (a === "mail-save") {
@@ -483,7 +487,10 @@ function drawVorgang(view, data) {
         });
       }
       if (a === "outlook") {
-        r = await api("POST", `api/vorgaenge/${encodeURIComponent(v.id)}/outlook`);
+        try { r = await api("POST", `api/vorgaenge/${encodeURIComponent(v.id)}/outlook`); }
+        catch (ex) { webWin?.close(); throw ex; }
+        if (r.url) { if (webWin && !webWin.closed) webWin.location.href = r.url; else window.open(r.url, "_blank"); }
+        else webWin?.close();
         toast(r.message || "An den Melder geschickt.");
         setTimeout(async () => { if (!view.isConnected) return; try { drawVorgang(view, await api("GET", "api/vorgaenge/" + encodeURIComponent(v.id))); } catch { } }, 4000);
         return;

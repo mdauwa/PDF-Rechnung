@@ -76,7 +76,7 @@ final class MelderClient: ObservableObject {
         let s = session(thumbprint: thumbprint, timeout: 15)
         do {
             let pc = computerName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-            let (data, res) = try await s.data(for: request(server + "/melder/api/hallo?pc=" + pc, token: token))
+            let (data, res) = try await s.data(for: request(server + "/melder/api/hallo?pc=" + pc + capabilities, token: token))
             let code = (res as? HTTPURLResponse)?.statusCode ?? 0
             if code == 401 { throw MelderError.message("Der Code ist nicht (mehr) gültig – im Portal bitte neu verbinden.") }
             guard code == 200, let o = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -181,12 +181,16 @@ final class MelderClient: ObservableObject {
 
     func refreshInfo() async {
         let pc = Self.computerName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        guard let o = await call("/melder/api/hallo?pc=" + pc) else { return }
+        guard let o = await call("/melder/api/hallo?pc=" + pc + Self.capabilities) else { return }
         apply(o)
     }
 
+    /// Betriebssystem und Fähigkeiten für den Server (Speichern/Drucken kann der Mac-Melder noch nicht – solche Aufträge bekommt er nicht).
+    static let capabilities = "&os=mac&f=outlook,outlookweb,standard"
+
     private func apply(_ o: [String: Any]) {
         if let a = (o["outlook"] ?? o["outlookAllowed"]) as? Bool, a != cfg.outlookAllowed { cfg.outlookAllowed = a }
+        if let mc = o["mailClient"] as? String, mc != cfg.mailClient { cfg.mailClient = mc }
         if let m = o["mapi"] as? [String: Any] {
             cfg.mapiMode = m["mode"] as? String ?? ""
             cfg.mapiEffectiveText = m["effectiveText"] as? String

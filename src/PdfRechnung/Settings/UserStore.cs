@@ -50,6 +50,11 @@ public sealed class PortalUser
     public string MapiMode { get; set; } = "";
     /// <summary>Belegpost-Drucker: "" = Standard, "melder" = über den Melder, "sitzung" = direkt in der Sitzung am Server (RDS).</summary>
     public string OutlookTarget { get; set; } = "";
+    /// <summary>
+    /// Mailprogramm für „In Outlook senden“ und Outlook-Belege: "" = globaler Standard, "outlook" = Outlook (Windows/Mac),
+    /// "outlookweb" = Outlook im Web (Entwurf über Microsoft 365), "standard" = Standard-Mailprogramm des PCs (Windows: MAPI).
+    /// </summary>
+    public string MailClient { get; set; } = "";
     /// <summary>Darstellung im Portal: "" = wie das System, "hell", "dunkel". Stellt der Benutzer selbst ein.</summary>
     public string Theme { get; set; } = "";
 
@@ -104,6 +109,10 @@ public sealed class MelderDevice
     public string MapiSource { get; set; } = "";
     public string? MapiChangedBy { get; set; }
     public DateTimeOffset? MapiChangedAt { get; set; }
+    /// <summary>Was dieser Melder kann (vom Melder gemeldet): "speichern", "drucken", "outlookweb", "standard", "outlook"; Betriebssystem in <see cref="Platform"/>.</summary>
+    public List<string> Capabilities { get; set; } = new();
+    /// <summary>"windows", "mac" oder "linux" (vom Melder gemeldet; leer = alter Melder).</summary>
+    public string Platform { get; set; } = "";
 }
 
 public sealed class UserData
@@ -390,7 +399,7 @@ public sealed class UserStore
         lock (_lock) return _data.Users.Any(u => u.Id == userId && u.Active && u.SendViaOutlook);
     }
 
-    public void TouchDevice(string id, string? computerName = null)
+    public void TouchDevice(string id, string? computerName = null, string? platform = null, IEnumerable<string>? capabilities = null)
     {
         lock (_lock)
         {
@@ -398,12 +407,21 @@ public sealed class UserStore
             if (d is null) return;
             var pc = string.IsNullOrWhiteSpace(computerName) ? null : computerName.Trim()[..Math.Min(63, computerName.Trim().Length)];
             var pcChanged = pc is not null && !string.Equals(pc, d.ComputerName, StringComparison.OrdinalIgnoreCase);
-            if (!pcChanged && d.LastSeen is { } ls && DateTimeOffset.Now - ls < TimeSpan.FromMinutes(5)) return;
+            var plat = platform?.Trim().ToLowerInvariant();
+            var caps = capabilities?.Select(c => c.Trim().ToLowerInvariant()).Where(c => c.Length is > 0 and < 20).Distinct().OrderBy(c => c).Take(20).ToList();
+            var other = (plat is not null && plat != d.Platform) || (caps is not null && !caps.SequenceEqual(d.Capabilities));
+            if (!pcChanged && !other && d.LastSeen is { } ls && DateTimeOffset.Now - ls < TimeSpan.FromMinutes(5)) return;
             d.LastSeen = DateTimeOffset.Now;
             if (pc is not null) d.ComputerName = pc;
+            if (plat is not null) d.Platform = plat[..Math.Min(10, plat.Length)];
+            if (caps is not null) d.Capabilities = caps;
             Save(_data);
         }
     }
+
+    /// <summary>Kann dieser Melder die Auftragsart (alte Melder ohne Meldung können nur „outlook“)?</summary>
+    public static bool Can(MelderDevice d, string kind) =>
+        kind == PdfRechnung.Services.MelderTasks.KindOutlook || d.Capabilities.Contains(kind);
 
     // ---------------- MAPI-Einstellung (Benutzer → PC) ----------------
 
@@ -438,12 +456,13 @@ public sealed class UserStore
     /// Melder auf genau diesem Computer (z. B. der RDS-Server, an dem gedruckt wurde, oder der PC des Druckauftrags); sonst null.
     /// Bei mehreren der zuletzt aktive.
     /// </summary>
-    public MelderDevice? DeviceOn(string userId, string? computer)
+    public MelderDevice? DeviceOn(string userId, string? computer, string? kind = null)
     {
         if (string.IsNullOrWhiteSpace(computer)) return null;
         var c = computer.Trim().TrimStart('\\');
         lock (_lock)
-            return _data.Devices.Where(d => d.UserId == userId && (string.Equals(d.ComputerName, c, StringComparison.OrdinalIgnoreCase) || SameComputer(d.ComputerName, c)))
+            return _data.Devices.Where(d => d.UserId == userId && (kind is null || Can(d, kind))
+                    && (string.Equals(d.ComputerName, c, StringComparison.OrdinalIgnoreCase) || SameComputer(d.ComputerName, c)))
                 .OrderByDescending(d => d.LastSeen ?? d.Created).FirstOrDefault();
     }
 

@@ -255,6 +255,7 @@ public static class AuthApi
                     .DistinctBy(MandantOptions.Key, StringComparer.OrdinalIgnoreCase).ToList();
                 u.Visibility = u.Visibility is "auswahl" or "alle" ? u.Visibility : "eigene";
                 u.OutlookTarget = u.OutlookTarget is "melder" or "sitzung" ? u.OutlookTarget : "";
+                u.MailClient = MailClients.All.Contains(u.MailClient) ? u.MailClient : "";
                 u.AlsoSees = (u.AlsoSees ?? new()).Where(id => id != u.Id && list.Any(o => o.Id == id)).Distinct().ToList();
                 u.SendFromAddress = (u.SendFromAddress ?? "").Trim(); u.SendFromName = (u.SendFromName ?? "").Trim(); u.ReplyTo = (u.ReplyTo ?? "").Trim();
                 if (u.SendFromAddress.Length > 0 && !Documents.DocumentChecker.IsMail(u.SendFromAddress)) errors.Add($"„{u.Name}“: Absenderadresse „{u.SendFromAddress}“ ist keine gültige E-Mail-Adresse.");

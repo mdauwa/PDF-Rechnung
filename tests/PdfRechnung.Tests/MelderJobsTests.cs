@@ -52,9 +52,9 @@ public sealed class MelderJobsTests : IDisposable
         var hub = new EventHub();
         var tasks = new MelderTasks(store.Db, hub);
         var (rds, _) = users.AddDevice("martin", "RDS");
-        users.TouchDevice(rds.Id, "RDS01");
+        users.TouchDevice(rds.Id, "RDS01", "windows", new[] { "outlook", "speichern", "drucken" });
         var (pc, _) = users.AddDevice("martin", "Büro");
-        users.TouchDevice(pc.Id, "PC-BUERO");
+        users.TouchDevice(pc.Id, "PC-BUERO", "windows", new[] { "outlook", "speichern", "drucken" });
         var proc = new DocumentProcessor(store, new StaticOptions<MailOptions>(s.Mail), new StaticOptions<InvoiceOptions>(s.Invoice),
             NullLogger<DocumentProcessor>.Instance, settings: settings, users: users, events: hub, melderTasks: tasks);
 
@@ -118,7 +118,7 @@ public sealed class MelderJobsTests : IDisposable
         var hub = new EventHub();
         var tasks = new MelderTasks(store.Db, hub);
         var (rds, _) = users.AddDevice("martin", "RDS");
-        users.TouchDevice(rds.Id, "RDS01");
+        users.TouchDevice(rds.Id, "RDS01", "windows", new[] { "outlook", "speichern" });
         var proc = new DocumentProcessor(store, new StaticOptions<MailOptions>(s.Mail), new StaticOptions<InvoiceOptions>(s.Invoice),
             NullLogger<DocumentProcessor>.Instance, settings: settings, users: users, events: hub, melderTasks: tasks);
         var send = new SendService(store, settings, new StaticOptions<MailOptions>(s.Mail), new StaticOptions<StorageOptions>(s.Storage),
@@ -137,5 +137,34 @@ public sealed class MelderJobsTests : IDisposable
         send.AfterSend(v.Id); // nur einmal
         Assert.Single(tasks.Pending("martin", rds.Id));
         Assert.True(GotomaxxCodes.IsPortalOnly(new ControlCode(1, "pn", "")));
+    }
+
+    [Fact]
+    public void Alte_Melder_bekommen_keine_Speicher_Auftraege()
+    {
+        Directory.CreateDirectory(_dir);
+        var users = new UserStore(_dir);
+        users.Replace(new List<PortalUser> { new() { Id = "martin", Name = "Martin" } });
+        var (alt, _) = users.AddDevice("martin", "Mac alt");
+        users.TouchDevice(alt.Id, "MAC1");
+        var (neu, _) = users.AddDevice("martin", "Linux");
+        users.TouchDevice(neu.Id, "LINUX1", "linux", new[] { "outlookweb", "speichern", "drucken" });
+        var a = users.Device(alt.Id)!; var n = users.Device(neu.Id)!;
+        Assert.True(UserStore.Can(a, MelderTasks.KindOutlook));
+        Assert.False(UserStore.Can(a, MelderTasks.KindSave));
+        Assert.True(UserStore.Can(n, MelderTasks.KindSave));
+        Assert.Equal("linux", n.Platform);
+        Assert.Null(users.DeviceOn("martin", "MAC1", MelderTasks.KindSave));
+        Assert.Equal(alt.Id, users.DeviceOn("martin", "MAC1")!.Id);
+    }
+
+    [Fact]
+    public void Mailprogramm_je_Benutzer_sonst_Vorgabe()
+    {
+        Assert.Equal(MailClients.OutlookWeb, MailClients.Effective(new PortalUser { MailClient = "outlookweb" }, "outlook"));
+        Assert.Equal(MailClients.Standard, MailClients.Effective(new PortalUser(), "standard"));
+        Assert.Equal(MailClients.Outlook, MailClients.Effective(new PortalUser { MailClient = "quatsch" }, null));
+        Assert.True(MailClients.IsValid(""));
+        Assert.False(MailClients.IsValid("thunderbird"));
     }
 }

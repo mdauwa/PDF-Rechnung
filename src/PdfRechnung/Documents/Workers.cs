@@ -228,6 +228,26 @@ public sealed class SendService
         if (changed) AfterSend(id); // Speicher-Dialog gleich nach dem Outlook-Entwurf
     }
 
+    /// <summary>Versand aus Outlook bestätigt (Melder oder Outlook im Web): Status 110 bzw. 120.</summary>
+    public bool ConfirmOutlookSent(string id, string by, DateTimeOffset? when)
+    {
+        var v = _store.Get(id);
+        if (v is null || v.OutlookConfirmedAt is not null) return false;
+        var at = when is { } a && a <= DateTimeOffset.Now.AddMinutes(5) && a > v.CreatedAt.AddMinutes(-5) ? a : DateTimeOffset.Now;
+        _store.Update(id, x =>
+        {
+            x.OutlookConfirmedAt = at;
+            x.SendChannel = "Outlook";
+            x.SentBy = by;
+            x.SentAt ??= at;
+            x.History.Add(new HistoryEntry(DateTimeOffset.Now, by, "outlookGesendet", "Versand aus Outlook bestätigt"));
+            x.Status = VorgangStatus.Sent; // Statuswechsel erzeugt 110 (bzw. 120 bei erneutem Versand)
+            return true;
+        });
+        if (v.Status == VorgangStatus.Sent) _store.AddEvent(id, StatusCode.VersendetOutlook, "Outlook", by, null, at); // war schon versendet
+        return true;
+    }
+
     /// <summary>
     /// @@pn@@: Nach dem Senden (Mail versendet oder Entwurf in Outlook geöffnet) den Speicher-Dialog im Melder öffnen –
     /// einmal je Beleg, beim Melder auf dem Computer, an dem gedruckt wurde (sonst beim nächsten Melder des Benutzers).
@@ -248,7 +268,7 @@ public sealed class SendService
         });
         if (queued is null) return;
         var title = string.Join(" ", new[] { queued.DocumentType, queued.VoucherId }.Where(s => !string.IsNullOrWhiteSpace(s)));
-        tasks.Create(queued.OwnerUserId!, users?.DeviceOn(queued.OwnerUserId!, queued.PrintMachine)?.Id, PdfRechnung.Services.MelderTasks.KindSave, queued.Id,
+        tasks.Create(queued.OwnerUserId!, users?.DeviceOn(queued.OwnerUserId!, queued.PrintMachine, PdfRechnung.Services.MelderTasks.KindSave)?.Id, PdfRechnung.Services.MelderTasks.KindSave, queued.Id,
             title.Length > 0 ? title : queued.OriginalFileName ?? queued.Id, queued.SaveAfterSendRequest);
     }
 

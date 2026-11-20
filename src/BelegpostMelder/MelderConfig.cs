@@ -33,6 +33,8 @@ public sealed class MelderConfig
     public string? MapiNote { get; set; }
     /// <summary>In Outlook geöffnete Entwürfe, deren Versand noch bestätigt werden soll (Vorgang → Zeitpunkt).</summary>
     public Dictionary<string, DateTime> PendingSent { get; set; } = new();
+    /// <summary>Mailprogramm laut Portal: "outlook", "outlookweb" oder "standard".</summary>
+    public string MailClient { get; set; } = "outlook";
 
     public static string Folder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Belegpost");
     public static string FilePath => Path.Combine(Folder, "melder.json");

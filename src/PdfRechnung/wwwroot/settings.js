@@ -693,6 +693,7 @@ function tabGotomaxx() {
 }
 
 let GXD = null;
+const MAIL_CLIENTS = [["outlook", "Outlook (Windows/Mac)"], ["outlookweb", "Outlook im Web (Microsoft 365)"], ["standard", "Standard-Mailprogramm (Windows: MAPI)"]];
 function gxDelimiterSection() {
   const rows = (ST.s.gotomaxx ||= {}).printerDelimiters ||= [];
   const printers = ST.data.printers || [];
@@ -1404,6 +1405,10 @@ function userMask(i) {
           <option value="" ${!u.outlookTarget ? "selected" : ""}>Standard (${(ST.s.mapi?.outlookTarget || "melder") === "sitzung" ? "Sitzung am Server" : "Melder"})</option>
           <option value="melder" ${u.outlookTarget === "melder" ? "selected" : ""}>über den Melder</option>
           <option value="sitzung" ${u.outlookTarget === "sitzung" ? "selected" : ""}>direkt in der Sitzung am Server (RDS)</option></select>`)}
+       ${field("Mailprogramm für „In Outlook senden“", `<select data-u="${i}|mailClient">
+          <option value="" ${!u.mailClient ? "selected" : ""}>Standard (${esc((MAIL_CLIENTS.find(c => c[0] === (ST.s.mapi?.mailClient || "outlook")) || MAIL_CLIENTS[0])[1])})</option>
+          ${MAIL_CLIENTS.map(([k, t]) => `<option value="${k}" ${u.mailClient === k ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`,
+          "Outlook im Web braucht die E-Mail-Adresse des Benutzers (sein Postfach in Microsoft 365).")}
        <div class="user-devices">${userDevices(u, i)}</div>`) +
     section("Signaturen und Mail-Regeln", rulesHtml);
 }
@@ -1922,6 +1927,18 @@ function tabMapi() {
           "Pro Benutzer (Benutzer → MAPI-Mails) und pro PC (Melder) änderbar. Der Benutzer kann die Einstellung seines PCs im Melder selbst ändern; der Admin kann sie überrollen.")}
         ${field("Nicht abgeholte Outlook-Entwürfe nach (Stunden)", inNum("mapi.deliveryTimeoutHours", 1, 720), "Holt kein Melder den Entwurf ab, bleibt die Mail im Portal (Status 820).")}
         ${field("Versandbestätigung aus Outlook erwarten (Stunden)", inNum("mapi.outlookConfirmHours", 1, 720), "Ohne Bestätigung Status 830 – eine spätere Bestätigung setzt 110.")}</div>`) +
+    section("Mailprogramm für „In Outlook senden“",
+      `<div class="grid2">${field("Standard für alle Benutzer", inSelect("mapi.mailClient", MAIL_CLIENTS),
+          "Pro Benutzer änderbar (Benutzer → MAPI-Mails und Melder).")}</div>
+       <div class="help-box">
+         <b>Outlook</b>: klassisches Outlook am Windows-PC bzw. am RDS-Server und Outlook für Mac – über den Melder, mit Versandbestätigung (110).<br>
+         <b>Outlook im Web</b>: Belegpost legt den fertigen Entwurf (Text, Logo, PDF, Anlagen) über Microsoft 365 im Postfach des Benutzers an und öffnet ihn im Browser –
+         aus dem Portal ohne Melder, sonst über den Melder (Windows, Mac, Linux). Versandbestätigung: Belegpost prüft alle 2 Minuten „Gesendete Elemente“.
+         Voraussetzung: Microsoft 365 unter E-Mail eingerichtet, die App-Registrierung hat zusätzlich die Anwendungsberechtigung <code>Mail.ReadWrite</code>,
+         und beim Benutzer ist die E-Mail-Adresse seines Postfachs eingetragen.<br>
+         <b>Standard-Mailprogramm</b>: das am Rechner eingestellte Mailprogramm über den Melder – Windows per MAPI (z. B. Thunderbird, eM Client), Mac: Mail-Entwurf des Systems,
+         Linux: <code>xdg-email</code> (Thunderbird, Evolution, KMail). Der Text kommt dort ohne CI-Gestaltung an, die Anlagen vollständig; keine Versandbestätigung.
+       </div>`) +
     section("Belegpost-Drucker: Outlook und Portal öffnen",
       `${field("Standard für alle Benutzer", inSelect("mapi.outlookTarget", [
           ["melder", "über den Melder (PC des Benutzers)"],

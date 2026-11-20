@@ -172,6 +172,8 @@ public sealed class MapiOptions
     /// Windows-Sitzung des Benutzers am Server ("sitzung", für RDS mit Outlook am Server – ohne Melder). MAPI bleibt unberührt.
     /// </summary>
     public string OutlookTarget { get; set; } = "melder";
+    /// <summary>Standard-Mailprogramm für alle Benutzer: "outlook", "outlookweb" oder "standard" (je Benutzer änderbar).</summary>
+    public string MailClient { get; set; } = "outlook";
     /// <summary>
     /// @@pa@@: Ablageordner, in dem sich „Speichern unter“ im Melder öffnet – so, wie ihn der PC bzw. die RDS-Sitzung sieht
     /// (z. B. \\server\Ablage\Belege oder K:\Belege). @@paUnterordner@@ hängt einen Ordner an; Platzhalter {Jahr} {Monat}

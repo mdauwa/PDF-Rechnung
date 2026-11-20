@@ -23,6 +23,7 @@ public static class MelderApi
 {
     public const string ExeName = "Belegpost-Melder.exe";
     public const string MacZipName = "Belegpost-Melder-macOS.zip";
+    public const string LinuxName = "Belegpost-Melder-Linux.tar.gz";
     public const string Scheme = "belegpost-melder";
 
     public static void Map(WebApplication app)
@@ -42,6 +43,7 @@ public static class MelderApi
                 canPair = a.UserId is not null,
                 download = File.Exists(ExePath) ? "melder/" + ExeName : null,
                 downloadMac = File.Exists(MacZipPath) ? "melder/" + MacZipName : null,
+                downloadLinux = File.Exists(LinuxPath) ? "melder/" + LinuxName : null,
                 server = $"{ctx.Request.Scheme}://{ctx.Request.Host}"
             });
         });
@@ -127,12 +129,17 @@ public static class MelderApi
         });
 
         // ---------- Melder (Zugangsschlüssel statt Cookie; liegt bewusst außerhalb von /api) ----------
-        app.MapGet("/melder/api/hallo", (HttpContext ctx, UserStore users, IOptionsSnapshot<PortalOptions> portal) =>
+        app.MapGet("/melder/api/hallo", (HttpContext ctx, UserStore users, IOptionsSnapshot<PortalOptions> portal, IOptionsMonitor<MapiOptions> mapiOpt) =>
         {
             var found = users.FindDevice(Bearer(ctx));
             if (found is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
-            users.TouchDevice(f.Device.Id, ctx.Request.Query["pc"].ToString());
+            // Neue Melder melden Betriebssystem (os) und Fähigkeiten (f=speichern,drucken,outlookweb,standard,outlook)
+            var os = ctx.Request.Query["os"].ToString();
+            var caps = ctx.Request.Query["f"].ToString();
+            users.TouchDevice(f.Device.Id, ctx.Request.Query["pc"].ToString(), os.Length > 0 ? os : null,
+                caps.Length > 0 ? caps.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) : null);
             return Results.Ok(new { user = f.User.Name, device = f.Device.Name, title = portal.Value.Title, outlook = f.User.SendViaOutlook,
+                mailClient = MailClients.Effective(f.User, mapiOpt.CurrentValue.MailClient),
                 mapi = MapiInfo(users, f.User, users.Device(f.Device.Id) ?? f.Device, ctx) });
         });
 
@@ -168,13 +175,17 @@ public static class MelderApi
         app.MapGet("/melder/api/auftraege", (HttpContext ctx, UserStore users, MelderTasks tasks, DocumentStore store, IOptionsMonitor<MapiOptions> mapi) =>
         {
             if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
-            return Results.Ok(new { items = tasks.Pending(f.User.Id, f.Device.Id).Select(t => TaskInfo(t, store, mapi.CurrentValue)) });
+            var dev = users.Device(f.Device.Id) ?? f.Device;
+            // Aufträge, die dieser Melder nicht kann (z. B. Speichern bei alten Meldern), bleiben für einen anderen liegen
+            return Results.Ok(new { items = tasks.Pending(f.User.Id, f.Device.Id).Where(t => UserStore.Can(dev, t.Kind)).Select(t => TaskInfo(t, store, mapi.CurrentValue)) });
         });
 
         app.MapPost("/melder/api/auftraege/{id}/uebernehmen", (string id, HttpContext ctx, UserStore users, MelderTasks tasks, DocumentStore store,
             IOptionsMonitor<MapiOptions> mapi) =>
         {
             if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
+            var dev = users.Device(f.Device.Id) ?? f.Device;
+            if (tasks.Get(id) is { } pre && !UserStore.Can(dev, pre.Kind)) return Results.Conflict(new { error = "Dieser Melder kann den Auftrag nicht ausführen." });
             return tasks.Claim(id, f.User.Id, f.Device.Id) is { } t
                 ? Results.Ok(TaskInfo(t, store, mapi.CurrentValue))
                 : Results.Conflict(new { error = "Auftrag wurde bereits übernommen." });
@@ -217,26 +228,25 @@ public static class MelderApi
         });
 
         // Outlook-Versandbestätigung: das Element ist in „Gesendete Elemente“ aufgetaucht → Status 110
-        app.MapPost("/melder/api/vorgang/{id}/gesendet", (string id, SentConfirmation req, HttpContext ctx, UserStore users, DocumentStore store) =>
+        app.MapPost("/melder/api/vorgang/{id}/gesendet", (string id, SentConfirmation req, HttpContext ctx, UserStore users, DocumentStore store, SendService send) =>
         {
             if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
             var v = store.Get(id);
             if (v is null || !PortalAccess.ForUser(f.User).CanSee(v)) return Results.NotFound();
             if (v.OutlookConfirmedAt is not null) return Results.Ok(new { ok = true, already = true });
-            var at = req.At is { } a && a <= DateTimeOffset.Now.AddMinutes(5) && a > v.CreatedAt.AddMinutes(-5) ? a : DateTimeOffset.Now;
-            var by = $"{f.User.Name} (Outlook, {f.Device.Name})";
-            store.Update(id, x =>
-            {
-                x.OutlookConfirmedAt = at;
-                x.SendChannel = "Outlook";
-                x.SentBy = by;
-                x.SentAt ??= at;
-                x.History.Add(new HistoryEntry(DateTimeOffset.Now, by, "outlookGesendet", "Versand aus Outlook bestätigt"));
-                x.Status = VorgangStatus.Sent; // Statuswechsel erzeugt 110 (bzw. 120 bei erneutem Versand)
-                return true;
-            });
-            if (v.Status == VorgangStatus.Sent) store.AddEvent(id, StatusCode.VersendetOutlook, "Outlook", by, null, at); // war schon versendet
+            send.ConfirmOutlookSent(id, $"{f.User.Name} (Outlook, {f.Device.Name})", req.At);
             return Results.Ok(new { ok = true });
+        });
+
+        // Outlook im Web: Entwurf im Postfach des Benutzers anlegen, der Melder öffnet den Link im Browser
+        app.MapPost("/melder/api/vorgang/{id}/webentwurf", async (string id, HttpContext ctx, UserStore users, DocumentStore store, OutlookWebService web, CancellationToken ct) =>
+        {
+            if (users.FindDevice(Bearer(ctx)) is not { } f) return Results.Json(new { error = "Melder nicht (mehr) gekoppelt." }, statusCode: 401);
+            var v = store.Get(id);
+            if (v is null || !PortalAccess.ForUser(f.User).CanSee(v)) return Results.NotFound(new { error = "Vorgang nicht gefunden." });
+            if (!MaySend(f.User) && !v.Mail.Plain) return Results.Json(new { error = "Senden über Outlook ist für dich nicht freigeschaltet (Einstellungen → Benutzer)." }, statusCode: 403);
+            var r = await web.OpenAsync(v, f.User, $"{f.User.Name} (Outlook im Web, {f.Device.Name})", ct);
+            return r.Ok ? Results.Ok(new { url = r.Url, message = r.Message }) : Results.Json(new { error = r.Message }, statusCode: 409);
         });
 
         app.MapPost("/melder/api/vorgang/{id}/outlookfehler", (string id, OutlookFailure req, HttpContext ctx, UserStore users, DocumentStore store) =>
@@ -303,7 +313,7 @@ public static class MelderApi
 
         // Portal: „In Outlook öffnen“ → der eigene Melder öffnet den Entwurf
         app.MapPost("/api/vorgaenge/{id}/outlook", async (string id, PortalAccess access, HttpContext ctx, DocumentStore store, EventHub hub,
-            SessionLauncher launcher, UserStore users, CancellationToken ct) =>
+            SessionLauncher launcher, UserStore users, OutlookWebService web, IOptionsMonitor<MapiOptions> mapiOpt, CancellationToken ct) =>
         {
             var a = access.For(ctx);
             var v = store.Get(id);
@@ -313,6 +323,13 @@ public static class MelderApi
             if (!a.CanSend || (!a.Outlook && !v.Mail.Plain)) return Results.Json(new { error = "Senden über Outlook ist für dich nicht freigeschaltet – bitte an einen Administrator wenden." }, statusCode: 403);
             if (!v.Mail.Enabled) return Results.BadRequest(new { error = "Für diesen Beleg ist kein E-Mail-Versand vorgesehen." });
             if (v.Status == VorgangStatus.Error) return Results.BadRequest(new { error = "Der Vorgang hat Fehler – bitte zuerst beheben (z. B. Empfänger, Anlagen)." });
+            // Outlook im Web: Entwurf über Microsoft 365, der Browser öffnet ihn gleich selbst – kein Melder nötig (auch Linux/Mac)
+            if (users.FindById(a.UserId) is { } webUser && MailClients.Effective(webUser, mapiOpt.CurrentValue.MailClient) == MailClients.OutlookWeb)
+            {
+                var w = await web.OpenAsync(v, webUser, $"{a.Name} (Outlook im Web)", ct);
+                return w.Ok ? Results.Ok(new { message = "Entwurf in Outlook im Web angelegt – er öffnet sich in einem neuen Tab.", url = w.Url })
+                    : Results.BadRequest(new { error = w.Message });
+            }
             // RDS mit Outlook am Server: Belege vom Belegpost-Drucker direkt in der Sitzung öffnen (kein Melder nötig)
             if (!v.Mail.Plain && users.FindById(a.UserId) is { } me && launcher.UsesSession(me))
             {
@@ -324,6 +341,9 @@ public static class MelderApi
             hub.Publish(a.UserId, "outlook", v.Id, title.Length > 0 ? title : v.OriginalFileName ?? v.Id, v.Status, null, v.Mail.Enabled);
             return Results.Ok(new { message = "An den Melder geschickt – Outlook öffnet sich gleich." });
         });
+
+        app.MapGet("/melder/" + LinuxName, () =>
+            File.Exists(LinuxPath) ? Results.File(LinuxPath, "application/gzip", LinuxName) : Results.NotFound());
 
         app.MapGet("/melder/" + MacZipName, () =>
             File.Exists(MacZipPath) ? Results.File(MacZipPath, "application/zip", MacZipName) : Results.NotFound());
@@ -390,6 +410,7 @@ public static class MelderApi
 
     public static string ExePath => Path.Combine(AppContext.BaseDirectory, ExeName);
     public static string MacZipPath => Path.Combine(AppContext.BaseDirectory, MacZipName);
+    public static string LinuxPath => Path.Combine(AppContext.BaseDirectory, LinuxName);
 
     private static string? Bearer(HttpContext ctx)
     {

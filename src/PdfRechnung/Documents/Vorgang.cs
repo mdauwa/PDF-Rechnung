@@ -128,6 +128,10 @@ public sealed class Vorgang
     /// <summary>Wann der Entwurf an Outlook übergeben bzw. der Versand aus Outlook bestätigt wurde.</summary>
     public DateTimeOffset? OutlookHandedAt { get; set; }
     public DateTimeOffset? OutlookConfirmedAt { get; set; }
+    /// <summary>Outlook im Web: Postfach und Internet-Message-ID des Entwurfs (für die Versandbestätigung 110).</summary>
+    public string? OutlookWebMailbox { get; set; }
+    public string? OutlookWebMessageId { get; set; }
+    public DateTimeOffset? OutlookWebDraftAt { get; set; }
     public int Pages { get; set; }
     /// <summary>Weiterleitung an gotomaxx: null = nein, "" = Standarddrucker, sonst Druckername (aus @@pg@@ oder „immer“).</summary>
     public string? GotomaxxPrinter { get; set; }

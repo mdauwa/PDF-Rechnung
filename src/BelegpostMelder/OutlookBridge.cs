@@ -30,6 +30,21 @@ internal static class OutlookBridge
         using var http = MelderClient.CreateHttp(cfg.Thumbprint, TimeSpan.FromSeconds(60));
         var baseUrl = cfg.Server!.TrimEnd('/') + "/melder/api/vorgang/" + Uri.EscapeDataString(documentId);
 
+        // Outlook im Web: Belegpost legt den Entwurf im Postfach an, hier nur den Link im Browser öffnen
+        if (cfg.MailClient == "outlookweb")
+        {
+            using var wreq = new HttpRequestMessage(HttpMethod.Post, baseUrl + "/webentwurf") { Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json") };
+            wreq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var wres = await http.SendAsync(wreq);
+            var wbody = await wres.Content.ReadAsStringAsync();
+            if (!wres.IsSuccessStatusCode) return new Result(false, Error(wbody) ?? $"Server meldet {(int)wres.StatusCode}.", false);
+            using var wdoc = JsonDocument.Parse(wbody);
+            var url = Str(wdoc.RootElement, "url");
+            if (string.IsNullOrEmpty(url)) return new Result(false, "Der Server hat keinen Link zum Entwurf geliefert.", false);
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            return new Result(true, "Entwurf in Outlook im Web geöffnet.", false); // „An Outlook übergeben“ setzt der Server selbst
+        }
+
         using var req = new HttpRequestMessage(HttpMethod.Get, baseUrl + "/mail");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         using var res = await http.SendAsync(req);
@@ -42,7 +57,15 @@ internal static class OutlookBridge
         Directory.CreateDirectory(folder);
 
         Result result;
-        if (ClassicOutlookAvailable())
+        if (cfg.MailClient == "standard")
+        {
+            // Standard-Mailprogramm per MAPI; geht das nicht, den .eml-Entwurf mit dem zugeordneten Programm öffnen
+            var r = MapiMail.Open(m, folder);
+            result = r.Ok ? new Result(true, r.Message, false)
+                : r.Fallback ? await OpenEml(http, baseUrl, token, folder, documentId, r.Message + " – ")
+                : new Result(false, r.Message, false);
+        }
+        else if (ClassicOutlookAvailable())
         {
             try
             {
@@ -83,11 +106,16 @@ internal static class OutlookBridge
         using (doc)
         {
             try { File.Delete(path); } catch { /* der Dienst räumt auf */ }
-            if (!ClassicOutlookAvailable()) return 2;
             var m = doc.RootElement;
             var id = Str(m, "id") ?? Guid.NewGuid().ToString("N");
             var folder = Path.Combine(Path.GetTempPath(), "Belegpost", id);
             Directory.CreateDirectory(folder);
+            if (Str(m, "client") == "standard")
+            {
+                var r = MapiMail.Open(m, folder);
+                return r.Ok ? 0 : r.Fallback ? 2 : 3;
+            }
+            if (!ClassicOutlookAvailable()) return 2;
             try { CreateViaCom(m, folder, id); return 0; }
             catch { return 3; }
             finally { Cleanup(); }

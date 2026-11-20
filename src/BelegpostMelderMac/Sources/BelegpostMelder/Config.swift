@@ -24,6 +24,11 @@ final class MelderConfig: ObservableObject {
         get { d.dictionary(forKey: "pendingSent") as? [String: [String: Any]] ?? [:] }
         set { d.set(newValue, forKey: "pendingSent") }
     }
+    /// Mailprogramm laut Portal: "outlook", "outlookweb" oder "standard"
+    var mailClient: String {
+        get { d.string(forKey: "mailClient") ?? "outlook" }
+        set { d.set(newValue, forKey: "mailClient") }
+    }
     var lastSeq: Int64? {
         get { d.object(forKey: "lastSeq") as? Int64 }
         set { d.set(newValue, forKey: "lastSeq") }

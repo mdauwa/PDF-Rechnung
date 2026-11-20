@@ -13,6 +13,7 @@ public sealed class GraphMailTests : IDisposable
     {
         public List<(HttpMethod Method, string Url, string? Auth, string Body, string? Range)> Calls { get; } = new();
         public HttpStatusCode SendStatus { get; set; } = HttpStatusCode.Accepted;
+        public bool SentFound { get; set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
@@ -26,7 +27,9 @@ public sealed class GraphMailTests : IDisposable
             if (url.EndsWith("/sendMail"))
                 return SendStatus == HttpStatusCode.Accepted ? new HttpResponseMessage(HttpStatusCode.Accepted)
                     : Json("""{"error":{"code":"ErrorAccessDenied","message":"Access is denied."}}""", SendStatus);
-            if (url.EndsWith("/messages")) return Json("""{"id":"MSG1"}""", HttpStatusCode.Created);
+            if (url.EndsWith("/messages")) return Json("""{"id":"MSG1","webLink":"https://outlook.office365.com/owa/?ItemID=MSG1","internetMessageId":"<abc@firma.at>"}""", HttpStatusCode.Created);
+            if (url.Contains("/mailFolders('sentitems')/messages"))
+                return Json(SentFound ? """{"value":[{"sentDateTime":"2026-11-20T10:15:00Z"}]}""" : """{"value":[]}""");
             if (url.EndsWith("/createUploadSession")) return Json("""{"uploadUrl":"https://upload.example/session1"}""");
             if (url.StartsWith("https://upload.example")) return new HttpResponseMessage(HttpStatusCode.OK);
             if (url.EndsWith("/attachments")) return Json("{}", HttpStatusCode.Created);
@@ -53,6 +56,27 @@ public sealed class GraphMailTests : IDisposable
         m.To.Add("kunde@example.at"); m.Cc.Add("cc@example.at");
         m.Attachments.Add(("Rechnung_4711.pdf", new byte[attachmentBytes], "application/pdf"));
         return m;
+    }
+
+    [Fact]
+    public async Task Outlook_Web_Entwurf_im_Postfach_des_Benutzers_ohne_Absender_und_Archivkopie()
+    {
+        var d = await GraphMailSender.CreateDraftAsync(Options(), "geheim", "m.muster@firma.at", Mail(50_000), null, CancellationToken.None);
+        Assert.Equal("https://outlook.office365.com/owa/?ItemID=MSG1", d.WebLink);
+        Assert.Equal("<abc@firma.at>", d.InternetMessageId);
+        var create = _fake.Calls.First(c => c.Url.EndsWith("/messages"));
+        Assert.Equal("https://graph.microsoft.com/v1.0/users/m.muster%40firma.at/messages", create.Url);
+        var msg = JsonNode.Parse(create.Body)!;
+        Assert.Null(msg["from"]); // der Benutzer sendet als er selbst
+        Assert.Empty(msg["bccRecipients"]!.AsArray()); // keine Archivkopie im Entwurf
+        Assert.Contains(_fake.Calls, c => c.Url.EndsWith("/messages/MSG1/attachments"));
+        Assert.DoesNotContain(_fake.Calls, c => c.Url.EndsWith("/send") || c.Url.EndsWith("/sendMail"));
+
+        Assert.Null(await GraphMailSender.FindSentAsync(Options(), "geheim", "m.muster@firma.at", "<abc@firma.at>", CancellationToken.None));
+        _fake.SentFound = true;
+        var at = await GraphMailSender.FindSentAsync(Options(), "geheim", "m.muster@firma.at", "<abc@firma.at>", CancellationToken.None);
+        Assert.Equal(new DateTimeOffset(2026, 11, 20, 10, 15, 0, TimeSpan.Zero), at);
+        Assert.Contains(_fake.Calls, c => c.Method == HttpMethod.Get && c.Url.Contains("internetMessageId"));
     }
 
     [Fact]

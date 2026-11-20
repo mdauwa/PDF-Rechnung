@@ -143,17 +143,70 @@ public static class GraphMailSender
         // Große Anlagen: Entwurf → Anlagen → senden
         var draft = await Send(HttpMethod.Post, $"{GraphBase}/users/{user}/messages", token, message, ct);
         var id = Uri.EscapeDataString(draft?["id"]?.GetValue<string>() ?? throw new InvalidOperationException("Graph hat keinen Entwurf angelegt."));
+        await AddAttachments(user, id, token, mail, ct);
+        await Send(HttpMethod.Post, $"{GraphBase}/users/{user}/messages/{id}/send", token, null, ct);
+    }
+
+    public sealed record Draft(string Id, string WebLink, string? InternetMessageId);
+
+    /// <summary>
+    /// Outlook im Web: Entwurf im Postfach <paramref name="mailbox"/> anlegen (Text, Logo, Anlagen) und den Link zum Öffnen liefern.
+    /// Braucht die Anwendungsberechtigung Mail.ReadWrite. Absender: <paramref name="from"/> (leer = das Postfach selbst).
+    /// </summary>
+    public static async Task<Draft> CreateDraftAsync(MailOptions o, string? secret, string mailbox, OutgoingMail mail, string? from, CancellationToken ct)
+    {
+        var token = await Token(o, secret, ct);
+        var user = Uri.EscapeDataString(mailbox);
+        var message = Message(o, mail, draft: true);
+        if (!string.IsNullOrWhiteSpace(from) && !string.Equals(from, mailbox, StringComparison.OrdinalIgnoreCase))
+            message["from"] = new JsonObject { ["emailAddress"] = new JsonObject { ["address"] = from } };
+        var created = await Send(HttpMethod.Post, $"{GraphBase}/users/{user}/messages", token, message, ct, draft: true);
+        var rawId = created?["id"]?.GetValue<string>() ?? throw new InvalidOperationException("Microsoft 365 hat keinen Entwurf angelegt.");
+        await AddAttachments(user, Uri.EscapeDataString(rawId), token, mail, ct, draft: true);
+        var link = created?["webLink"]?.GetValue<string>();
+        if (string.IsNullOrEmpty(link))
+        {
+            var info = await Send(HttpMethod.Get, $"{GraphBase}/users/{user}/messages/{Uri.EscapeDataString(rawId)}?$select=webLink", token, null, ct, draft: true);
+            link = info?["webLink"]?.GetValue<string>() ?? throw new InvalidOperationException("Microsoft 365 liefert keinen Link zum Entwurf.");
+        }
+        return new Draft(rawId, link, created?["internetMessageId"]?.GetValue<string>());
+    }
+
+    /// <summary>
+    /// Wurde der Outlook-Web-Entwurf gesendet? Sucht in „Gesendete Elemente“ nach der Internet-Message-ID.
+    /// Liefert den Sendezeitpunkt oder null (noch nicht gesendet). Fehler werden durchgereicht.
+    /// </summary>
+    public static async Task<DateTimeOffset?> FindSentAsync(MailOptions o, string? secret, string mailbox, string internetMessageId, CancellationToken ct)
+    {
+        var token = await Token(o, secret, ct);
+        var filter = Uri.EscapeDataString($"internetMessageId eq '{internetMessageId.Replace("'", "''")}'");
+        var r = await Send(HttpMethod.Get, $"{GraphBase}/users/{Uri.EscapeDataString(mailbox)}/mailFolders('sentitems')/messages?$filter={filter}&$select=sentDateTime&$top=1",
+            token, null, ct, draft: true);
+        var first = r?["value"]?.AsArray().FirstOrDefault();
+        if (first is null) return null;
+        return DateTimeOffset.TryParse(first["sentDateTime"]?.GetValue<string>(), out var at) ? at : DateTimeOffset.Now;
+    }
+
+    private static Task<string> Token(MailOptions o, string? secret, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(o.GraphTenantId) || string.IsNullOrWhiteSpace(o.GraphClientId) || string.IsNullOrWhiteSpace(secret))
+            throw new InvalidOperationException("Microsoft 365 ist nicht eingerichtet (Einstellungen → E-Mail → Microsoft 365: Mandanten-ID, Client-ID, geheimer Schlüssel).");
+        return TokenAsync(o.GraphTenantId.Trim(), o.GraphClientId.Trim(), secret, ct);
+    }
+
+    private static async Task AddAttachments(string user, string id, string token, OutgoingMail mail, CancellationToken ct, bool draft = false)
+    {
         foreach (var img in mail.Images)
-            await Send(HttpMethod.Post, $"{GraphBase}/users/{user}/messages/{id}/attachments", token, InlineAttachment(img), ct);
+            await Send(HttpMethod.Post, $"{GraphBase}/users/{user}/messages/{id}/attachments", token, InlineAttachment(img), ct, draft);
         foreach (var a in mail.Attachments)
         {
             if (a.Data.Length < InlineLimit)
             {
-                await Send(HttpMethod.Post, $"{GraphBase}/users/{user}/messages/{id}/attachments", token, FileAttachment(a), ct);
+                await Send(HttpMethod.Post, $"{GraphBase}/users/{user}/messages/{id}/attachments", token, FileAttachment(a), ct, draft);
                 continue;
             }
             var session = await Send(HttpMethod.Post, $"{GraphBase}/users/{user}/messages/{id}/attachments/createUploadSession", token,
-                new JsonObject { ["AttachmentItem"] = new JsonObject { ["attachmentType"] = "file", ["name"] = a.Name, ["size"] = a.Data.Length, ["contentType"] = a.ContentType } }, ct);
+                new JsonObject { ["AttachmentItem"] = new JsonObject { ["attachmentType"] = "file", ["name"] = a.Name, ["size"] = a.Data.Length, ["contentType"] = a.ContentType } }, ct, draft);
             var url = session?["uploadUrl"]?.GetValue<string>() ?? throw new InvalidOperationException("Graph hat keine Upload-Sitzung angelegt.");
             for (var pos = 0; pos < a.Data.Length; pos += Chunk)
             {
@@ -165,10 +218,9 @@ public static class GraphMailSender
                 if (!res.IsSuccessStatusCode) throw new InvalidOperationException($"Upload der Anlage {a.Name} fehlgeschlagen: {await Error(res, ct)}");
             }
         }
-        await Send(HttpMethod.Post, $"{GraphBase}/users/{user}/messages/{id}/send", token, null, ct);
     }
 
-    private static JsonObject Message(MailOptions o, OutgoingMail mail)
+    private static JsonObject Message(MailOptions o, OutgoingMail mail, bool draft = false)
     {
         static JsonArray Recipients(IEnumerable<string> list) =>
             new(list.Select(a => (JsonNode)new JsonObject { ["emailAddress"] = new JsonObject { ["address"] = a } }).ToArray());
@@ -181,8 +233,9 @@ public static class GraphMailSender
             ["from"] = new JsonObject { ["emailAddress"] = new JsonObject { ["address"] = mail.From(o), ["name"] = mail.Name(o) } },
             ["toRecipients"] = Recipients(mail.To),
             ["ccRecipients"] = Recipients(mail.Cc),
-            ["bccRecipients"] = Recipients(mail.Bcc.Concat(MailSender.CopyTo(o)))
+            ["bccRecipients"] = Recipients(draft ? mail.Bcc : mail.Bcc.Concat(MailSender.CopyTo(o)))
         };
+        if (draft) msg.Remove("from"); // Entwurf im eigenen Postfach: Absender ist der Benutzer (sonst „Senden als“ nötig)
         if (mail.Reply(o) is { } reply) msg["replyTo"] = Recipients(new[] { reply });
         return msg;
     }
@@ -205,13 +258,22 @@ public static class GraphMailSender
         ["contentBytes"] = Convert.ToBase64String(a.Data)
     };
 
-    private static async Task<JsonNode?> Send(HttpMethod method, string url, string token, JsonNode? body, CancellationToken ct)
+    private static async Task<JsonNode?> Send(HttpMethod method, string url, string token, JsonNode? body, CancellationToken ct, bool draft = false)
     {
         using var req = new HttpRequestMessage(method, url);
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        req.Content = body is null ? new StringContent("") : new StringContent(body.ToJsonString(), System.Text.Encoding.UTF8, "application/json");
+        if (method != HttpMethod.Get)
+            req.Content = body is null ? new StringContent("") : new StringContent(body.ToJsonString(), System.Text.Encoding.UTF8, "application/json");
         using var res = await Http.SendAsync(req, ct);
-        if (!res.IsSuccessStatusCode) throw new InvalidOperationException(Explain(res.StatusCode, await Error(res, ct)));
+        if (!res.IsSuccessStatusCode)
+        {
+            var err = await Error(res, ct);
+            throw new InvalidOperationException(draft && res.StatusCode is System.Net.HttpStatusCode.Forbidden or System.Net.HttpStatusCode.Unauthorized
+                ? $"Microsoft 365 verweigert den Zugriff aufs Postfach ({err}). Für Outlook im Web braucht die App-Registrierung die Anwendungsberechtigung „Mail.ReadWrite“ mit Administratorzustimmung."
+                : draft && res.StatusCode == System.Net.HttpStatusCode.NotFound
+                ? $"Postfach nicht gefunden ({err}). Die E-Mail-Adresse des Benutzers muss ein Postfach in Microsoft 365 sein."
+                : Explain(res.StatusCode, err));
+        }
         var text = await res.Content.ReadAsStringAsync(ct);
         return string.IsNullOrWhiteSpace(text) ? null : JsonNode.Parse(text);
     }

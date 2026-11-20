@@ -43,6 +43,12 @@ public sealed class MelderTasks
             ("@u", userId), ("@g", deviceId), ("@alt", BelegpostDb.Ms(DateTimeOffset.Now.AddMinutes(-10))));
     }
 
+    public MelderTask? Get(string id)
+    {
+        using var c = _db.Open();
+        return Read(c, "WHERE id=@i", ("@i", id)).FirstOrDefault();
+    }
+
     /// <summary>Gerät übernimmt den Auftrag (nur einmal; nach 10 Minuten ohne Erledigung erneut vergebbar).</summary>
     public MelderTask? Claim(string id, string userId, string deviceId)
     {

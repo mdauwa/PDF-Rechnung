@@ -610,6 +610,7 @@ public static class AdminApi
         }
         if (s.Gotomaxx.PrinterDelimiters.Where(x => !string.IsNullOrWhiteSpace(x.Printer)).GroupBy(x => x.Printer.Trim(), StringComparer.OrdinalIgnoreCase).Any(g => g.Count() > 1))
             e.Add("Jeder gotomaxx-Drucker darf bei den Trennzeichen nur einmal vorkommen.");
+        if (!MailClients.IsValid(s.Mapi.MailClient) || string.IsNullOrEmpty(s.Mapi.MailClient)) e.Add("Unbekanntes Standard-Mailprogramm.");
         if (!PdfRechnung.Printing.GotomaxxProfile.IsValidSetting(s.Gotomaxx.CommandDelimiter)) e.Add("Das Trennzeichen für gotomaxx muss „auto“ oder 1–5 Zeichen ohne Leerzeichen sein (z. B. @@ oder $$).");
         if (s.Gotomaxx.TimeoutSeconds is < 10 or > 900) e.Add("Die Höchstdauer des gotomaxx-Drucks muss zwischen 10 und 900 Sekunden liegen.");
         if (s.Erp.Enabled)
